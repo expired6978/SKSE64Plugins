@@ -1,0 +1,559 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="IPluginInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemDataInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="NiTransformInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="OverlayInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="OverrideInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="TintMaskInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="BodyMorphInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXBrush.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXCamera.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXEditableMesh.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXEditableScene.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXMaterial.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXMesh.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifBrush.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifCommands.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifMesh.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifScene.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXPicker.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXResetMask.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXScene.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXShader.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXStroke.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXUndo.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="FileUtils.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="NifUtils.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="MorphHandler.cpp">
+      <Filter>handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="PartHandler.cpp">
+      <Filter>handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="StringTable.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="SkeletonExtender.cpp">
+      <Filter>handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="ShaderUtilities.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="PapyrusNiOverride.cpp">
+      <Filter>papyrus\functions</Filter>
+    </ClCompile>
+    <ClCompile Include="PapyrusCharGen.cpp">
+      <Filter>papyrus\functions</Filter>
+    </ClCompile>
+    <ClCompile Include="OverrideVariant.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiRTTI.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiObjects.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="ScaleformCharGenFunctions.cpp">
+      <Filter>scaleform\functions</Filter>
+    </ClCompile>
+    <ClCompile Include="ScaleformFunctions.cpp">
+      <Filter>scaleform\functions</Filter>
+    </ClCompile>
+    <ClCompile Include="ScaleformLoader.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformTypes.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformValue.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformVM.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformAPI.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformCallbacks.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformMovie.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\ScaleformState.cpp">
+      <Filter>api\scaleform\api</Filter>
+    </ClCompile>
+    <ClCompile Include="ScaleformUtils.cpp">
+      <Filter>scaleform\functions</Filter>
+    </ClCompile>
+    <ClCompile Include="tinyxml2.cpp">
+      <Filter>tinyxml</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameAPI.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameBSExtraData.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameData.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameEvents.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameExtraData.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameFormComponents.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameForms.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameObjects.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameReferences.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameResources.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameRTTI.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameStreams.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameTypes.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameUtilities.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\PapyrusValue.cpp">
+      <Filter>api\papyrus\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\PapyrusVM.cpp">
+      <Filter>api\papyrus\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\PapyrusArgs.cpp">
+      <Filter>api\papyrus\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\HashUtil.cpp">
+      <Filter>api\util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\PapyrusNativeFunctions.cpp">
+      <Filter>api\papyrus\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameSettings.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiSerialization.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiTextures.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiTypes.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiProperties.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiRenderer.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiMaterial.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiNodes.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiGeometry.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiExtraData.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\PapyrusInterfaces.cpp">
+      <Filter>api\papyrus\vm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\NiAllocator.cpp">
+      <Filter>api\netimmerse</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameMenus.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="..\skse64\GameThreads.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
+    <ClCompile Include="SKEEHooks.cpp">
+      <Filter>hooks</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="exports.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="interfaces">
+      <UniqueIdentifier>{0e7456c6-8b31-4e3c-8c58-6bf8d11029af}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="renderer">
+      <UniqueIdentifier>{fd15b1d7-af8f-47cd-9bc2-81cb5e3031b6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{32f893d1-2ac9-4bf4-847d-c826765c38ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="handlers">
+      <UniqueIdentifier>{86d73a42-5804-4bb0-ba15-15de6b668abe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="papyrus">
+      <UniqueIdentifier>{8a63702f-2d8b-48c4-b433-1cee3d884756}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="papyrus\functions">
+      <UniqueIdentifier>{6b24f812-a327-4f57-bf81-0eb152237deb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api">
+      <UniqueIdentifier>{32b8b088-86c4-46cd-8133-1185264ab64d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="hooks">
+      <UniqueIdentifier>{46eba454-d6fb-4652-98b4-4e68a0cdc53f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tinyxml">
+      <UniqueIdentifier>{a7b136cc-81b4-4ade-b474-f1d1d93d5a80}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\game">
+      <UniqueIdentifier>{cf28e502-c371-4e65-a68f-0ffee359622a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\netimmerse">
+      <UniqueIdentifier>{b0362c2f-7b73-433d-a183-3324be01f92e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\scaleform">
+      <UniqueIdentifier>{034a5766-0417-496f-8069-f1336a7f0e0d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\scaleform\api">
+      <UniqueIdentifier>{dbfabd71-8642-489e-8903-b0df2d615ecd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\papyrus">
+      <UniqueIdentifier>{920a578f-cc79-4581-bade-41e3f2f878e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\papyrus\vm">
+      <UniqueIdentifier>{8c282fe0-26e1-4096-87cd-a68ea11c3efb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="api\util">
+      <UniqueIdentifier>{c785bcf4-53bb-4e4e-896c-79d61e907e21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="scaleform">
+      <UniqueIdentifier>{703a9dd2-68ff-4004-9066-f9bd34abd0dd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="scaleform\functions">
+      <UniqueIdentifier>{386572e3-f3b3-4998-847b-1f680bb2d95b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="IPluginInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemDataInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="NiTransformInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="OverlayInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="OverrideInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="TintMaskInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="IHashType.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="BodyMorphInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXUndo.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXBrush.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXCamera.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXEditableMesh.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXEditableScene.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXMaterial.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXMesh.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifBrush.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifCommands.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifMesh.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifScene.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXPicker.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXResetMask.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXScene.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXShader.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXStroke.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="FileUtils.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="NifUtils.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="MorphHandler.h">
+      <Filter>handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="PartHandler.h">
+      <Filter>handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="StringTable.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SkeletonExtender.h">
+      <Filter>handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderUtilities.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="PapyrusNiOverride.h">
+      <Filter>papyrus\functions</Filter>
+    </ClInclude>
+    <ClInclude Include="PapyrusCharGen.h">
+      <Filter>papyrus\functions</Filter>
+    </ClInclude>
+    <ClInclude Include="OverrideVariant.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiRTTI.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiObjects.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="ScaleformFunctions.h">
+      <Filter>scaleform\functions</Filter>
+    </ClInclude>
+    <ClInclude Include="ScaleformCharGenFunctions.h">
+      <Filter>scaleform\functions</Filter>
+    </ClInclude>
+    <ClInclude Include="ScaleformLoader.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformState.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformTypes.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformValue.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformVM.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformAPI.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformCallbacks.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ScaleformMovie.h">
+      <Filter>api\scaleform\api</Filter>
+    </ClInclude>
+    <ClInclude Include="ScaleformUtils.h">
+      <Filter>scaleform\functions</Filter>
+    </ClInclude>
+    <ClInclude Include="tinyxml2.h">
+      <Filter>tinyxml</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameUtilities.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameAPI.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameBSExtraData.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameData.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameEvents.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameExtraData.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameFormComponents.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameForms.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameObjects.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameReferences.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameResources.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameRTTI.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameStreams.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameTypes.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\PapyrusValue.h">
+      <Filter>api\papyrus\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\PapyrusVM.h">
+      <Filter>api\papyrus\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\PapyrusArgs.h">
+      <Filter>api\papyrus\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\HashUtil.h">
+      <Filter>api\util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\PapyrusNativeFunctions.h">
+      <Filter>api\papyrus\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameSettings.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiSerialization.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiTextures.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiTypes.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiProperties.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiRenderer.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiMaterial.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiNodes.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiGeometry.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiExtraData.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\PapyrusInterfaces.h">
+      <Filter>api\papyrus\vm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\NiAllocator.h">
+      <Filter>api\netimmerse</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\GameMenus.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\gamethreads.h">
+      <Filter>api\game</Filter>
+    </ClInclude>
+    <ClInclude Include="SKEEHooks.h">
+      <Filter>hooks</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

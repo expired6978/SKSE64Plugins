@@ -1,0 +1,313 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectName>skee64</ProjectName>
+    <ProjectGuid>{FC9A1EE6-D9DB-47F6-B0ED-8867439C43CE}</ProjectGuid>
+    <RootNamespace>skee64</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>12.0.21005.1</_ProjectFileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ForcedIncludeFiles>common/IPrefix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy "$(TargetPath)" "$(Skyrim64Path)\Data\SKSE\Plugins\$(TargetFileName)"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing DLL...</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ForcedIncludeFiles>common/IPrefix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy "$(TargetPath)" "$(Skyrim64Path)\Data\SKSE\Plugins\$(TargetFileName)"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing DLL...</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\skse64\GameAPI.cpp" />
+    <ClCompile Include="..\skse64\GameBSExtraData.cpp" />
+    <ClCompile Include="..\skse64\GameData.cpp" />
+    <ClCompile Include="..\skse64\GameEvents.cpp" />
+    <ClCompile Include="..\skse64\GameExtraData.cpp" />
+    <ClCompile Include="..\skse64\GameFormComponents.cpp" />
+    <ClCompile Include="..\skse64\GameForms.cpp" />
+    <ClCompile Include="..\skse64\GameMenus.cpp" />
+    <ClCompile Include="..\skse64\GameObjects.cpp" />
+    <ClCompile Include="..\skse64\GameReferences.cpp" />
+    <ClCompile Include="..\skse64\GameResources.cpp" />
+    <ClCompile Include="..\skse64\GameRTTI.cpp" />
+    <ClCompile Include="..\skse64\GameSettings.cpp" />
+    <ClCompile Include="..\skse64\GameStreams.cpp" />
+    <ClCompile Include="..\skse64\GameThreads.cpp" />
+    <ClCompile Include="..\skse64\GameTypes.cpp" />
+    <ClCompile Include="..\skse64\GameUtilities.cpp" />
+    <ClCompile Include="..\skse64\HashUtil.cpp" />
+    <ClCompile Include="..\skse64\NiAllocator.cpp" />
+    <ClCompile Include="..\skse64\NiExtraData.cpp" />
+    <ClCompile Include="..\skse64\NiGeometry.cpp" />
+    <ClCompile Include="..\skse64\NiMaterial.cpp" />
+    <ClCompile Include="..\skse64\NiNodes.cpp" />
+    <ClCompile Include="..\skse64\NiObjects.cpp" />
+    <ClCompile Include="..\skse64\NiProperties.cpp" />
+    <ClCompile Include="..\skse64\NiRenderer.cpp" />
+    <ClCompile Include="..\skse64\NiRTTI.cpp" />
+    <ClCompile Include="..\skse64\NiSerialization.cpp" />
+    <ClCompile Include="..\skse64\NiTextures.cpp" />
+    <ClCompile Include="..\skse64\NiTypes.cpp" />
+    <ClCompile Include="..\skse64\PapyrusArgs.cpp" />
+    <ClCompile Include="..\skse64\PapyrusInterfaces.cpp" />
+    <ClCompile Include="..\skse64\PapyrusNativeFunctions.cpp" />
+    <ClCompile Include="..\skse64\PapyrusValue.cpp" />
+    <ClCompile Include="..\skse64\PapyrusVM.cpp" />
+    <ClCompile Include="..\skse64\ScaleformAPI.cpp" />
+    <ClCompile Include="..\skse64\ScaleformCallbacks.cpp" />
+    <ClCompile Include="..\skse64\ScaleformMovie.cpp" />
+    <ClCompile Include="..\skse64\ScaleformState.cpp" />
+    <ClCompile Include="..\skse64\ScaleformTypes.cpp" />
+    <ClCompile Include="..\skse64\ScaleformValue.cpp" />
+    <ClCompile Include="..\skse64\ScaleformVM.cpp" />
+    <ClCompile Include="BodyMorphInterface.cpp" />
+    <ClCompile Include="CDXBrush.cpp" />
+    <ClCompile Include="CDXCamera.cpp" />
+    <ClCompile Include="CDXEditableMesh.cpp" />
+    <ClCompile Include="CDXEditableScene.cpp" />
+    <ClCompile Include="CDXMaterial.cpp" />
+    <ClCompile Include="CDXMesh.cpp" />
+    <ClCompile Include="CDXNifBrush.cpp" />
+    <ClCompile Include="CDXNifCommands.cpp" />
+    <ClCompile Include="CDXNifMesh.cpp" />
+    <ClCompile Include="CDXNifScene.cpp" />
+    <ClCompile Include="CDXPicker.cpp" />
+    <ClCompile Include="CDXResetMask.cpp" />
+    <ClCompile Include="CDXScene.cpp" />
+    <ClCompile Include="CDXShader.cpp" />
+    <ClCompile Include="CDXStroke.cpp" />
+    <ClCompile Include="CDXUndo.cpp" />
+    <ClCompile Include="FileUtils.cpp" />
+    <ClCompile Include="SKEEHooks.cpp" />
+    <ClCompile Include="IPluginInterface.cpp" />
+    <ClCompile Include="ItemDataInterface.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="MorphHandler.cpp" />
+    <ClCompile Include="NifUtils.cpp" />
+    <ClCompile Include="NiTransformInterface.cpp" />
+    <ClCompile Include="OverlayInterface.cpp" />
+    <ClCompile Include="OverrideInterface.cpp" />
+    <ClCompile Include="OverrideVariant.cpp" />
+    <ClCompile Include="PapyrusCharGen.cpp" />
+    <ClCompile Include="PapyrusNiOverride.cpp" />
+    <ClCompile Include="PartHandler.cpp" />
+    <ClCompile Include="ScaleformCharGenFunctions.cpp" />
+    <ClCompile Include="ScaleformFunctions.cpp" />
+    <ClCompile Include="ScaleformLoader.cpp" />
+    <ClCompile Include="ScaleformUtils.cpp" />
+    <ClCompile Include="ShaderUtilities.cpp" />
+    <ClCompile Include="SkeletonExtender.cpp" />
+    <ClCompile Include="StringTable.cpp" />
+    <ClCompile Include="TintMaskInterface.cpp" />
+    <ClCompile Include="tinyxml2.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\skse64\GameAPI.h" />
+    <ClInclude Include="..\skse64\GameBSExtraData.h" />
+    <ClInclude Include="..\skse64\GameData.h" />
+    <ClInclude Include="..\skse64\GameEvents.h" />
+    <ClInclude Include="..\skse64\GameExtraData.h" />
+    <ClInclude Include="..\skse64\GameFormComponents.h" />
+    <ClInclude Include="..\skse64\GameForms.h" />
+    <ClInclude Include="..\skse64\GameMenus.h" />
+    <ClInclude Include="..\skse64\GameObjects.h" />
+    <ClInclude Include="..\skse64\GameReferences.h" />
+    <ClInclude Include="..\skse64\GameResources.h" />
+    <ClInclude Include="..\skse64\GameRTTI.h" />
+    <ClInclude Include="..\skse64\GameSettings.h" />
+    <ClInclude Include="..\skse64\GameStreams.h" />
+    <ClInclude Include="..\skse64\gamethreads.h" />
+    <ClInclude Include="..\skse64\GameTypes.h" />
+    <ClInclude Include="..\skse64\GameUtilities.h" />
+    <ClInclude Include="..\skse64\HashUtil.h" />
+    <ClInclude Include="..\skse64\NiAllocator.h" />
+    <ClInclude Include="..\skse64\NiExtraData.h" />
+    <ClInclude Include="..\skse64\NiGeometry.h" />
+    <ClInclude Include="..\skse64\NiMaterial.h" />
+    <ClInclude Include="..\skse64\NiNodes.h" />
+    <ClInclude Include="..\skse64\NiObjects.h" />
+    <ClInclude Include="..\skse64\NiProperties.h" />
+    <ClInclude Include="..\skse64\NiRenderer.h" />
+    <ClInclude Include="..\skse64\NiRTTI.h" />
+    <ClInclude Include="..\skse64\NiSerialization.h" />
+    <ClInclude Include="..\skse64\NiTextures.h" />
+    <ClInclude Include="..\skse64\NiTypes.h" />
+    <ClInclude Include="..\skse64\PapyrusArgs.h" />
+    <ClInclude Include="..\skse64\PapyrusInterfaces.h" />
+    <ClInclude Include="..\skse64\PapyrusNativeFunctions.h" />
+    <ClInclude Include="..\skse64\PapyrusValue.h" />
+    <ClInclude Include="..\skse64\PapyrusVM.h" />
+    <ClInclude Include="..\skse64\ScaleformAPI.h" />
+    <ClInclude Include="..\skse64\ScaleformCallbacks.h" />
+    <ClInclude Include="..\skse64\ScaleformMovie.h" />
+    <ClInclude Include="..\skse64\ScaleformState.h" />
+    <ClInclude Include="..\skse64\ScaleformTypes.h" />
+    <ClInclude Include="..\skse64\ScaleformValue.h" />
+    <ClInclude Include="..\skse64\ScaleformVM.h" />
+    <ClInclude Include="BodyMorphInterface.h" />
+    <ClInclude Include="CDXBrush.h" />
+    <ClInclude Include="CDXCamera.h" />
+    <ClInclude Include="CDXEditableMesh.h" />
+    <ClInclude Include="CDXEditableScene.h" />
+    <ClInclude Include="CDXMaterial.h" />
+    <ClInclude Include="CDXMesh.h" />
+    <ClInclude Include="CDXNifBrush.h" />
+    <ClInclude Include="CDXNifCommands.h" />
+    <ClInclude Include="CDXNifMesh.h" />
+    <ClInclude Include="CDXNifScene.h" />
+    <ClInclude Include="CDXPicker.h" />
+    <ClInclude Include="CDXResetMask.h" />
+    <ClInclude Include="CDXScene.h" />
+    <ClInclude Include="CDXShader.h" />
+    <ClInclude Include="CDXStroke.h" />
+    <ClInclude Include="CDXUndo.h" />
+    <ClInclude Include="FileUtils.h" />
+    <ClInclude Include="SKEEHooks.h" />
+    <ClInclude Include="IHashType.h" />
+    <ClInclude Include="IPluginInterface.h" />
+    <ClInclude Include="ItemDataInterface.h" />
+    <ClInclude Include="MorphHandler.h" />
+    <ClInclude Include="NifUtils.h" />
+    <ClInclude Include="NiTransformInterface.h" />
+    <ClInclude Include="OverlayInterface.h" />
+    <ClInclude Include="OverrideInterface.h" />
+    <ClInclude Include="OverrideVariant.h" />
+    <ClInclude Include="PapyrusCharGen.h" />
+    <ClInclude Include="PapyrusNiOverride.h" />
+    <ClInclude Include="PartHandler.h" />
+    <ClInclude Include="ScaleformCharGenFunctions.h" />
+    <ClInclude Include="ScaleformFunctions.h" />
+    <ClInclude Include="ScaleformLoader.h" />
+    <ClInclude Include="ScaleformUtils.h" />
+    <ClInclude Include="ShaderUtilities.h" />
+    <ClInclude Include="SkeletonExtender.h" />
+    <ClInclude Include="StringTable.h" />
+    <ClInclude Include="TintMaskInterface.h" />
+    <ClInclude Include="tinyxml2.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="exports.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\common_vc14.vcxproj">
+      <Project>{d4c128a1-73dc-4941-a453-ce55af239ba8}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\skse64_common\skse64_common.vcxproj">
+      <Project>{20c6411c-596f-4b85-be4e-8bc91f59d8a6}</Project>
+      <Private>false</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
+    </ProjectReference>
+    <ProjectReference Include="..\jsoncpp\jsoncpp.vcxproj">
+      <Project>{522ec01c-c40f-4de4-a83e-06c5b56620e6}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
