@@ -112,3 +112,84 @@ BGSHeadPart * GetHeadPartByName(std::string & headPartName)
 
 	return NULL;
 }
+
+ModInfo* GetModInfoByFormID(UInt32 formId, bool allowLight)
+{
+	DataHandler * dataHandler = DataHandler::GetSingleton();
+
+	UInt8 modIndex = formId >> 24;
+	UInt16 lightIndex = ((formId >> 12) & 0xFFF);
+
+	ModInfo* modInfo = nullptr;
+	if (modIndex == 0xFE && allowLight) {
+		if (lightIndex < dataHandler->modList.loadedCCMods.count)
+			dataHandler->modList.loadedCCMods.GetNthItem(lightIndex, modInfo);
+	} else {
+		if(modIndex < 0xFE)
+			dataHandler->modList.loadedMods.GetNthItem(modIndex, modInfo);
+	}
+
+	return modInfo;
+}
+
+std::string GetFormIdentifier(TESForm * form)
+{
+	char formName[MAX_PATH];
+	UInt8 modIndex = form->formID >> 24;
+	UInt32 modForm = form->formID & 0xFFFFFF;
+
+	ModInfo* modInfo = nullptr;
+	if (modIndex == 0xFE)
+	{
+		UInt16 lightIndex = (form->formID >> 12) & 0xFFF;
+		if (lightIndex < (*g_dataHandler)->modList.loadedCCMods.count)
+			modInfo = (*g_dataHandler)->modList.loadedCCMods[lightIndex];
+	}
+	else
+	{
+		modInfo = (*g_dataHandler)->modList.loadedMods[modIndex];
+	}
+
+	if (modInfo) {
+		sprintf_s(formName, "%s|%06X", modInfo->name, modForm);
+	}
+
+	return formName;
+}
+
+TESForm * GetFormFromIdentifier(const std::string & formIdentifier)
+{
+	std::size_t pos = formIdentifier.find_first_of('|');
+	std::string modName = formIdentifier.substr(0, pos);
+	std::string modForm = formIdentifier.substr(pos + 1);
+
+	UInt32 formId = 0;
+	sscanf_s(modForm.c_str(), "%X", &formId);
+
+	UInt8 modIndex = (*g_dataHandler)->GetLoadedModIndex(modName.c_str());
+	if (modIndex != 0xFF) {
+		formId |= ((UInt32)modIndex) << 24;
+	}
+	else
+	{
+		UInt16 lightModIndex = (*g_dataHandler)->GetLoadedLightModIndex(modName.c_str());
+		if (lightModIndex != 0xFFFF) {
+			formId |= 0xFE000000 | (UInt32(lightModIndex) << 12);
+		}
+	}
+
+	return LookupFormByID(formId);
+}
+
+void ForEachMod(std::function<void(ModInfo *)> functor)
+{
+	for (UInt32 i = 0; i < (*g_dataHandler)->modList.loadedMods.count; i++)
+	{
+		functor((*g_dataHandler)->modList.loadedMods[i]);
+	}
+
+	for (UInt32 i = 0; i < (*g_dataHandler)->modList.loadedCCMods.count; i++)
+	{
+		functor((*g_dataHandler)->modList.loadedCCMods[i]);
+	}
+}

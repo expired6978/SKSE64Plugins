@@ -566,7 +566,7 @@ bool ResolveAnyHandle(SKSESerializationInterface * intfc, UInt64 handle, UInt64 
 			return false;
 		}
 	}
-	else {
+	else { // This will resolve game-created forms
 		TESForm * formCheck = LookupFormByID(handle & 0xFFFFFFFF);
 		if (!formCheck) {
 			return false;
@@ -602,12 +602,12 @@ void DumpNodeChildren(NiAVObject * node)
 			NiAVObject * object = niNode->m_children.m_data[i];
 			if (object) {
 				NiNode * childNode = object->GetAsNiNode();
-				NiGeometry * geometry = object->GetAsNiGeometry();
+				BSGeometry * geometry = object->GetAsBSGeometry();
 				if (geometry) {
-					NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
+					/*NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
 					if (geometryData)
 						_MESSAGE("{%s} {%s} {%X} {%s} {%X}", object->GetRTTI()->name, object->m_name, object, geometryData->GetRTTI()->name, geometryData);
-					else
+					else*/
 						_MESSAGE("{%s} {%s} {%X}", object->GetRTTI()->name, object->m_name, object);
 				}
 				else if (childNode) {

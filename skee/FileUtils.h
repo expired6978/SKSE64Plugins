@@ -12,6 +12,7 @@
 class TESRace;
 class BGSHeadPart;
 class BSResourceNiBinaryStream;
+struct ModInfo;
 
 namespace std {
 	extern inline std::string &ltrim(std::string &s);
@@ -26,3 +27,10 @@ void BSReadAll(BSResourceNiBinaryStream* fin, std::string* str);
 
 TESRace * GetRaceByName(std::string & raceName);
 BGSHeadPart * GetHeadPartByName(std::string & headPartName);
+
+ModInfo* GetModInfoByFormID(UInt32 formId, bool allowLight = true);
+
+std::string GetFormIdentifier(TESForm * form);
+TESForm * GetFormFromIdentifier(const std::string & formIdentifier);
+
+void ForEachMod(std::function<void(ModInfo *)> functor);

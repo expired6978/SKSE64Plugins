@@ -48,20 +48,18 @@ void BodyMorphInterface::LoadMods()
 	if (dataHandler)
 	{
 		std::string fixedPath = "Meshes\\" + std::string(MORPH_MOD_DIRECTORY);
-		UInt8 modCount = dataHandler->modList.loadedMods.count;
-		for (UInt32 i = 0; i < modCount; i++)
+
+		ForEachMod([&](ModInfo * modInfo)
 		{
-			ModInfo * modInfo = dataHandler->modList.loadedMods[i];
 			std::string templatesPath = fixedPath + std::string(modInfo->name) + "\\templates.ini";
 			ReadBodyMorphTemplates(templatesPath.c_str());
-		}
+		});
 
-		for (UInt32 i = 0; i < modCount; i++)
+		ForEachMod([&](ModInfo * modInfo)
 		{
-			ModInfo * modInfo = dataHandler->modList.loadedMods[i];
 			std::string morphsPath = fixedPath + std::string(modInfo->name) + "\\morphs.ini";
 			ReadBodyMorphs(morphsPath.c_str());
-		}
+		});
 	}
 }
 

@@ -331,6 +331,10 @@ void SKEE64Serialization_Save(SKSESerializationInterface * intfc)
 	_DMESSAGE("%s - Serialized string table %dms", __FUNCTION__, sw.Stop());
 
 	sw.Start();
+	g_morphHandler.Save(intfc, kSerializationDataVersion);
+	_DMESSAGE("%s - Player morph data %dms", __FUNCTION__, sw.Stop());
+
+	sw.Start();
 	g_transformInterface.Save(intfc, NiTransformInterface::kSerializationVersion);
 	_DMESSAGE("%s - Serialized transforms %dms", __FUNCTION__, sw.Stop());
 
@@ -350,11 +354,6 @@ void SKEE64Serialization_Save(SKSESerializationInterface * intfc)
 	g_itemDataInterface.Save(intfc, ItemDataInterface::kSerializationVersion);
 	_DMESSAGE("%s - Serialized item data %dms", __FUNCTION__, sw.Stop());
 
-	PlayerCharacter * player = (*g_thePlayer);
-	TESNPC * playerBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
-
-	g_morphHandler.Save(playerBase, intfc, kSerializationDataVersion);
-
 	g_stringTable.Clear();
 }
 
@@ -365,13 +364,6 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 	UInt32 type, length, version;
 	bool error = false;
 
-	PlayerCharacter * player = (*g_thePlayer);
-	TESNPC * playerBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
-
-	g_morphHandler.Load(playerBase, intfc, kSerializationDataVersion);
-
-	g_task->AddTask(new SKSETaskApplyMorphs(player));
-
 	StopWatch sw;
 	sw.Start();
 	while (intfc->GetNextRecordInfo(&type, &version, &length))
@@ -379,12 +371,14 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 		switch (type)
 		{
 			case 'STTB':	g_stringTable.Load(intfc, version);							break;
+			case 'MRST':	g_morphHandler.LoadMorphData(intfc, version);				break;
+			case 'SCDT':	g_morphHandler.LoadSculptData(intfc, version);				break;
 			case 'AOVL':	g_overlayInterface.Load(intfc, version);					break;
 			case 'ACEN':	g_overrideInterface.LoadOverrides(intfc, version);			break;
 			case 'NDEN':	g_overrideInterface.LoadNodeOverrides(intfc, version);		break;
 			case 'WPEN':	g_overrideInterface.LoadWeaponOverrides(intfc, version);	break;
 			case 'SKNR':	g_overrideInterface.LoadSkinOverrides(intfc, version);		break;
-			case 'MRPH':	g_bodyMorphInterface.Load(intfc, version);						break;
+			case 'MRPH':	g_bodyMorphInterface.Load(intfc, version);					break;
 			case 'ITEE':	g_itemDataInterface.Load(intfc, version);					break;
 			case 'ACTM':	g_transformInterface.Load(intfc, version);					break;
 			default:
@@ -394,6 +388,9 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 		}
 	}
 	_DMESSAGE("%s - Loaded %dms", __FUNCTION__, sw.Stop());
+
+	PlayerCharacter * player = (*g_thePlayer);
+	g_task->AddTask(new SKSETaskApplyMorphs(player));
 
 	g_stringTable.Clear();
 	g_firstLoad = true;

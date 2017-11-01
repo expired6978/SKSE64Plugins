@@ -513,10 +513,8 @@ void MorphHandler::LoadMods()
 	DataHandler * dataHandler = DataHandler::GetSingleton();
 	if (dataHandler)
 	{
-		UInt8 modCount = dataHandler->modList.loadedMods.count;
-		for (UInt32 i = 0; i < modCount; i++)
+		ForEachMod([&](ModInfo * modInfo)
 		{
-			ModInfo * modInfo = dataHandler->modList.loadedMods[i];
 			std::string fixedPath = "Meshes\\";
 			fixedPath.append(SLIDER_MOD_DIRECTORY);
 			std::string modPath = modInfo->name;
@@ -527,7 +525,7 @@ void MorphHandler::LoadMods()
 				ReadMorphs(fixedPath, modPath, "morphs.ini");
 
 			ReadPartReplacements(fixedPath, modPath, "replacements.ini");
-		}
+		});
 
 		if (g_extendedMorphs) {
 			BGSHeadPart * part = NULL;
@@ -1564,8 +1562,11 @@ SInt32 MorphHandler::LoadSliders(tArray<RaceMenuSlider> * sliderArray, RaceMenuS
 	return sliderId;
 }
 
-void MorphHandler::Save(TESNPC* npc, SKSESerializationInterface * intfc, UInt32 kVersion)
+void MorphHandler::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 {
+	PlayerCharacter * player = (*g_thePlayer);
+	TESNPC * npc = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
+
 	auto sculptData = m_sculptStorage.GetSculptTarget(npc, false);
 	if (sculptData) {
 		if (sculptData->size() > 0) {
@@ -1624,172 +1625,159 @@ void MorphHandler::Save(TESNPC* npc, SKSESerializationInterface * intfc, UInt32 
 	}
 }
 
-bool MorphHandler::Load(TESNPC* npc, SKSESerializationInterface * intfc, UInt32 kVersion)
+bool MorphHandler::LoadMorphData(SKSESerializationInterface * intfc, UInt32 version)
 {
 	UInt32	type;
-	UInt32	version;
 	UInt32	length;
-	bool	error = false;
 
-	while(!error && intfc->GetNextRecordInfo(&type, &version, &length))
+	bool error = false;
+
+	PlayerCharacter * player = (*g_thePlayer);
+	TESNPC * playerBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
+
+	UInt32 numMorphs = 0;
+	if (!intfc->ReadRecordData(&numMorphs, sizeof(numMorphs)))
 	{
-		switch(type)
+		_MESSAGE("Error loading morph count");
+		error = true;
+		return true;
+	}
+
+	for (UInt32 i = 0; i < numMorphs; i++)
+	{
+		char * name = NULL;
+		UInt32 index = 0;
+		float value = 0.0;
+
+		if (intfc->GetNextRecordInfo(&type, &version, &length))
 		{
-		case 'MRST':
+			switch (type)
 			{
-				if(version == kVersion)
-				{
-					UInt32 numMorphs = 0;
-					if(!intfc->ReadRecordData(&numMorphs, sizeof(numMorphs)))
-					{
-						_MESSAGE("Error loading morph count");
-						error = true;
-						return true;
-					}
-
-					for(UInt32 i = 0; i < numMorphs; i++)
-					{
-						char * name = NULL;
-						UInt32 index = 0;
-						float value = 0.0;
-
-						if(intfc->GetNextRecordInfo(&type, &version, &length))
-						{
-							switch(type)
-							{
-								case 'MRPH':
-								{
-									UInt16 nameLength = 0;
-									if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
-										_MESSAGE("Error loading morph name length");
-										error = true;
-										return true;
-									}
-
-									name = new char[nameLength + 1];
-									if (!intfc->ReadRecordData(name, nameLength)) {
-										_MESSAGE("Error loading morph name");
-										error = true;
-										return true;
-									}
-									name[nameLength] = 0;
-
-									if (!intfc->ReadRecordData(&value, sizeof(value))) {
-										_MESSAGE("Error loading morph value");
-										error = true;
-										return true;
-									}
-								}
-								break;
-							default:
-								_MESSAGE("unhandled type %08X", type);
-								error = true;
-								break;
-							}
-						}
-
-						if(value != 0.0) {
-							_MESSAGE("Loaded Morph: %s - Value: %f", name, value);
-							m_valueMap.SetMorphValue(npc, BSFixedString(name), value);
-						}
-					}
-				} else {
-					error = true;
-				}
-			}
-			break;
-
-		case 'SCDT':
-		{
-			if (version == kVersion)
+			case 'MRPH':
 			{
-				UInt16 numParts = 0;
-				if (!intfc->ReadRecordData(&numParts, sizeof(numParts)))
-				{
-					_MESSAGE("Error loading sculpt part count");
+				UInt16 nameLength = 0;
+				if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
+					_MESSAGE("Error loading morph name length");
 					error = true;
 					return true;
 				}
 
-				for (UInt32 i = 0; i < numParts; i++)
-				{
-					if (intfc->GetNextRecordInfo(&type, &version, &length))
-					{
-						switch (type)
-						{
-							case 'SCPT':
-							{
-								UInt16 nameLength = 0;
-								if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
-									_MESSAGE("Error loading sculpt part name length");
-									error = true;
-									return true;
-								}
+				name = new char[nameLength + 1];
+				if (!intfc->ReadRecordData(name, nameLength)) {
+					_MESSAGE("Error loading morph name");
+					error = true;
+					return true;
+				}
+				name[nameLength] = 0;
 
-								char * name = new char[nameLength + 1];
-								if (!intfc->ReadRecordData(name, nameLength)) {
-									_MESSAGE("Error loading sculpt part name");
-									error = true;
-									return true;
-								}
-								name[nameLength] = 0;
-
-								UInt16 totalDifferences = 0;
-								if (!intfc->ReadRecordData(&totalDifferences, sizeof(totalDifferences))) {
-									_MESSAGE("Error loading sculpt difference count");
-									error = true;
-									return true;
-								}
-
-								SculptDataPtr sculptTarget;
-								if (totalDifferences > 0)
-									sculptTarget = m_sculptStorage.GetSculptTarget(npc, true);
-								MappedSculptDataPtr sculptHost;
-								if (sculptTarget && totalDifferences > 0)
-									sculptHost = sculptTarget->GetSculptHost(BSFixedString(name), true);
-
-								UInt16 index = 0;
-								NiPoint3 value;
-								for (UInt16 i = 0; i < totalDifferences; i++)
-								{
-									if (!intfc->ReadRecordData(&index, sizeof(index))) {
-										_MESSAGE("Error loading sculpt index");
-										error = true;
-										return true;
-									}
-
-									if (!intfc->ReadRecordData(&value, sizeof(value))) {
-										_MESSAGE("Error loading sculpt index");
-										error = true;
-										return true;
-									}
-
-									if (sculptTarget && sculptHost)
-										sculptHost->force_insert(std::make_pair(index, value));
-								}
-							}
-							break;
-							default:
-							_MESSAGE("unhandled type %08X", type);
-							error = true;
-							break;
-						}
-					}
+				if (!intfc->ReadRecordData(&value, sizeof(value))) {
+					_MESSAGE("Error loading morph value");
+					error = true;
+					return true;
 				}
 			}
-		}
-		break;
-
-		default:
-			_MESSAGE("unhandled type %08X", type);
-			error = true;
 			break;
+			default:
+				_MESSAGE("unhandled type %08X", type);
+				error = true;
+				break;
+			}
+		}
+
+		if (value != 0.0) {
+			_MESSAGE("Loaded Morph: %s - Value: %f", name, value);
+			m_valueMap.SetMorphValue(playerBase, BSFixedString(name), value);
 		}
 	}
 
 	return error;
 }
 
+bool MorphHandler::LoadSculptData(SKSESerializationInterface * intfc, UInt32 version)
+{
+	UInt32	type;
+	UInt32	length;
+	bool	error = false;
+
+	PlayerCharacter * player = (*g_thePlayer);
+	TESNPC * playerBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
+
+	UInt16 numParts = 0;
+	if (!intfc->ReadRecordData(&numParts, sizeof(numParts)))
+	{
+		_MESSAGE("Error loading sculpt part count");
+		error = true;
+		return true;
+	}
+
+	for (UInt32 i = 0; i < numParts; i++)
+	{
+		if (intfc->GetNextRecordInfo(&type, &version, &length))
+		{
+			switch (type)
+			{
+			case 'SCPT':
+			{
+				UInt16 nameLength = 0;
+				if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
+					_MESSAGE("Error loading sculpt part name length");
+					error = true;
+					return true;
+				}
+
+				char * name = new char[nameLength + 1];
+				if (!intfc->ReadRecordData(name, nameLength)) {
+					_MESSAGE("Error loading sculpt part name");
+					error = true;
+					return true;
+				}
+				name[nameLength] = 0;
+
+				UInt16 totalDifferences = 0;
+				if (!intfc->ReadRecordData(&totalDifferences, sizeof(totalDifferences))) {
+					_MESSAGE("Error loading sculpt difference count");
+					error = true;
+					return true;
+				}
+
+				SculptDataPtr sculptTarget;
+				if (totalDifferences > 0)
+					sculptTarget = m_sculptStorage.GetSculptTarget(playerBase, true);
+				MappedSculptDataPtr sculptHost;
+				if (sculptTarget && totalDifferences > 0)
+					sculptHost = sculptTarget->GetSculptHost(BSFixedString(name), true);
+
+				UInt16 index = 0;
+				NiPoint3 value;
+				for (UInt16 i = 0; i < totalDifferences; i++)
+				{
+					if (!intfc->ReadRecordData(&index, sizeof(index))) {
+						_MESSAGE("Error loading sculpt index");
+						error = true;
+						return true;
+					}
+
+					if (!intfc->ReadRecordData(&value, sizeof(value))) {
+						_MESSAGE("Error loading sculpt index");
+						error = true;
+						return true;
+					}
+
+					if (sculptTarget && sculptHost)
+						sculptHost->force_insert(std::make_pair(index, value));
+				}
+			}
+			break;
+			default:
+				_MESSAGE("unhandled type %08X", type);
+				error = true;
+				break;
+			}
+		}
+	}
+
+	return error;
+}
 
 struct PresetHeader
 {
@@ -1837,7 +1825,8 @@ bool MorphHandler::SaveJsonPreset(const char * filePath)
 	if (npc)
 		isFemale = CALL_MEMBER_FN(npc, GetSex)() == 1;
 
-	std::map<UInt8, const char *> modList;
+	std::map<UInt8, const char *> modListLegacy;
+	std::set<std::string> modList;
 	std::map<UInt8, BGSHeadPart*> partList;
 
 	UInt32 numHeadParts = 0;
@@ -1851,15 +1840,28 @@ bool MorphHandler::SaveJsonPreset(const char * filePath)
 		headParts = npc->headparts;
 	}
 
-	for (UInt32 i = 0; i < numHeadParts; i++) // Acquire all unique parts
+	// Acquire only vanilla dependencies
+	for (UInt32 i = 0; i < numHeadParts; i++)
+	{
+		BGSHeadPart * headPart = headParts[i];
+		if (headPart && !headPart->IsExtraPart()) {			
+			ModInfo * modInfo = GetModInfoByFormID(headPart->formID, false);
+			if (modInfo) {
+				modListLegacy.emplace(modInfo->modIndex, modInfo->name);
+			}
+
+			partList.emplace(i, headPart);
+		}
+	}
+
+	// Acquire all mod dependencies
+	for (UInt32 i = 0; i < numHeadParts; i++)
 	{
 		BGSHeadPart * headPart = headParts[i];
 		if (headPart && !headPart->IsExtraPart()) {
-			UInt8 modIndex = headPart->formID >> 24;
-			ModInfo* modInfo = dataHandler->modList.modInfoList.GetNthItem(modIndex);
+			ModInfo * modInfo = GetModInfoByFormID(headPart->formID, true);
 			if (modInfo) {
-				modList.emplace(modInfo->modIndex, modInfo->name);
-				partList.emplace(i, headPart);
+				modList.emplace(modInfo->name);
 			}
 		}
 	}
@@ -1877,12 +1879,18 @@ bool MorphHandler::SaveJsonPreset(const char * filePath)
 	}
 
 	Json::Value modInfo;
-	for (auto mIt = modList.begin(); mIt != modList.end(); ++mIt)
+	for (auto mIt = modListLegacy.begin(); mIt != modListLegacy.end(); ++mIt)
 	{
 		Json::Value mod;
 		mod["index"] = mIt->first;
 		mod["name"] = mIt->second;
 		modInfo.append(mod);
+	}
+
+	Json::Value modNames;
+	for (auto mIt = modList.begin(); mIt != modList.end(); ++mIt)
+	{
+		modNames.append(*mIt);
 	}
 
 	Json::Value headPartInfo;
@@ -1891,6 +1899,7 @@ bool MorphHandler::SaveJsonPreset(const char * filePath)
 		Json::Value partInfo;
 		partInfo["type"] = pIt->first;
 		partInfo["formId"] = (Json::UInt)pIt->second->formID;
+		partInfo["formIdentifier"] = GetFormIdentifier(pIt->second);
 		headPartInfo.append(partInfo);
 	}
 
@@ -2144,6 +2153,7 @@ bool MorphHandler::SaveJsonPreset(const char * filePath)
 	
 	root["version"] = versionInfo;
 	root["mods"] = modInfo;
+	root["modNames"] = modNames;
 	root["headParts"] = headPartInfo;
 	root["actor"]["weight"] = npc->weight;
 
@@ -2218,8 +2228,7 @@ bool MorphHandler::SaveBinaryPreset(const char * filePath)
 		{
 			BGSHeadPart * headPart = headParts[i];
 			if(headPart && !headPart->IsExtraPart()) {
-				UInt8 modIndex = headPart->formID >> 24;
-				ModInfo* modInfo = dataHandler->modList.modInfoList.GetNthItem(modIndex);
+				ModInfo* modInfo = GetModInfoByFormID(headPart->formID);
 				if(modInfo) {
 					modList.emplace(modInfo->modIndex, modInfo->name);
 					partList.emplace(i, headPart);
@@ -2411,7 +2420,8 @@ bool MorphHandler::LoadJsonPreset(const char * filePath, PresetDataPtr presetDat
 	}
 
 	Json::Value mods = root["mods"];
-	if (mods.empty()) {
+	Json::Value modNames = root["modNames"];
+	if (mods.empty() && modNames.empty()) {
 		_ERROR("%s: No mods header.", __FUNCTION__);
 		loadError = true;
 		return loadError;
@@ -2419,10 +2429,10 @@ bool MorphHandler::LoadJsonPreset(const char * filePath, PresetDataPtr presetDat
 
 	DataHandler * dataHandler = DataHandler::GetSingleton();
 
-	std::map<UInt8, std::string> modList;
+	std::map<UInt32, std::string> modList;
 	if (mods.type() == Json::arrayValue) {
 		for (auto & mod : mods) {
-			UInt8 modIndex = mod["index"].asUInt();
+			UInt32 modIndex = mod["index"].asUInt();
 			std::string modName = mod["name"].asString();
 
 			modList.emplace(modIndex, modName);
@@ -2430,32 +2440,49 @@ bool MorphHandler::LoadJsonPreset(const char * filePath, PresetDataPtr presetDat
 		}
 	}
 
+	if (root.isMember("modNames") && modNames.type() == Json::arrayValue) {
+		presetData->modList.clear();
+		for (auto & mod : modNames) {
+			presetData->modList.push_back(mod.asString());
+		}
+	}
+
 	Json::Value headParts = root["headParts"];
 	if (!headParts.empty() && headParts.type() == Json::arrayValue) {
 		for (auto & part : headParts) {
+			if (part.isMember("formIdentifier")) {
+				TESForm * headPartForm = GetFormFromIdentifier(part["formIdentifier"].asString());
+				if (headPartForm) {
+					BGSHeadPart * headPart = DYNAMIC_CAST(headPartForm, TESForm, BGSHeadPart);
+					if (headPart) {
+						presetData->headParts.push_back(headPart);
+					}
+				}
+			}
+			else if (part.isMember("formId")) {
+				UInt8 partType = part["type"].asUInt();
+				UInt32 formId = part["formId"].asUInt();
 
-			UInt8 partType = part["type"].asUInt();
-			UInt32 formId = part["formId"].asUInt();
-
-			UInt8 modIndex = formId >> 24;
-			auto it = modList.find(modIndex);
-			if (it != modList.end()) {
-				UInt8 gameIndex = dataHandler->GetModIndex(it->second.c_str());
-				if (gameIndex != 255) {
-					formId = (formId & 0x00FFFFFF) | (gameIndex << 24);
-					TESForm * headPartForm = LookupFormByID(formId);
-					if (headPartForm) {
-						BGSHeadPart * headPart = DYNAMIC_CAST(headPartForm, TESForm, BGSHeadPart);
-						if (headPart) {
-							presetData->headParts.push_back(headPart);
+				UInt32 modIndex = formId >> 24;
+				auto it = modList.find(modIndex);
+				if (it != modList.end()) {
+					UInt8 gameIndex = dataHandler->GetLoadedModIndex(it->second.c_str());
+					if (gameIndex != 255) {
+						formId = (formId & 0x00FFFFFF) | (gameIndex << 24);
+						TESForm * headPartForm = LookupFormByID(formId);
+						if (headPartForm) {
+							BGSHeadPart * headPart = DYNAMIC_CAST(headPartForm, TESForm, BGSHeadPart);
+							if (headPart) {
+								presetData->headParts.push_back(headPart);
+							}
+						}
+						else {
+							_WARNING("Could not resolve part %08X", formId);
 						}
 					}
 					else {
-						_WARNING("Could not resolve part %08X", formId);
+						_WARNING("Could not load part type %d from %s; mod not found.", partType, it->second.c_str());
 					}
-				}
-				else {
-					_WARNING("Could not load part type %d from %s; mod not found.", partType, it->second.c_str());
 				}
 			}
 		}
@@ -2677,7 +2704,7 @@ bool MorphHandler::LoadJsonPreset(const char * filePath, PresetDataPtr presetDat
 					BSFixedString ext(strKey.substr(strKey.find_last_of(".") + 1).c_str());
 					if (ext == BSFixedString("esp") || ext == BSFixedString("esm"))
 					{
-						if (!dataHandler->LookupModByName(key.data))
+						if (!dataHandler->LookupLoadedModByName(key.data))
 							continue;
 					}
 
@@ -2766,7 +2793,7 @@ bool MorphHandler::LoadBinaryPreset(const char * filePath, PresetDataPtr presetD
 			UInt8 modIndex = formId >> 24;
 			auto it = modList.find(modIndex);
 			if(it != modList.end()) {
-				UInt8 gameIndex = dataHandler->GetModIndex(it->second.c_str());
+				UInt8 gameIndex = dataHandler->GetLoadedModIndex(it->second.c_str());
 				if(gameIndex != 255) {
 					formId = (formId & 0x00FFFFFF) | (gameIndex << 24);
 					TESForm * headPartForm = LookupFormByID(formId);

@@ -333,10 +333,12 @@ typedef std::unordered_map<TESNPC*, PresetDataPtr> PresetMap;
 class MorphHandler
 {
 public:
-	void Save(TESNPC* npc, SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(TESNPC* npc, SKSESerializationInterface * intfc, UInt32 kVersion);
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
 	void Revert();
 	void RevertInternals();
+
+	bool LoadMorphData(SKSESerializationInterface * intfc, UInt32 version);
+	bool LoadSculptData(SKSESerializationInterface * intfc, UInt32 version);
 
 	void LoadMods();
 
