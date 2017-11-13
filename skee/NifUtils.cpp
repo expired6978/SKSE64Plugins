@@ -18,7 +18,6 @@
 #include "skse64/NiRenderer.h"
 #include "skse64/NiTextures.h"
 #include "skse64/NiExtraData.h"
-#include "skse64/NiAllocator.h"
 
 #ifdef FIXME
 #include <d3dx9.h>
@@ -314,7 +313,7 @@ void SKSETaskExportHead::Run()
 				// Remap the bones to new NiNode instances
 				if (numBones > 0)
 				{
-					newSkinInstance->m_ppkBones = (NiAVObject**)NiAllocate(numBones * sizeof(NiAVObject*));
+					newSkinInstance->m_ppkBones = (NiAVObject**)Heap_Allocate(numBones * sizeof(NiAVObject*));
 					for (UInt32 i = 0; i < numBones; i++)
 					{
 						NiAVObject * bone = skinInstance->m_ppkBones[i];

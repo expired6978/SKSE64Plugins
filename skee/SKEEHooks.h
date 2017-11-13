@@ -5,6 +5,7 @@ class TESObjectARMA;
 class TESModelTextureSwap;
 class BGSTextureSet;
 class BSFaceGenNiNode;
+class NiNode;
 
 #include "common/IErrors.h"
 #include "skse64/NiProperties.h"
@@ -32,32 +33,30 @@ extern RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs;
 typedef void(*_UpdateNPCMorph)(TESNPC * npc, BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
 extern RelocAddr<_UpdateNPCMorph> UpdateNPCMorph;
 
-
-class AddonTreeParameters
-{
-public:
-	UInt32	unk00;					// 00 - ?
-	UInt32	unk04;					// 04 - inited to zero
-	TESObjectARMO * armor;			// 08
-	TESObjectARMA * addon;			// 0C
-	TESModelTextureSwap * model;	// 10
-	BGSTextureSet * textureSet;		// 14
-};
+typedef NiNode * (*_CreateArmorNode)(void * unk1, void * unk2, UInt32 unk3, UInt32 unk4, UInt32 unk5, UInt64 unk6);
+extern RelocAddr<_CreateArmorNode> CreateArmorNode;
 
 class ArmorAddonTree
 {
 public:
-	MEMBER_FN_PREFIX(ArmorAddonTree);
-	DEFINE_MEMBER_FN(CreateArmorNode, NiAVObject *, 0x0046F0B0, NiNode * unk1, UInt32 unk2, UInt8 unk3, UInt32 unk4, UInt32 unk5);
-
 	UInt32	unk00;			// 00 refcount?
-	NiNode * unk04;			// 04 FlattenedBoneTree
-	TESObjectARMO * skin;	// 08
-	UInt32	unk0C[(0xA88 - 0x0C) >> 2];	// 0C
-	UInt32	unkA88;			// A88
+	UInt32	unk04;			// 04
+	NiNode * boneTree;		// 08 FlattenedBoneTree
+	TESObjectARMO * skin;	// 10
+	UInt64	unk18[(0x2770 - 0x18) >> 3];	// 18
+	UInt32	handle;			// 2770
+	UInt32	unk2774;		// 2774
+};
 
-	//NiAVObject * CreateArmorNode_Hooked(NiNode * unk1, UInt32 unk2, UInt32 unk3, UInt32 unk4, UInt32 unk5);
-	NiAVObject * CreateArmorNode(AddonTreeParameters * params, NiNode * unk1, UInt32 unk2, UInt32 unk3, UInt32 unk4, UInt32 unk5);
+class AddonTreeParameters
+{
+public:
+	UInt64	unk00;					// 00 - ?
+	UInt64	unk08;					// 08 - inited to zero
+	TESObjectARMO * armor;			// 10
+	TESObjectARMA * addon;			// 18
+	TESModelTextureSwap * model;	// 20
+	BGSTextureSet * textureSet;		// 28
 };
 
 #ifdef FIXME

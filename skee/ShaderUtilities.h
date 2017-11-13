@@ -42,8 +42,8 @@ public:
 		NiAVObject::ControllerUpdateContext ctx;
 		ctx.flags = 0;
 		ctx.delta = 0;
-		//m_object->UpdateWorldData(&ctx);
-		CALL_MEMBER_FN(m_object, UpdateNode)(&ctx);
+		m_object->UpdateWorldData(&ctx);
+		//CALL_MEMBER_FN(m_object, UpdateNode)(&ctx);
 	}
 	virtual void Dispose()
 	{

@@ -634,8 +634,20 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_3)
+	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_16)
 	{
+		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_16;
+		char buf[512];
+		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
+			GET_EXE_VERSION_MAJOR(runtimeVersion),
+			GET_EXE_VERSION_MINOR(runtimeVersion),
+			GET_EXE_VERSION_BUILD(runtimeVersion),
+			GET_EXE_VERSION_SUB(runtimeVersion),
+			GET_EXE_VERSION_MAJOR(skse->runtimeVersion),
+			GET_EXE_VERSION_MINOR(skse->runtimeVersion),
+			GET_EXE_VERSION_BUILD(skse->runtimeVersion),
+			GET_EXE_VERSION_SUB(skse->runtimeVersion));
+		MessageBox(NULL, buf, "Game Version Error", MB_OK | MB_ICONEXCLAMATION);
 		_FATALERROR("unsupported runtime version %08X", skse->runtimeVersion);
 		return false;
 	}

@@ -78,8 +78,8 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	NiNode * rootNode = NULL;
 	BSGeometry * newShape = NULL;
 
-	UInt8 niStreamMemory[0x5B4];
-	memset(niStreamMemory, 0, 0x5B4);
+	UInt8 niStreamMemory[sizeof(NiStream)];
+	memset(niStreamMemory, 0, sizeof(NiStream));
 	NiStream * niStream = (NiStream *)niStreamMemory;
 	CALL_MEMBER_FN(niStream, ctor)();
 

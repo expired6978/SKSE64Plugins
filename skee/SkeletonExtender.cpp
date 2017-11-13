@@ -131,6 +131,12 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 			}
 		}
 
+		NiFloatExtraData * floatData = ni_cast(object->GetExtraData("HH_OFFSET"), NiFloatExtraData);
+		if (floatData)
+		{
+			current_nodes.insert("NPC");
+		}
+
 		return false;
 	});
 
@@ -147,7 +153,18 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 	diffs.clear();
 
 	NiStringExtraData * stringData = ni_cast(FindExtraData(objectRoot, "SDTA"), NiStringExtraData);
-	ReadTransforms(refr, stringData, isFirstPerson, gender == 1, current_nodes, changes);
+	if (stringData)
+	{
+		ReadTransforms(refr, stringData->m_pString, isFirstPerson, gender == 1, current_nodes, changes);
+	}
+	NiFloatExtraData * floatData = ni_cast(FindExtraData(objectRoot, "HH_OFFSET"), NiFloatExtraData);
+	if (floatData)
+	{
+		char buffer[32 + std::numeric_limits<float>::digits];
+		sprintf_s(buffer, sizeof(buffer), "[{\"name\":\"NPC\",\"pos\":[0,0,%f]}]", floatData->m_data);
+		ReadTransforms(refr, buffer, isFirstPerson, gender == 1, current_nodes, changes);
+	}
+	
 
 	std::set_symmetric_difference(current_nodes.begin(), current_nodes.end(),
 						previous_nodes.begin(), previous_nodes.end(),
@@ -190,107 +207,104 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 	}
 }
 
-void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, NiStringExtraData * stringData, bool isFirstPerson, bool isFemale, std::set<BSFixedString> & nodes, std::set<BSFixedString> & changes)
+void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonData, bool isFirstPerson, bool isFemale, std::set<BSFixedString> & nodes, std::set<BSFixedString> & changes)
 {
-	if (stringData)
+	try
 	{
-		try
+		Json::Features features;
+		features.all();
+
+		Json::Value root;
+		Json::Reader reader(features);
+
+		bool parseSuccess = reader.parse(jsonData, root);
+		if (parseSuccess)
 		{
-			Json::Features features;
-			features.all();
 
-			Json::Value root;
-			Json::Reader reader(features);
-
-			bool parseSuccess = reader.parse(stringData->m_pString, root);
-			if (parseSuccess)
+			bool changed = false;
+			for (auto & objects : root)
 			{
+				BSFixedString node = objects["name"].asCString();
+				nodes.insert(node);
 
-				bool changed = false;
-				for (auto & objects : root)
+				Json::Value pos = objects["pos"];
+				if (pos.isArray() && pos.size() == 3)
 				{
-					BSFixedString node = objects["name"].asCString();
-					nodes.insert(node);
+					float position[3];
+					position[0] = pos[0].asFloat();
+					position[1] = pos[1].asFloat();
+					position[2] = pos[2].asFloat();
 
-					Json::Value pos = objects["pos"];
-					if (pos.isArray() && pos.size() == 3)
+					OverrideVariant posV[3];
+					float oldPosition[3];
+					for (UInt32 i = 0; i < 3; i++)
 					{
-						float position[3];
-						position[0] = pos[0].asFloat();
-						position[1] = pos[1].asFloat();
-						position[2] = pos[2].asFloat();
+						OverrideVariant posOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformPosition, i);
+						UnpackValue<float>(&oldPosition[i], &posOld);
 
-						OverrideVariant posV[3];
-						float oldPosition[3];
-						for (UInt32 i = 0; i < 3; i++)
-						{
-							OverrideVariant posOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformPosition, i);
-							UnpackValue<float>(&oldPosition[i], &posOld);
-
-							if (position[i] != oldPosition[i])
-								changed = true;
-						}
-
-						for (UInt32 i = 0; i < 3; i++)
-						{
-							PackValue<float>(&posV[i], OverrideVariant::kParam_NodeTransformPosition, i, &position[i]);
-							g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", posV[i]);
-						}
-					}
-
-					Json::Value rot = objects["rot"];
-					if (pos.isArray() && pos.size() == 3)
-					{
-						NiMatrix33 rotation;
-						float rotationEuler[3];
-						rotationEuler[0] = rot[0].asFloat() * MATH_PI / 180;
-						rotationEuler[1] = rot[1].asFloat() * MATH_PI / 180;
-						rotationEuler[2] = rot[2].asFloat() * MATH_PI / 180;
-						rotation.SetEulerAngles(rotationEuler[0], rotationEuler[1], rotationEuler[2]);
-
-						float oldRotation[9];
-						for (UInt32 i = 0; i < 9; i++)
-						{
-							OverrideVariant potOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformRotation, i);
-							UnpackValue<float>(&oldRotation[i], &potOld);
-
-							if (rotation.arr[i] != oldRotation[i])
-								changed = true;
-						}
-
-						OverrideVariant rotV[9];
-						for (UInt32 i = 0; i < 9; i++) {
-							PackValue<float>(&rotV[i], OverrideVariant::kParam_NodeTransformRotation, i, &rotation.arr[i]);
-							g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", rotV[i]);
-						}
-					}
-
-					Json::Value scale = objects["scale"];
-					if (scale.isDouble() && scale.asFloat() > 0)
-					{
-						float oldScale = 0;
-						OverrideVariant scaleOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformScale, 0);
-						UnpackValue<float>(&oldScale, &scaleOld);
-
-						float fScale = scale.asFloat();
-						OverrideVariant scaleV;
-						PackValue<float>(&scaleV, OverrideVariant::kParam_NodeTransformScale, 0, &fScale);
-						g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", scaleV);
-
-						if (fScale != oldScale)
+						if (position[i] != oldPosition[i])
 							changed = true;
 					}
 
-					if (changed)
+					for (UInt32 i = 0; i < 3; i++)
 					{
-						changes.insert(node);
+						PackValue<float>(&posV[i], OverrideVariant::kParam_NodeTransformPosition, i, &position[i]);
+						g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", posV[i]);
 					}
+				}
+
+				Json::Value rot = objects["rot"];
+				if (pos.isArray() && pos.size() == 3)
+				{
+					NiMatrix33 rotation;
+					float rotationEuler[3];
+					rotationEuler[0] = rot[0].asFloat() * MATH_PI / 180;
+					rotationEuler[1] = rot[1].asFloat() * MATH_PI / 180;
+					rotationEuler[2] = rot[2].asFloat() * MATH_PI / 180;
+					rotation.SetEulerAngles(rotationEuler[0], rotationEuler[1], rotationEuler[2]);
+
+					float oldRotation[9];
+					for (UInt32 i = 0; i < 9; i++)
+					{
+						OverrideVariant potOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformRotation, i);
+						UnpackValue<float>(&oldRotation[i], &potOld);
+
+						if (rotation.arr[i] != oldRotation[i])
+							changed = true;
+					}
+
+					OverrideVariant rotV[9];
+					for (UInt32 i = 0; i < 9; i++) {
+						PackValue<float>(&rotV[i], OverrideVariant::kParam_NodeTransformRotation, i, &rotation.arr[i]);
+						g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", rotV[i]);
+					}
+				}
+
+				Json::Value scale = objects["scale"];
+				if (scale.isDouble() && scale.asFloat() > 0)
+				{
+					float oldScale = 0;
+					OverrideVariant scaleOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformScale, 0);
+					UnpackValue<float>(&oldScale, &scaleOld);
+
+					float fScale = scale.asFloat();
+					OverrideVariant scaleV;
+					PackValue<float>(&scaleV, OverrideVariant::kParam_NodeTransformScale, 0, &fScale);
+					g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", scaleV);
+
+					if (fScale != oldScale)
+						changed = true;
+				}
+
+				if (changed)
+				{
+					changes.insert(node);
 				}
 			}
 		}
-		catch (...)
-		{
-			_ERROR("%s - Error - Failed to parse skeleton transform data", __FUNCTION__);
-		}
+	}
+	catch (...)
+	{
+		_ERROR("%s - Error - Failed to parse skeleton transform data", __FUNCTION__);
 	}
 }

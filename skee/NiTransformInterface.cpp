@@ -618,7 +618,14 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 						NiStringExtraData * stringData = ni_cast(root->GetExtraData(BSFixedString("SDTA").data), NiStringExtraData);
 						if (stringData)
 						{
-							SkeletonExtender::ReadTransforms(refr, stringData, i >= 1 ? true : false, gender >= 1 ? true : false, modified, changed);
+							SkeletonExtender::ReadTransforms(refr, stringData->m_pString, i >= 1 ? true : false, gender >= 1 ? true : false, modified, changed);
+						}
+						NiFloatExtraData * floatData = ni_cast(root->GetExtraData(BSFixedString("HH_OFFSET").data), NiFloatExtraData);
+						if (floatData)
+						{
+							char buffer[32 + std::numeric_limits<float>::digits];
+							sprintf_s(buffer, sizeof(buffer), "[{\"name\":\"NPC\",\"pos\":[0,0,%f]}]", floatData->m_data);
+							SkeletonExtender::ReadTransforms(refr, buffer, i >= 1 ? true : false, gender >= 1 ? true : false, modified, changed);
 						}
 					}
 

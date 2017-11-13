@@ -66,6 +66,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -136,7 +137,6 @@
     <ClCompile Include="..\skse64\GameTypes.cpp" />
     <ClCompile Include="..\skse64\GameUtilities.cpp" />
     <ClCompile Include="..\skse64\HashUtil.cpp" />
-    <ClCompile Include="..\skse64\NiAllocator.cpp" />
     <ClCompile Include="..\skse64\NiExtraData.cpp" />
     <ClCompile Include="..\skse64\NiGeometry.cpp" />
     <ClCompile Include="..\skse64\NiMaterial.cpp" />
@@ -220,7 +220,6 @@
     <ClInclude Include="..\skse64\GameTypes.h" />
     <ClInclude Include="..\skse64\GameUtilities.h" />
     <ClInclude Include="..\skse64\HashUtil.h" />
-    <ClInclude Include="..\skse64\NiAllocator.h" />
     <ClInclude Include="..\skse64\NiExtraData.h" />
     <ClInclude Include="..\skse64\NiGeometry.h" />
     <ClInclude Include="..\skse64\NiMaterial.h" />

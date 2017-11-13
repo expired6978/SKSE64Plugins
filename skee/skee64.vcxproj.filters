@@ -233,9 +233,6 @@
     <ClCompile Include="..\skse64\PapyrusInterfaces.cpp">
       <Filter>api\papyrus\vm</Filter>
     </ClCompile>
-    <ClCompile Include="..\skse64\NiAllocator.cpp">
-      <Filter>api\netimmerse</Filter>
-    </ClCompile>
     <ClCompile Include="..\skse64\GameMenus.cpp">
       <Filter>api\game</Filter>
     </ClCompile>
@@ -542,9 +539,6 @@
     </ClInclude>
     <ClInclude Include="..\skse64\PapyrusInterfaces.h">
       <Filter>api\papyrus\vm</Filter>
-    </ClInclude>
-    <ClInclude Include="..\skse64\NiAllocator.h">
-      <Filter>api\netimmerse</Filter>
     </ClInclude>
     <ClInclude Include="..\skse64\GameMenus.h">
       <Filter>api\game</Filter>
