@@ -191,7 +191,7 @@ struct ArmorAddonStack
 	UInt32			unk14;		// 14
 };
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x01CAE20);
+RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE50);
 
 NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, ArmorAddonStack * stackInfo, UInt32 unk4, UInt64 unk5, UInt64 unk6)
 {
@@ -852,8 +852,6 @@ UInt8 ApplyRaceMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName, T
 		_ERROR("%s - fatal error while applying morph (%s)", __FUNCTION__, *morphName);
 	}
 
-
-
 	return ret;
 }
 
@@ -874,8 +872,6 @@ UInt8 ApplyChargenMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName
 	{
 		_ERROR("%s - fatal error while applying morph (%s)", __FUNCTION__, *morphName);
 	}
-
-
 
 	return ret;
 }
@@ -925,6 +921,11 @@ SInt32 AddSlider_Hook(tArray<RaceMenuSlider> * sliders, RaceMenuSlider * slider)
 	return totalSliders;
 }
 
+float SliderLookup_Hooked(RaceMenuSlider * slider)
+{
+	return slider->value;
+}
+
 void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderId)
 {
 	RaceMenuSlider * slider = NULL;
@@ -953,6 +954,12 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 				return;
 
 			float currentValue = g_morphHandler.GetMorphValueByName(actorBase, sliderInternal->name);
+			if (newValue == FLT_MAX || newValue == -FLT_MAX)
+			{
+				//slider->value = 0.0f;
+				return;
+			}
+
 			float relative = newValue - currentValue;
 
 			if (relative == 0.0 && sliderInternal->type != SliderInternal::kTypeHeadPart) {
@@ -1073,15 +1080,15 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 RelocAddr<uintptr_t> TESModelTri_vtbl(0x015AF848);
 
 // DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856960);
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856990);
 
 // 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2450);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC380);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4440);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2480);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC3B0);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4470);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360990);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360B80);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003609C0);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360BB0);
 
 bool InstallSKEEHooks()
 {
@@ -1132,16 +1139,6 @@ bool InstallSKEEHooks()
 		WriteRelJump(kInstallForceRegenHeadHook_Base, (UInt32)&InstallForceRegenHeadHook_Entry); // Preprocessed Head Hook
 	}
 #endif
-	// ApplyChargenMorph - 1403D2530+F3
-	// ApplyRaceMorph - 1403D4760+56
-
-	// UpdateMorphs Hook - 1403D26A0+C7
-	// UpdateMorph - 1403DC370+79
-
-	// AddSlider - 1408B4590+37E4 - call 1408BAED0
-	// AddArgument - 1408B39A0+97A - call 1408554B0
-
-	// DoubleMorphCallback - 1408B4590+3CD5
 
 	if (!g_branchTrampoline.Create(1024 * 64))
 	{
@@ -1155,32 +1152,65 @@ bool InstallSKEEHooks()
 		return false;
 	}
 
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B4E50 + 0x9FB);
+	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B4E80 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
-	RelocAddr <uintptr_t> AddSlider_Target(0x008B5A40 + 0x37E4);
+	RelocAddr <uintptr_t> AddSlider_Target(0x08B5A70 + 0x37E4);
 	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x008B5A40 + 0x3CD5);
+	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x08B5A70 + 0x3CD5);
 	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008B17E0 + 0x4F);
+	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x08B1810 + 0x4F); // ChangeDoubleMorph callback
 	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D25B0 + 0xF3);
-	g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
+	RelocAddr<uintptr_t> SliderLookup_Target(0x08B5A70 + 0x3895);
+	{
+		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
+			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
+			{
+				Xbyak::Label retnLabel;
+				Xbyak::Label funcLabel;
 
-	RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D47E0 + 0x56);
-	g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
+				lea(rcx, ptr[rax + rbx]);		 // Load Slider into RCX
+				call(ptr[rip + funcLabel]);		 // Call function
+				movss(xmm6, xmm0);				 // Move return into register
+				mov(rcx, ptr[rcx + 0x18]);		 // Restore overwrite (this assumes our call doesnt clobber RCX)
+				jmp(ptr[rip + retnLabel]);		 // Jump back
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D2720 + 0xC7);
+				L(funcLabel);
+				dq(funcAddr);
+
+				L(retnLabel);
+				dq(targetAddr + 0x5);
+			}
+		};
+
+		void * codeBuf = g_localTrampoline.StartAlloc();
+		SliderLookup_Entry_Code code(codeBuf, uintptr_t(SliderLookup_Hooked), SliderLookup_Target.GetUIntPtr());
+		g_localTrampoline.EndAlloc(code.getCurr());
+
+		g_branchTrampoline.Write5Branch(SliderLookup_Target.GetUIntPtr(), uintptr_t(code.getCode()));
+	}
+
+
+	if (g_extendedMorphs)
+	{
+		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D25E0 + 0xF3);
+		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
+
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D4810 + 0x56);
+		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
+	}
+
+	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D2750 + 0xC7);
 	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC3F0 + 0x79);
+	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC420 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
 
-	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C7140 + 0xB4A);
+	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C7170 + 0xB4A);
 	{
 		struct ArmorAddonHook_Entry_Code : Xbyak::CodeGenerator {
 			ArmorAddonHook_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)

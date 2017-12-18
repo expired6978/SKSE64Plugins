@@ -116,9 +116,9 @@ bool RegisterScaleform(GFxMovieView * view, GFxValue * root)
 	return true;
 }
 
-RelocAddr<uintptr_t> HUDMenu_Hook_Target(0x0087C920 + 0x5D8);
+RelocAddr<uintptr_t> HUDMenu_Hook_Target(0x0087C950 + 0x5D8);
 typedef void(*_HUDMenu_RegisterMarkers)(GFxValue * value);
-RelocAddr<_HUDMenu_RegisterMarkers> HUDMenu_RegisterMarkers(0x00882F80);
+RelocAddr<_HUDMenu_RegisterMarkers> HUDMenu_RegisterMarkers(0x00882FB0);
 
 void HUDMenu_RegisterMarkers_Hook(GFxValue * value, HUDMenu * menu)
 {
@@ -157,7 +157,7 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_16)
+	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_23)
 	{
 		_MESSAGE("unsupported runtime version %08X", skse->runtimeVersion);
 		return false;
