@@ -1076,19 +1076,19 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 	DoubleMorphCallback(menu, newValue, sliderId);
 }
 
-// TESModelTri
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x015AF848);
+// ??_7TESModelTri@@6B@
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B0898);
 
 // DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
 RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856990);
 
 // 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2480);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC3B0);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4470);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2560);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BCC10);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4CD0);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003609C0);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360BB0);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360AA0);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C90);
 
 bool InstallSKEEHooks()
 {
@@ -1152,19 +1152,19 @@ bool InstallSKEEHooks()
 		return false;
 	}
 
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B4E80 + 0x9FB);
+	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B56E0 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
-	RelocAddr <uintptr_t> AddSlider_Target(0x08B5A70 + 0x37E4);
+	RelocAddr <uintptr_t> AddSlider_Target(0x08B62D0 + 0x37E4);
 	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x08B5A70 + 0x3CD5);
+	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x08B62D0 + 0x3CD5);
 	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x08B1810 + 0x4F); // ChangeDoubleMorph callback
+	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x08B2070 + 0x4F); // ChangeDoubleMorph callback
 	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr<uintptr_t> SliderLookup_Target(0x08B5A70 + 0x3895);
+	RelocAddr<uintptr_t> SliderLookup_Target(0x08B62D0 + 0x3895);
 	{
 		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
 			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1196,17 +1196,17 @@ bool InstallSKEEHooks()
 
 	if (g_extendedMorphs)
 	{
-		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D25E0 + 0xF3);
+		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D26C0 + 0xF3);
 		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D4810 + 0x56);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D48F0 + 0x56);
 		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
 	}
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D2750 + 0xC7);
+	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D2830 + 0xC7);
 	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC420 + 0x79);
+	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC500 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
 
