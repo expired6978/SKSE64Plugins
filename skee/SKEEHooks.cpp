@@ -1080,7 +1080,7 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B0898);
 
 // DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856990);
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x008572C0);
 
 // 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
 RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2560);
