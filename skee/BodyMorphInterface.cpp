@@ -591,7 +591,11 @@ TESObjectARMO * GetActorSkin(Actor * actor)
 }
 
 void MorphCache::UpdateMorphs(TESObjectREFR * refr)
-{
+{	
+#ifndef FIXME_MORPHS
+	return;
+#endif
+
 	if(!refr)
 		return;
 
