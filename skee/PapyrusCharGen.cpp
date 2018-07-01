@@ -360,7 +360,10 @@ namespace papyrusCharGen
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
 		g_morphHandler.SaveJsonPreset(slotPath);
+
+#ifdef FIXME_GEOMETRY
 		g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
+#endif
 	}
 
 	bool LoadExternalCharacterEx(StaticFunctionTag*, Actor * actor, TESRace * race, BSFixedString fileName, UInt32 flags)
@@ -497,7 +500,9 @@ namespace papyrusCharGen
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\SKSE\\Plugins\\CharGen\\%s.dds", fileName.data);
 
+#ifdef FIXME_GEOMETRY
 		g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
+#endif
 	}
 
 	void ExportSlot(StaticFunctionTag*, BSFixedString fileName)

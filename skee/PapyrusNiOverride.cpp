@@ -73,8 +73,10 @@ namespace papyrusNiOverride
 {
 	void AddOverlays(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
+#ifdef FIXME_GEOMETRY
 		if(refr)
 			g_overlayInterface.AddOverlays(refr);
+#endif
 	}
 
 	bool HasOverlays(StaticFunctionTag* base, TESObjectREFR * refr)
