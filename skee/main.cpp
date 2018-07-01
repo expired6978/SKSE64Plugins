@@ -461,6 +461,7 @@ bool RegisterCharGenScaleform(GFxMovieView * view, GFxValue * root)
 	RegisterFunction <SKSEScaleform_LoadImportedHead>(root, view, "LoadImportedHead");
 	RegisterFunction <SKSEScaleform_ReleaseImportedHead>(root, view, "ReleaseImportedHead");
 
+	/* FIXME: Not yet implemented
 	RegisterFunction <SKSEScaleform_BeginRotateMesh>(root, view, "BeginRotateMesh");
 	RegisterFunction <SKSEScaleform_DoRotateMesh>(root, view, "DoRotateMesh");
 	RegisterFunction <SKSEScaleform_EndRotateMesh>(root, view, "EndRotateMesh");
@@ -490,6 +491,7 @@ bool RegisterCharGenScaleform(GFxMovieView * view, GFxValue * root)
 
 	RegisterFunction <SKSEScaleform_GetMeshCameraRadius>(root, view, "GetMeshCameraRadius");
 	RegisterFunction <SKSEScaleform_SetMeshCameraRadius>(root, view, "SetMeshCameraRadius");
+	*/
 
 	RegisterFunction <SKSEScaleform_GetExternalFiles>(root, view, "GetExternalFiles");
 	return true;
