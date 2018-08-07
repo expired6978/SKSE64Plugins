@@ -52,6 +52,7 @@ extern bool					g_immediateArmor;
 extern bool					g_immediateFace;
 
 extern bool					g_enableEquippableTransforms;
+extern bool					g_disableFaceGenCache;
 
 Actor						* g_weaponHookActor = NULL;
 TESObjectWEAP				* g_weaponHookWeapon = NULL;
@@ -1209,6 +1210,13 @@ bool InstallSKEEHooks()
 	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC500 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
+	if (g_disableFaceGenCache)
+	{
+		RelocAddr <uintptr_t> Cache_Target(0x008B3090);
+		SafeWrite8(Cache_Target.GetUIntPtr(), 0xC3); // Cache immediate retn
+		RelocAddr <uintptr_t> CacheClear_Target(0x008B3210);
+		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn
+	}
 
 	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C7170 + 0xB4A);
 	{

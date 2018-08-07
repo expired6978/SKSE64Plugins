@@ -23,6 +23,7 @@
 #include "skse64/GameData.h"
 #include "skse64/GameExtraData.h"
 
+#include "skse64/NiRenderer.h"
 #include "skse64/NiNodes.h"
 #include "skse64/NiGeometry.h"
 #include "skse64/NiExtraData.h"
@@ -36,6 +37,7 @@ extern SKSETaskInterface				* g_task;
 extern bool								g_parallelMorphing;
 extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
+extern bool								g_enableBodyMorph;
 
 UInt32 BodyMorphInterface::GetVersion()
 {
@@ -408,22 +410,55 @@ typedef UInt32(*_UpdateReferenceNode)(UInt32 handle, NiAVObject * object);
 extern const _UpdateReferenceNode UpdateReferenceNode = (_UpdateReferenceNode)0x0046BF90;
 #endif
 
+#include <fstream>
+#include <regex>
+
+namespace MinD3D11
+{
+	struct D3D11_BOX {
+		UINT left;
+		UINT top;
+		UINT front;
+		UINT right;
+		UINT bottom;
+		UINT back;
+	};
+
+	typedef void (*_UpdateSubresource)(
+		struct ID3D11DeviceContext4	*pContext,
+		struct ID3D11Resource		*pDstResource,
+		UINT						DstSubresource,
+		const D3D11_BOX				*pDstBox,
+		const void					*pSrcData,
+		UINT						SrcRowPitch,
+		UINT						SrcDepthPitch
+	);
+
+	struct ID3D11DeviceContext4
+	{
+		void	* vtable;
+		void	* Functions[0x30];
+		_UpdateSubresource UpdateSubresource;
+		// ... More
+	};
+};
+
 void TriShapeMap::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph)
 {
 	BSFixedString nodeName = bodyMorph.first.data;
-	BSGeometry * triShape = rootNode->GetAsBSGeometry();
-	NiAVObject * bodyNode = triShape ? triShape : rootNode->GetObjectByName(&nodeName.data);
+	BSGeometry * geometry = rootNode->GetAsBSGeometry();
+	NiGeometry * legacyGeometry = rootNode->GetAsNiGeometry();
+	NiAVObject * bodyNode = geometry ? geometry : legacyGeometry ? legacyGeometry : rootNode->GetObjectByName(&nodeName.data);
 	if (bodyNode)
 	{
-#ifdef FIXME_MORPHS
-		BSGeometry * bodyGeometry = bodyNode->GetAsBSGeometry();
-		if (bodyGeometry)
+		NiGeometry * legacyGeometry = bodyNode->GetAsNiGeometry();
+		if (legacyGeometry)
 		{
-			NiGeometryData * geometryData = niptr_cast<NiGeometryData>(bodyGeometry->m_spModelData);
-			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(bodyGeometry->m_spSkinInstance);
+			NiGeometryData * geometryData = niptr_cast<NiGeometryData>(legacyGeometry->m_spModelData);
+			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(legacyGeometry->m_spSkinInstance);
 			if (geometryData && skinInstance) {
 				// Undo morphs on the old shape
-				BSFaceGenBaseMorphExtraData * bodyData = (BSFaceGenBaseMorphExtraData *)bodyGeometry->GetExtraData("FOD");
+				BSFaceGenBaseMorphExtraData * bodyData = (BSFaceGenBaseMorphExtraData *)legacyGeometry->GetExtraData("FOD");
 				if (bodyData) {
 					NiAutoRefCounter arc(bodyData);
 					// Undo old morphs for this trishape
@@ -473,7 +508,7 @@ void TriShapeMap::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 							// No old morphs, add one
 							if (!bodyData) {
 								bodyData = BSFaceGenBaseMorphExtraData::Create(targetShapeData, false);
-								bodyGeometry->AddExtraData(bodyData);
+								legacyGeometry->AddExtraData(bodyData);
 							}
 
 							if (bodyData) {
@@ -481,8 +516,8 @@ void TriShapeMap::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 								bodyMorph.second.ApplyMorphs(refr, targetShapeData->m_usVertices, targetShapeData->m_pkVertex, bodyData->vertexData);
 							}
 
-							bodyGeometry->SetModelData(targetShapeData);
-							bodyGeometry->SetSkinInstance(newSkinInstance);
+							legacyGeometry->m_spModelData = targetShapeData;
+							legacyGeometry->m_spSkinInstance = newSkinInstance;
 							targetShapeData->DecRef();
 
 							targetShapeData->m_usDirtyFlags = 0x0001;
@@ -491,7 +526,96 @@ void TriShapeMap::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 				}
 			}
 		}
-#endif
+
+		BSGeometry * bodyGeometry = bodyNode->GetAsBSGeometry();
+		if (bodyGeometry)
+		{
+			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(bodyGeometry->m_spSkinInstance);
+			if (skinInstance) {
+				NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
+				if (skinPartition) {
+					std::vector<NiPoint3> vertices(skinPartition->vertexCount);
+					memset(&vertices.at(0), 0, sizeof(NiPoint3)*skinPartition->vertexCount);
+
+					// Undo morphs on the old shape
+					BSFaceGenBaseMorphExtraData * bodyData = (BSFaceGenBaseMorphExtraData *)bodyGeometry->GetExtraData("FOD");
+					if (bodyData)
+					{
+						for(UInt32 i = 0; i < skinPartition->vertexCount; ++i)
+						{
+							if (!isAttaching)
+							{
+								for (UInt32 p = 0; p < skinPartition->m_uiPartitions; ++p)
+								{
+									auto & partition = skinPartition->m_pkPartitions[p];
+
+									UInt32 vertexSize = skinPartition->GetVertexSize(partition.vertexDesc);
+									UInt32 offset = skinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_POSITION);
+
+									NiPoint3 * position = reinterpret_cast<NiPoint3*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offset]);
+									*position -= bodyData->vertexData[i];
+								}
+								
+							}
+							bodyData->vertexData[i] = NiPoint3(0, 0, 0);
+						}
+					}
+
+					// Apply new morphs to new shape
+					if (bodyMorph.second.HasMorphs(refr))
+					{
+
+						if (skinPartition) {
+							NiSkinPartition * newSkinPartition = nullptr;
+							CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
+
+							if (newSkinPartition)
+							{
+								// No old morphs, add one
+								if (!bodyData) {
+									bodyData = BSFaceGenBaseMorphExtraData::Create(nullptr, false);
+									bodyData->vertexCount = skinPartition->vertexCount;
+									bodyData->modelVertexCount = skinPartition->vertexCount;
+									bodyData->vertexData = (NiPoint3*)Heap_Allocate(sizeof(NiPoint3) * bodyData->vertexCount);
+
+									for (UInt32 i = 0; i < skinPartition->vertexCount; ++i)
+									{
+										bodyData->vertexData[i].x = 0;
+										bodyData->vertexData[i].y = 0;
+										bodyData->vertexData[i].z = 0;
+									}
+									bodyGeometry->AddExtraData(bodyData);
+								}
+
+								if (bodyData) {
+									// Apply Morph data to the new partition
+									NiAutoRefCounter arc(bodyData);
+									bodyMorph.second.ApplyMorphs(refr, vertices.size(), &vertices.at(0), bodyData->vertexData);
+
+									for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
+									{
+										auto & partition = newSkinPartition->m_pkPartitions[p];
+										UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+										UInt32 offset = newSkinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_POSITION);
+
+										for (UInt32 i = 0; i < newSkinPartition->vertexCount; ++i)
+										{
+											NiPoint3 * position = reinterpret_cast<NiPoint3*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offset]);
+											*position += vertices[i];
+										}
+
+										auto deviceContext = reinterpret_cast<MinD3D11::ID3D11DeviceContext4*>(g_renderManager->context);
+										deviceContext->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(partition.shapeData->m_VertexBuffer), 0, nullptr, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize, 0);
+									}
+								}
+							}
+
+							skinInstance->m_spSkinPartition = newSkinPartition;
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -632,8 +756,8 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr)
 		}
 	}
 #ifndef _NO_REATTACH
-	CALL_MEMBER_FN(actor->processManager, SetEquipFlag)(ActorProcessManager::kFlags_Unk01 | ActorProcessManager::kFlags_Unk02 | ActorProcessManager::kFlags_Mobile);
-	CALL_MEMBER_FN(actor->processManager, UpdateEquipment)(actor);
+	//CALL_MEMBER_FN(actor->processManager, SetEquipFlag)(ActorProcessManager::kFlags_Unk01 | ActorProcessManager::kFlags_Unk02 | ActorProcessManager::kFlags_Mobile);
+	//CALL_MEMBER_FN(actor->processManager, UpdateEquipment)(actor);
 #endif
 }
 
@@ -857,7 +981,10 @@ void BodyMorphInterface::ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * root
 #ifdef _DEBUG
 	_MESSAGE("%s - Applying Vertex Diffs to %08X on %s", __FUNCTION__, refr->formID, rootNode->m_name);
 #endif
-	morphCache.ApplyMorphs(refr, rootNode, erase);
+	if (g_enableBodyMorph)
+	{
+		morphCache.ApplyMorphs(refr, rootNode, erase);
+	}
 }
 
 void BodyMorphInterface::ApplyBodyMorphs(TESObjectREFR * refr)
@@ -865,7 +992,10 @@ void BodyMorphInterface::ApplyBodyMorphs(TESObjectREFR * refr)
 #ifdef _DEBUG
 	_MESSAGE("%s - Updating morphs for %08X.", __FUNCTION__, refr->formID);
 #endif
-	morphCache.UpdateMorphs(refr);
+	if (g_enableBodyMorph)
+	{
+		morphCache.UpdateMorphs(refr);
+	}
 }
 
 NIOVTaskUpdateModelWeight::NIOVTaskUpdateModelWeight(Actor * actor)

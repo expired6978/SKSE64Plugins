@@ -125,16 +125,6 @@ public:
 	SKSETaskUninstallOverlay(TESObjectREFR * refr, BSFixedString nodeName) : SKSETaskModifyOverlay(refr, nodeName){};
 };
 
-class SKSETaskToggleOverlay : public SKSETaskModifyOverlay
-{
-public:
-	virtual void Modify(TESObjectREFR * reference, NiAVObject * targetNode, NiNode * parent);
-
-	SKSETaskToggleOverlay(TESObjectREFR * refr, BSFixedString nodeName, bool toggle);
-
-	bool m_toggle;
-};
-
 class OverlayHolder : public std::set<UInt64>
 {
 public:

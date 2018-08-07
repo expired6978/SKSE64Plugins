@@ -70,12 +70,19 @@ PartSet	g_partSet;
 
 StringTable g_stringTable;
 
+// Feature Toggles
+bool	g_enableOverlays = true;
+bool	g_enableSculpting = true;
+bool	g_enableBodyGen = true;
+bool	g_enableAutoTransforms = true;
+bool	g_enableHeadExport = true;
+bool	g_enableBodyMorph = true;
+
+bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
 UInt32	g_numHandOverlays = 3;
 UInt32	g_numFeetOverlays = 3;
 UInt32	g_numFaceOverlays = 3;
-
-bool	g_playerOnly = true;
 UInt32	g_numSpellBodyOverlays = 1;
 UInt32	g_numSpellHandOverlays = 1;
 UInt32	g_numSpellFeetOverlays = 1;
@@ -86,8 +93,8 @@ UInt16	g_alphaFlags = 4845;
 UInt16	g_alphaThreshold = 0;
 
 UInt16	g_loadMode = 0;
-bool	g_enableAutoTransforms = true;
-bool	g_enableBodyGen = true;
+
+
 bool	g_enableBodyInit = true;
 bool	g_firstLoad = false;
 bool	g_immediateArmor = true;
@@ -404,6 +411,8 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
 {
 	GFxValue obj;
+	RegisterBool(root, "bEnableOverlays", g_enableOverlays);
+
 	view->CreateObject(&obj);
 	RegisterNumber(&obj, "iNumOverlays", g_numBodyOverlays);
 	RegisterNumber(&obj, "iSpellOverlays", g_numSpellBodyOverlays);
@@ -438,6 +447,9 @@ bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
 
 bool RegisterCharGenScaleform(GFxMovieView * view, GFxValue * root)
 {
+	RegisterBool(root, "bEnableSculpting", g_enableSculpting);
+	RegisterBool(root, "bEnableHeadExport", g_enableHeadExport);
+
 	RegisterFunction <SKSEScaleform_ImportHead>(root, view, "ImportHead");
 	RegisterFunction <SKSEScaleform_ExportHead>(root, view, "ExportHead");
 	RegisterFunction <SKSEScaleform_SavePreset>(root, view, "SavePreset");
@@ -724,6 +736,14 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 
 	_DMESSAGE("NetImmerse Override Enabled");
 
+	SKEE64GetConfigValue("Features", "bEnableOverlays", &g_enableOverlays);
+	SKEE64GetConfigValue("Features", "bEnableSculpting", &g_enableSculpting);
+	SKEE64GetConfigValue("Features", "bEnableHeadExport", &g_enableHeadExport);
+	SKEE64GetConfigValue("Features", "bEnableBodyGen", &g_enableBodyGen);
+	SKEE64GetConfigValue("Features", "bEnableBodyMorph", &g_enableBodyMorph);
+	SKEE64GetConfigValue("Features", "bEnableAutoTransforms", &g_enableAutoTransforms);
+	SKEE64GetConfigValue("Features", "bEnableEquippableTransforms", &g_enableEquippableTransforms);
+
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
 	SKEE64GetConfigValue("Overlays", "bEnableFaceOverlays", &g_enableFaceOverlays);
 	SKEE64GetConfigValue("Overlays", "bImmediateArmor", &g_immediateArmor);
@@ -749,9 +769,8 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_overlayInterface.SetDefaultTexture(defaultTexture);
 
 	SKEE64GetConfigValue("General", "iLoadMode", &g_loadMode);
-	SKEE64GetConfigValue("General", "bEnableAutoTransforms", &g_enableAutoTransforms);
-	SKEE64GetConfigValue("General", "bEnableEquippableTransforms", &g_enableEquippableTransforms);
-	SKEE64GetConfigValue("General", "bEnableBodyGen", &g_enableBodyGen);
+	
+
 	SKEE64GetConfigValue("General", "iScaleMode", &g_scaleMode);
 	SKEE64GetConfigValue("General", "iBodyMorphMode", &g_bodyMorphMode);
 	SKEE64GetConfigValue("General", "bParallelMorphing", &g_parallelMorphing);

@@ -28,12 +28,13 @@ extern BodyMorphInterface				g_bodyMorphInterface;
 
 extern SKSETaskInterface				* g_task;
 
+extern bool		g_enableOverlays;
+extern bool		g_playerOnly;
+
 extern UInt32	g_numBodyOverlays;
 extern UInt32	g_numHandOverlays;
 extern UInt32	g_numFeetOverlays;
 extern UInt32	g_numFaceOverlays;
-
-extern bool		g_playerOnly;
 extern UInt32	g_numSpellBodyOverlays;
 extern UInt32	g_numSpellHandOverlays;
 extern UInt32	g_numSpellFeetOverlays;
@@ -62,10 +63,7 @@ void OverlayInterface::UninstallOverlay(const char * nodeName, TESObjectREFR * r
 		BSGeometry * foundGeometry = foundObject->GetAsBSGeometry();
 		if(foundGeometry)
 		{
-#ifdef FIXME_GEOMETRY
-			foundGeometry->SetModelData(NULL);
-			foundGeometry->SetSkinInstance(NULL);
-#endif
+			foundGeometry->m_spSkinInstance = nullptr;
 		}
 
 		parent->RemoveChild(foundObject);
@@ -76,7 +74,9 @@ void OverlayInterface::UninstallOverlay(const char * nodeName, TESObjectREFR * r
 void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, TESObjectREFR * refr, BSGeometry * source, NiNode * destination, BGSTextureSet * textureSet)
 {
 	NiNode * rootNode = NULL;
-	BSGeometry * newShape = NULL;
+	NiAVObject * newShape = NULL;
+	NiPropertyPtr alphaProperty = nullptr;
+	NiPropertyPtr shaderProperty = nullptr;
 
 	UInt8 niStreamMemory[sizeof(NiStream)];
 	memset(niStreamMemory, 0, sizeof(NiStream));
@@ -86,7 +86,7 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	BSFixedString overlayName(nodeName);
 	NiAVObject * foundGeometry = destination->GetObjectByName(&overlayName.data);
 	if (foundGeometry)
-		newShape = foundGeometry->GetAsBSGeometry();
+		newShape = foundGeometry->GetAsNiGeometry();
 
 	bool attachNew = false;
 	if(!newShape)
@@ -105,26 +105,36 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			if(rootNode) {
 				if(rootNode->m_children.m_data) {
 					if(rootNode->m_children.m_data[0]) { // Get first child of root
-						newShape = rootNode->m_children.m_data[0]->GetAsBSGeometry();
+						newShape = rootNode->m_children.m_data[0]->GetAsNiGeometry();
 						attachNew = true;
 					}
 				}
 			}
-			if(newShape)
+
+			NiGeometry * legacyGeometry = newShape->GetAsNiGeometry();
+			if (legacyGeometry) {
+				shaderProperty = legacyGeometry->m_spEffectState;
+				alphaProperty = legacyGeometry->m_spPropertyState;
+			}
+
+			newShape = CreateBSTriShape();
+			if (newShape) {
 				newShape->m_name = overlayName.data;
+			}
 		}
 	}
 
-	if(newShape)
+	BSGeometry * targetShape = newShape->GetAsBSGeometry();
+	if(targetShape)
 	{
-		newShape->m_localTransform = source->m_localTransform;
+		targetShape->unk148 = source->unk148;
+		targetShape->m_spEffectState = shaderProperty;
+		targetShape->m_spPropertyState = alphaProperty;
 
-#ifdef FIXME_GEOMETRY
-		newShape->SetModelData(source->m_spModelData);
-		newShape->SetSkinInstance(source->m_spSkinInstance);
-#endif
+		targetShape->m_localTransform = source->m_localTransform;
+		targetShape->m_spSkinInstance = source->m_spSkinInstance;
 
-		NiProperty * newProperty = niptr_cast<NiProperty>(newShape->m_spEffectState);
+		NiProperty * newProperty = niptr_cast<NiProperty>(targetShape->m_spEffectState);
 		NiProperty * sourceProperty = niptr_cast<NiProperty>(source->m_spEffectState);
 
 		BSLightingShaderProperty * shaderProperty = ni_cast(newProperty, BSLightingShaderProperty);
@@ -159,13 +169,13 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 					
 					targetMaterial->ReleaseTextures();
 					CALL_MEMBER_FN(shaderProperty, InvalidateTextures)(0);
-					CALL_MEMBER_FN(shaderProperty, InitializeShader)(newShape);
+					CALL_MEMBER_FN(shaderProperty, InitializeShader)(targetShape);
 				}				
 			}
 		}
 
 		if(g_alphaOverride) {
-			NiAlphaProperty * alphaProperty = niptr_cast<NiAlphaProperty>(newShape->m_spPropertyState);
+			NiAlphaProperty * alphaProperty = niptr_cast<NiAlphaProperty>(targetShape->m_spPropertyState);
 			if(alphaProperty) {
 				alphaProperty->alphaFlags = g_alphaFlags;
 				alphaProperty->alphaThreshold = g_alphaThreshold;
@@ -280,15 +290,12 @@ void OverlayInterface::RelinkOverlay(const char * nodeName, TESObjectREFR * refr
 
 	if (source && foundGeometry)
 	{
-#ifdef FIXME_GEOMETRY
-		NiGeometryData * sourceGeometryData = niptr_cast<NiGeometryData>(source->m_spModelData);
+		foundGeometry->unk148 = source->unk148;
 		NiSkinInstance * sourceSkin = niptr_cast<NiSkinInstance>(source->m_spSkinInstance);
 
-		if (sourceGeometryData && sourceSkin) {
-			foundGeometry->SetModelData(sourceGeometryData);
-			foundGeometry->SetSkinInstance(sourceSkin);
+		if (sourceSkin) {
+			foundGeometry->m_spSkinInstance = sourceSkin->Clone();
 		}
-#endif
 	}
 }
 
@@ -893,69 +900,72 @@ void OverlayInterface::AddOverlays(TESObjectREFR * reference)
 	UInt64 handle = g_overrideInterface.GetHandle(reference, TESObjectREFR::kTypeID);
 	overlays.insert(handle);
 
-	char buff[MAX_PATH];
-	// Body
-	for(UInt32 i = 0; i < g_numBodyOverlays; i++)
+	if (g_enableOverlays)
 	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, BODY_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, BODY_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body));
-	}
-	for(UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, BODY_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, BODY_MAGIC_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body));
-	}
+		char buff[MAX_PATH];
+		// Body
+		for (UInt32 i = 0; i < g_numBodyOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, BODY_NODE, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, BODY_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body));
+		}
+		for (UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, BODY_NODE_SPELL, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, BODY_MAGIC_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body));
+		}
 
-	// Hand
-	for(UInt32 i = 0; i < g_numHandOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, HAND_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, HAND_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands));
-	}
-	for(UInt32 i = 0; i < g_numSpellHandOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, HAND_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, HAND_MAGIC_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands));
-	}
+		// Hand
+		for (UInt32 i = 0; i < g_numHandOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, HAND_NODE, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, HAND_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands));
+		}
+		for (UInt32 i = 0; i < g_numSpellHandOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, HAND_NODE_SPELL, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, HAND_MAGIC_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands));
+		}
 
-	// Feet
-	for(UInt32 i = 0; i < g_numFeetOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FEET_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, FEET_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet));
-	}
-	for(UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, FEET_MAGIC_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet));
-	}
+		// Feet
+		for (UInt32 i = 0; i < g_numFeetOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, FEET_NODE, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, FEET_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet));
+		}
+		for (UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallOverlay(reference, buff, FEET_MAGIC_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet));
+		}
 
-	// Face
-	for(UInt32 i = 0; i < g_numFaceOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FACE_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallFaceOverlay(reference, buff, FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen));
-	}
-	for(UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
-	{
-		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-		g_task->AddTask(new SKSETaskInstallFaceOverlay(reference, buff, FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen));
+		// Face
+		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, FACE_NODE, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallFaceOverlay(reference, buff, FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen));
+		}
+		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+		{
+			memset(buff, 0, MAX_PATH);
+			sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
+			g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+			g_task->AddTask(new SKSETaskInstallFaceOverlay(reference, buff, FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen));
+		}
 	}
 }
 

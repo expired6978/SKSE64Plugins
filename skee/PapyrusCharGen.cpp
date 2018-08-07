@@ -31,6 +31,7 @@
 
 extern MorphHandler g_morphHandler;
 extern bool			g_externalHeads;
+extern bool			g_enableHeadExport;
 
 extern SKSETaskInterface				* g_task;
 extern OverrideInterface				g_overrideInterface;
@@ -204,7 +205,9 @@ namespace papyrusCharGen
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
 
 		g_morphHandler.SaveJsonPreset(slotPath);
-		g_task->AddTask(new SKSETaskExportTintMask(tintPath, fileName.data));
+
+		if(g_enableHeadExport)
+			g_task->AddTask(new SKSETaskExportTintMask(tintPath, fileName.data));
 	}
 
 	void DeleteCharacter(StaticFunctionTag*, BSFixedString fileName)
@@ -360,7 +363,9 @@ namespace papyrusCharGen
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
 		g_morphHandler.SaveJsonPreset(slotPath);
-		g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
+
+		if(g_enableHeadExport)
+			g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
 	}
 
 	bool LoadExternalCharacterEx(StaticFunctionTag*, Actor * actor, TESRace * race, BSFixedString fileName, UInt32 flags)
@@ -492,12 +497,15 @@ namespace papyrusCharGen
 
 	void ExportHead(StaticFunctionTag*, BSFixedString fileName)
 	{
-		char nifPath[MAX_PATH];
-		sprintf_s(nifPath, "Data\\SKSE\\Plugins\\CharGen\\%s.nif", fileName.data);
-		char tintPath[MAX_PATH];
-		sprintf_s(tintPath, "Data\\SKSE\\Plugins\\CharGen\\%s.dds", fileName.data);
+		if (g_enableHeadExport)
+		{
+			char nifPath[MAX_PATH];
+			sprintf_s(nifPath, "Data\\SKSE\\Plugins\\CharGen\\%s.nif", fileName.data);
+			char tintPath[MAX_PATH];
+			sprintf_s(tintPath, "Data\\SKSE\\Plugins\\CharGen\\%s.dds", fileName.data);
 
-		g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
+			g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
+		}
 	}
 
 	void ExportSlot(StaticFunctionTag*, BSFixedString fileName)

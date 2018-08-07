@@ -717,13 +717,15 @@ void SKSEScaleform_GetPlayerRotation::Invoke(Args * args)
 {
 	PlayerCharacter * player = (*g_thePlayer);
 	NiNode * root = player->GetNiRootNode(0);
-
-	args->movie->CreateArray(args->result);
-	for(UInt32 i = 0; i < 3 * 3; i++)
+	if (root)
 	{
-		GFxValue index;
-		index.SetNumber(((float*)(root->m_localTransform.rot.data))[i]);
-		args->result->PushBack(&index);
+		args->movie->CreateArray(args->result);
+		for (UInt32 i = 0; i < 3 * 3; i++)
+		{
+			GFxValue index;
+			index.SetNumber(((float*)(root->m_localTransform.rot.data))[i]);
+			args->result->PushBack(&index);
+		}
 	}
 }
 
@@ -736,18 +738,21 @@ void SKSEScaleform_SetPlayerRotation::Invoke(Args * args)
 	PlayerCharacter * player = (*g_thePlayer);
 	NiNode * root = player->GetNiRootNode(0);
 
-	for(UInt32 i = 0; i < 3 * 3; i++)
+	if (root)
 	{
-		GFxValue val;
-		args->args[0].GetElement(i, &val);
-		if(val.GetType() != GFxValue::kType_Number)
-			break;
+		for (UInt32 i = 0; i < 3 * 3; i++)
+		{
+			GFxValue val;
+			args->args[0].GetElement(i, &val);
+			if (val.GetType() != GFxValue::kType_Number)
+				break;
 
-		((float*)root->m_localTransform.rot.data)[i] = val.GetNumber();
+			((float*)root->m_localTransform.rot.data)[i] = val.GetNumber();
+		}
+
+		NiAVObject::ControllerUpdateContext ctx;
+		root->UpdateWorldData(&ctx);
 	}
-
-	NiAVObject::ControllerUpdateContext ctx;
-	root->UpdateWorldData(&ctx);
 }
 
 void SKSEScaleform_GetRaceSexCameraRot::Invoke(Args * args)
