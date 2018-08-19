@@ -7,6 +7,14 @@
 #include "skse64/GameThreads.h"
 #include "skse64/NiTypes.h"
 
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#include "half.hpp"
+
 #include <string>
 #include <set>
 #include <vector>
@@ -81,17 +89,25 @@ public:
 	SInt16	z;
 };
 
+class TriShapePackedUVDelta
+{
+public:
+	UInt16	index;
+	SInt16	u;
+	SInt16	v;
+};
+
 class TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, NiPoint3 * vertices, float factor) = 0;
+	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor) = 0;
 };
 typedef std::shared_ptr<TriShapeVertexData> TriShapeVertexDataPtr;
 
 class TriShapeFullVertexData : public TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, NiPoint3 * vertices, float factor);
+	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
 
 	std::vector<TriShapeVertexDelta> m_vertexDeltas;
 };
@@ -100,19 +116,43 @@ typedef std::shared_ptr<TriShapeFullVertexData> TriShapeFullVertexDataPtr;
 class TriShapePackedVertexData : public TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, NiPoint3 * vertices, float factor);
+	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
 
 	float									m_multiplier;
 	std::vector<TriShapePackedVertexDelta>	m_vertexDeltas;
 };
 typedef std::shared_ptr<TriShapePackedVertexData> TriShapePackedVertexDataPtr;
 
-
-class BodyMorphMap : public std::unordered_map<BSFixedString, TriShapeVertexDataPtr>
+class TriShapePackedUVData : public TriShapeVertexData
 {
 public:
-	void ApplyMorphs(TESObjectREFR * refr, UInt16 vertexCount, NiPoint3* targetGeometry, NiPoint3 * storageGeometry) const;
+	struct UVCoord
+	{
+		half_float::half u;
+		half_float::half v;
+	};
+
+	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
+
+	float								m_multiplier;
+	std::vector<TriShapePackedUVDelta>	m_uvDeltas;
+};
+typedef std::shared_ptr<TriShapePackedUVData> TriShapePackedUVDataPtr;
+
+
+class BodyMorphMap : public std::unordered_map<BSFixedString, std::pair<TriShapeVertexDataPtr, TriShapeVertexDataPtr>>
+{
+	friend class MorphCache;
+public:
+	BodyMorphMap() : m_hasUV(false) { }
+
+	void ApplyMorphs(TESObjectREFR * refr, std::function<void(const TriShapeVertexDataPtr, float)> vertexFunctor, std::function<void(const TriShapeVertexDataPtr, float)> uvFunctor) const;
 	bool HasMorphs(TESObjectREFR * refr) const;
+
+	bool HasUV() const { return m_hasUV; }
+
+private:
+	bool m_hasUV;
 };
 
 class TriShapeMap : public std::unordered_map<BSFixedString, BodyMorphMap>
@@ -121,18 +161,25 @@ public:
 	TriShapeMap()
 	{
 		memoryUsage = sizeof(TriShapeMap);
-		accessed = 0;
 	}
 
+	UInt32 memoryUsage;
+};
+
+class MorphFileCache
+{
+	friend class MorphCache;
+	friend class BodyMorphInterface;
+public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
 	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph);
 
-	UInt32 memoryUsage;
+private:
+	TriShapeMap vertexMap;
 	std::time_t accessed;
 };
 
-
-class MorphCache : public SafeDataHolder<std::unordered_map<BSFixedString, TriShapeMap>>
+class MorphCache : public SafeDataHolder<std::unordered_map<BSFixedString, MorphFileCache>>
 {
 	friend class BodyMorphInterface;
 

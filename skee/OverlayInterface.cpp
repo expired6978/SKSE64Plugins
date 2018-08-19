@@ -75,8 +75,8 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 {
 	NiNode * rootNode = NULL;
 	NiAVObject * newShape = NULL;
-	NiPropertyPtr alphaProperty = nullptr;
-	NiPropertyPtr shaderProperty = nullptr;
+	NiPropertyPtr alphaProperty;
+	NiPropertyPtr shaderProperty;
 
 	UInt8 niStreamMemory[sizeof(NiStream)];
 	memset(niStreamMemory, 0, sizeof(NiStream));
@@ -86,7 +86,7 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	BSFixedString overlayName(nodeName);
 	NiAVObject * foundGeometry = destination->GetObjectByName(&overlayName.data);
 	if (foundGeometry)
-		newShape = foundGeometry->GetAsNiGeometry();
+		newShape = foundGeometry->GetAsBSGeometry();
 
 	bool attachNew = false;
 	if(!newShape)
@@ -128,8 +128,11 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	if(targetShape)
 	{
 		targetShape->unk148 = source->unk148;
-		targetShape->m_spEffectState = shaderProperty;
-		targetShape->m_spPropertyState = alphaProperty;
+
+		if (shaderProperty)
+			targetShape->m_spEffectState = shaderProperty;
+		if (alphaProperty)
+			targetShape->m_spPropertyState = alphaProperty;
 
 		targetShape->m_localTransform = source->m_localTransform;
 		targetShape->m_spSkinInstance = source->m_spSkinInstance;

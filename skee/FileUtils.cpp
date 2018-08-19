@@ -80,10 +80,10 @@ TESRace * GetRaceByName(std::string & raceName)
 			if (dataHandler->races.GetNthItem(i, race)) {
 				BSFixedString raceStrName(raceName.c_str());
 				if (race->editorId == raceStrName) {
-					CALL_MEMBER_FN(&raceStrName, Release)();
+					raceStrName.Release();
 					return race;
 				}
-				CALL_MEMBER_FN(&raceStrName, Release)();
+				raceStrName.Release();
 			}
 		}
 	}
@@ -102,10 +102,10 @@ BGSHeadPart * GetHeadPartByName(std::string & headPartName)
 			if (dataHandler->headParts.GetNthItem(i, headPart)) {
 				BSFixedString partName(headPartName.c_str());
 				if (headPart->partName == partName) {
-					CALL_MEMBER_FN(&partName, Release)();
+					partName.Release();
 					return headPart;
 				}
-				CALL_MEMBER_FN(&partName, Release)();
+				partName.Release();
 			}
 		}
 	}

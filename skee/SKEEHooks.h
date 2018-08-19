@@ -70,25 +70,6 @@ public:
 };
 #endif
 
-class TESNPC_Hooked : public TESNPC
-{
-public:
-	MEMBER_FN_PREFIX(TESNPC_Hooked);
-	DEFINE_MEMBER_FN(BindHead, void, 0x00000000, Actor*, BSFaceGenNiNode**);
-	//DEFINE_MEMBER_FN(GetFaceGenHead, UInt32, 0x0056AEB0, UInt32 unk1, UInt32 unk2);
-	DEFINE_MEMBER_FN(UpdateHeadState, SInt32, 0x00000000, Actor *, UInt32 unk1);
-	DEFINE_MEMBER_FN(UpdateMorphs, void, 0x00000000, void * unk1, BSFaceGenNiNode * faceNode);
-	DEFINE_MEMBER_FN(UpdateMorph, void, 0x00000000, BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
-
-	void BindHead_Hooked(Actor* actor, BSFaceGenNiNode** headNode);
-	//UInt32 GetFaceGenHead_Hooked(TESObjectREFR* refr, UInt32 unk1, UInt32 unk2);
-	SInt32 CreateHeadState_Hooked(Actor *, UInt32 unk1);
-	SInt32 UpdateHeadState_Hooked(Actor *, UInt32 unk1);
-
-	void UpdateMorphs_Hooked(void * unk1, BSFaceGenNiNode * faceNode);
-	void UpdateMorph_Hooked(BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
-};
-
 class BGSHeadPart_Hooked : public BGSHeadPart
 {
 public:
@@ -124,7 +105,7 @@ public:
 	void GetValidPlayableHeadParts_Hooked(UInt32 unk1, void * unk2);
 };
 
-void __stdcall InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, NiNode * boneTree, NiAVObject * resultNode);
-void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate);
+void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, NiNode * boneTree, NiAVObject * resultNode);
+void InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate);
 
 bool InstallSKEEHooks();

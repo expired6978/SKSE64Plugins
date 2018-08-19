@@ -58,6 +58,38 @@ Actor						* g_weaponHookActor = NULL;
 TESObjectWEAP				* g_weaponHookWeapon = NULL;
 UInt32						g_firstPerson = 0;
 
+extern MorphHandler			g_morphHandler;
+extern PartSet				g_partSet;
+extern UInt32				g_customDataMax;
+extern bool					g_externalHeads;
+extern bool					g_extendedMorphs;
+extern bool					g_allowAllMorphs;
+
+RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE50);
+
+typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
+RelocAddr <_RegenerateHead> RegenerateHead(0x003D2DA0);
+_RegenerateHead RegenerateHead_Original = nullptr;
+
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E10030);
+
+// ??_7TESModelTri@@6B@
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B0898);
+
+// DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x008572C0);
+
+// 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2560);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BCC10);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4CD0);
+
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360AA0);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C90);
+
+// More in hook function
+
+
 typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
 extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
 
@@ -192,8 +224,6 @@ struct ArmorAddonStack
 	UInt32			unk14;		// 14
 };
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE50);
-
 NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, ArmorAddonStack * stackInfo, UInt32 unk4, UInt64 unk5, UInt64 unk6)
 {
 	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, stackInfo->unk10, unk4, unk5, unk6);
@@ -207,32 +237,7 @@ NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectR
 	return retVal;
 }
 
-#ifdef FIXME
-static const UInt32 kCreateArmorNode = GetFnAddr(&ArmorAddonTree::CreateArmorNode);
-static const UInt32 kInstallArmorHook_Base = 0x00470050 + 0x902;
-static const UInt32 kInstallArmorHook_Entry_retn = kInstallArmorHook_Base + 0x5;
-
-enum
-{
-	kArmorHook_EntryStackOffset = 0x04,
-	kArmorHook_VarObj = 0x14
-};
-
-__declspec(naked) void InstallArmorNodeHook_Entry(void)
-{
-	__asm
-	{
-		lea		eax, [ebx]
-		push	eax
-		call[kCreateArmorNode]
-
-		jmp[kInstallArmorHook_Entry_retn]
-	}
-}
-#endif
-
-
-void __stdcall InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, NiNode * boneTree, NiAVObject * resultNode)
+void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, NiNode * boneTree, NiAVObject * resultNode)
 {
 	if (!refr) {
 #ifdef _DEBUG
@@ -580,67 +585,13 @@ void RaceSexMenu_Hooked::RenderMenu_Hooked(void)
 }
 #endif
 
-bool CacheTempTRI(UInt32 hash, const char * originalPath);
-
-extern MorphHandler g_morphHandler;
-extern PartSet	g_partSet;
-extern UInt32	g_customDataMax;
-extern bool		g_externalHeads;
-extern bool		g_extendedMorphs;
-extern bool		g_allowAllMorphs;
-
-static const UInt32 kInstallRegenHeadHook_Base = 0x005A4B80 + 0x49B;
-static const UInt32 kInstallRegenHeadHook_Entry_retn = kInstallRegenHeadHook_Base + 0x8;
-
-enum
+void RegenerateHead_Hooked(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc)
 {
-	kRegenHeadHook_EntryStackOffset1 = 0x20,
-	kRegenHeadHook_EntryStackOffset2 = 0xA8,
-
-	kRegenHeadHook_VarHeadPart = 0x08,
-	kRegenHeadHook_VarFaceGenNode = 0x04,
-	kRegenHeadHook_VarNPC = 0x0C
-};
-
-void __stdcall ApplyPreset(TESNPC * npc, BSFaceGenNiNode * headNode, BGSHeadPart * headPart)
-{
+	RegenerateHead_Original(faceGen, headNode, headPart, npc);
 	g_morphHandler.ApplyPreset(npc, headNode, headPart);
 }
 
-#ifdef FIXME
-__declspec(naked) void InstallRegenHeadHook_Entry(void)
-{
-	__asm
-	{
-		pushad
-		mov		eax, [esp + kRegenHeadHook_EntryStackOffset1 + kRegenHeadHook_EntryStackOffset2 + kRegenHeadHook_VarHeadPart]
-		push	eax
-		mov		eax, [esp + kRegenHeadHook_EntryStackOffset1 + kRegenHeadHook_EntryStackOffset2 + kRegenHeadHook_VarFaceGenNode + 0x04]
-		push	eax
-		mov		eax, [esp + kRegenHeadHook_EntryStackOffset1 + kRegenHeadHook_EntryStackOffset2 + kRegenHeadHook_VarNPC + 0x08]
-		push	eax
-		call	ApplyPreset
-		popad
-
-		pop edi
-		pop ebx
-		add esp, 0xA0
-		jmp[kInstallRegenHeadHook_Entry_retn]
-	}
-}
-#endif
-
-static const UInt32 kInstallForceRegenHeadHook_Base = 0x0056AEB0 + 0x35;
-static const UInt32 kInstallForceRegenHeadHook_Entry_retn = kInstallForceRegenHeadHook_Base + 0x7;		// Standard execution
-
-enum
-{
-	kForceRegenHeadHook_EntryStackOffset = 0x10,
-};
-
-bool	* g_useFaceGenPreProcessedHeads = (bool*)0x0125D280;
-
-bool __stdcall IsHeadGenerated(TESNPC * npc)
+bool UsePreprocessedHead(TESNPC * npc)
 {
 	// For some reason the NPC vanilla preset data is reset when the actor is disable/enabled
 	auto presetData = g_morphHandler.GetPreset(npc);
@@ -660,29 +611,7 @@ bool __stdcall IsHeadGenerated(TESNPC * npc)
 			i++;
 		}
 	}
-	return (presetData != NULL) || !(*g_useFaceGenPreProcessedHeads);
-}
-
-#ifdef FIXME
-__declspec(naked) void InstallForceRegenHeadHook_Entry(void)
-{
-	__asm
-	{
-		push	esi
-		call	IsHeadGenerated
-		cmp		al, 1
-		jmp[kInstallForceRegenHeadHook_Entry_retn]
-	}
-}
-#endif
-
-SInt32 GetGameSettingInt(const char * key)
-{
-	Setting	* setting = (*g_gameSettingCollection)->Get(key);
-	if (setting && setting->GetType() == Setting::kType_Integer)
-		return setting->data.s32;
-
-	return 0;
+	return presetData == nullptr && (*g_useFaceGenPreProcessedHeads);
 }
 
 typedef void(*_ClearFaceGenCache)();
@@ -1077,20 +1006,6 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 	DoubleMorphCallback(menu, newValue, sliderId);
 }
 
-// ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B0898);
-
-// DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x008572C0);
-
-// 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2560);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BCC10);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4CD0);
-
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360AA0);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C90);
-
 bool InstallSKEEHooks()
 {
 #ifdef FIXME
@@ -1192,6 +1107,82 @@ bool InstallSKEEHooks()
 		g_localTrampoline.EndAlloc(code.getCurr());
 
 		g_branchTrampoline.Write5Branch(SliderLookup_Target.GetUIntPtr(), uintptr_t(code.getCode()));
+	}
+
+	if (!g_externalHeads)
+	{
+		RelocAddr<uintptr_t> PreprocessedHeads1_Target(0x0364040 + 0x58);
+		RelocAddr<uintptr_t> PreprocessedHeads2_Target(0x0364040 + 0x81);
+		RelocAddr<uintptr_t> PreprocessedHeads3_Target(0x0364040 + 0x67);
+		{
+			struct UsePreprocessedHeads_Entry_Code : Xbyak::CodeGenerator {
+				UsePreprocessedHeads_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
+				{
+					Xbyak::Label retnLabel;
+					Xbyak::Label funcLabel;
+
+					mov(rcx, rdi);					 // Move NPC into RCX
+					call(ptr[rip + funcLabel]);		 // Call function
+					jmp(ptr[rip + retnLabel]);		 // Jump back
+
+					L(funcLabel);
+					dq(funcAddr);
+
+					L(retnLabel);
+					dq(targetAddr + 0x6);
+				}
+			};
+
+			void * codeBuf = g_localTrampoline.StartAlloc();
+			UsePreprocessedHeads_Entry_Code code1(codeBuf, uintptr_t(UsePreprocessedHead), PreprocessedHeads1_Target.GetUIntPtr());
+			g_localTrampoline.EndAlloc(code1.getCurr());
+
+			codeBuf = g_localTrampoline.StartAlloc();
+			UsePreprocessedHeads_Entry_Code code2(codeBuf, uintptr_t(UsePreprocessedHead), PreprocessedHeads2_Target.GetUIntPtr());
+			g_localTrampoline.EndAlloc(code2.getCurr());
+
+			UInt8 resultFix[] = {
+				0x90,		// NOP
+				0x84, 0xC0	// TEST al, al
+			};
+			UInt8 testFix[] = {
+				0x85, 0xDB	// TEST ebx, ebx
+			};
+
+			g_branchTrampoline.Write6Branch(PreprocessedHeads1_Target.GetUIntPtr(), uintptr_t(code1.getCode()));
+			SafeWriteBuf(PreprocessedHeads1_Target.GetUIntPtr() + 6, resultFix, sizeof(resultFix));
+			g_branchTrampoline.Write6Branch(PreprocessedHeads2_Target.GetUIntPtr(), uintptr_t(code2.getCode()));
+			SafeWriteBuf(PreprocessedHeads2_Target.GetUIntPtr() + 6, resultFix, sizeof(resultFix));
+
+			SafeWriteBuf(PreprocessedHeads3_Target.GetUIntPtr(), testFix, sizeof(testFix));
+		}
+
+		// Preprocessing heads, used to restore mask and tinting where applicable
+		{
+			struct PreprocessedHeads_Code : Xbyak::CodeGenerator {
+				PreprocessedHeads_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)
+				{
+					Xbyak::Label retnLabel;
+
+					mov(rax, rsp);
+					push(rbp);
+					push(r12);
+
+					jmp(ptr[rip + retnLabel]);
+
+					L(retnLabel);
+					dq(RegenerateHead.GetUIntPtr() + 6);
+				}
+			};
+
+			void * codeBuf = g_localTrampoline.StartAlloc();
+			PreprocessedHeads_Code code(codeBuf);
+			g_localTrampoline.EndAlloc(code.getCurr());
+
+			RegenerateHead_Original = (_RegenerateHead)codeBuf;
+
+			g_branchTrampoline.Write6Branch(RegenerateHead.GetUIntPtr(), (uintptr_t)RegenerateHead_Hooked);
+		}
 	}
 
 

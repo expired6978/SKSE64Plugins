@@ -401,10 +401,9 @@ void SKSEScaleform_GetModName::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 
-	UInt32 modIndex = (UInt32)args->args[0].GetNumber();
+	UInt32 formId = (UInt32)args->args[0].GetNumber();
 
-	DataHandler* pDataHandler = DataHandler::GetSingleton();
-	ModInfo* modInfo = pDataHandler->modList.modInfoList.GetNthItem(modIndex);
+	ModInfo* modInfo = GetModInfoByFormID(formId);
 	if(modInfo) {
 		args->movie->CreateString(args->result, modInfo->name);
 	}
