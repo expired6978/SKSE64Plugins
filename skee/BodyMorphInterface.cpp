@@ -277,121 +277,131 @@ bool BodyMorphInterface::HasMorphs(TESObjectREFR * actor)
 	return false;
 }
 
-void TriShapeFullVertexData::ApplyMorph(UInt16 vertCount, void * data, float factor)
+void TriShapeFullVertexData::ApplyMorphRaw(UInt16 vertCount, void * data, float factor)
 {
 	NiPoint3 * vertices = static_cast<NiPoint3*>(data);
 	if (!vertices)
 		return;
 
-	if (g_parallelMorphing)
+	if (m_maxIndex < vertCount)
 	{
-		concurrency::parallel_for_each(m_vertexDeltas.begin(), m_vertexDeltas.end(), [&](const TriShapeVertexDelta & vert)
-		{
-			const UInt16 vertexIndex = vert.index;
-			const NiPoint3 * vertexDiff = &vert.diff;
-			if (vertexIndex < vertCount)
-			{
-				vertices[vertexIndex].x += vertexDiff->x * factor;
-				vertices[vertexIndex].y += vertexDiff->y * factor;
-				vertices[vertexIndex].z += vertexDiff->z * factor;
-			}
-		}, concurrency::static_partitioner());
-	}
-	else
-	{
-		UInt32 size = m_vertexDeltas.size();
-		for (UInt32 i = 0; i < size; i++)
-		{
-			TriShapeVertexDelta * vert = &m_vertexDeltas.at(i);
-			UInt16 vertexIndex = vert->index;
-			NiPoint3 * vertexDiff = &vert->diff;
-			if (vertexIndex < vertCount)
-			{
-				vertices[vertexIndex].x += vertexDiff->x * factor;
-				vertices[vertexIndex].y += vertexDiff->y * factor;
-				vertices[vertexIndex].z += vertexDiff->z * factor;
-			}
-			else {
-				_DMESSAGE("%s - Vertex %d out of bounds X:%f Y:%f Z:%f", __FUNCTION__, vertexIndex, vertexDiff->x, vertexDiff->y, vertexDiff->z);
-			}
-		}
-	}
-}
-
-void TriShapePackedVertexData::ApplyMorph(UInt16 vertCount, void * data, float factor)
-{
-	NiPoint3 * vertices = static_cast<NiPoint3*>(data);
-	if (!vertices)
-		return;
-
-	if (g_parallelMorphing)
-	{
-		concurrency::parallel_for_each(m_vertexDeltas.begin(), m_vertexDeltas.end(), [&](const TriShapePackedVertexDelta & vert)
+		for (const auto & vert : m_vertexDeltas)
 		{
 			UInt16 vertexIndex = vert.index;
-			if (vertexIndex < vertCount)
-			{
-				vertices[vertexIndex].x += (float)vert.x * m_multiplier * factor;
-				vertices[vertexIndex].y += (float)vert.y * m_multiplier * factor;
-				vertices[vertexIndex].z += (float)vert.z * m_multiplier * factor;
-			}
-		}, concurrency::static_partitioner());
+			const DirectX::XMVECTOR * vertexDiff = &vert.delta;
+
+			vertices[vertexIndex].x += vertexDiff->m128_f32[0] * factor;
+			vertices[vertexIndex].y += vertexDiff->m128_f32[1] * factor;
+			vertices[vertexIndex].z += vertexDiff->m128_f32[2] * factor;
+
+		}
 	}
 	else
 	{
-		UInt32 size = m_vertexDeltas.size();
-		for (UInt32 i = 0; i < size; i++)
-		{
-			TriShapePackedVertexDelta * vert = &m_vertexDeltas.at(i);
-
-			UInt16 vertexIndex = vert->index;
-			if (vertexIndex < vertCount)
-			{
-				vertices[vertexIndex].x += (float)vert->x * m_multiplier * factor;
-				vertices[vertexIndex].y += (float)vert->y * m_multiplier * factor;
-				vertices[vertexIndex].z += (float)vert->z * m_multiplier * factor;
-			}
-			else {
-				_DMESSAGE("%s - Vertex %d out of bounds X:%f Y:%f Z:%f", __FUNCTION__, vertexIndex, vert->x, vert->y, vert->z);
-			}
-		}
+		_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertCount);
 	}
 }
 
-void TriShapePackedUVData::ApplyMorph(UInt16 vertCount, void * data, float factor)
+void TriShapeFullVertexData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+{
+	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_POSITION);
+	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
+
+	if (m_maxIndex < vertexCount)
+	{
+		for (const auto & vert : m_vertexDeltas)
+		{
+			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->m_RawVertexData[vertexSize * vert.index + offset]);
+			DirectX::XMStoreFloat4(position, DirectX::XMVectorAdd(DirectX::XMLoadFloat4(position), DirectX::XMVectorScale(vert.delta, factor)));
+		}
+	}
+	else
+	{
+		_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertexCount);
+	}
+}
+
+void TriShapePackedVertexData::ApplyMorphRaw(UInt16 vertCount, void * data, float factor)
+{
+	NiPoint3 * vertices = static_cast<NiPoint3*>(data);
+	if (!vertices)
+		return;
+
+	if (m_maxIndex < vertCount)
+	{
+		for (const auto & vert : m_vertexDeltas)
+		{
+			UInt32 vertexIndex = vert.index;
+			vertices[vertexIndex].x += (float)vert.delta.m128_f32[0] * factor;
+			vertices[vertexIndex].y += (float)vert.delta.m128_f32[1] * factor;
+			vertices[vertexIndex].z += (float)vert.delta.m128_f32[2] * factor;
+		}
+	}
+	else
+	{
+		_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertCount);
+	}
+}
+
+void TriShapePackedVertexData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+{
+	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
+	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_POSITION);
+
+	if (m_maxIndex < vertexCount)
+	{
+		for (const auto & vert : m_vertexDeltas)
+		{
+			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->m_RawVertexData[vertexSize * vert.index + offset]);
+			DirectX::XMStoreFloat4(position, DirectX::XMVectorAdd(DirectX::XMLoadFloat4(position), DirectX::XMVectorScale(vert.delta, factor)));
+		}
+	}
+	else
+	{
+		_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertexCount);
+	}
+}
+
+void TriShapePackedUVData::ApplyMorphRaw(UInt16 vertCount, void * data, float factor)
 {
 	UVCoord * deltas = static_cast<UVCoord*>(data);
 	if (!deltas)
 		return;
 
-	if (g_parallelMorphing)
+	if (m_maxIndex < vertCount)
 	{
-		concurrency::parallel_for_each(m_uvDeltas.begin(), m_uvDeltas.end(), [&](const TriShapePackedUVDelta & vert)
+		for (const auto & delta : m_uvDeltas)
 		{
-			UInt16 vertexIndex = vert.index;
-			if (vertexIndex < vertCount)
-			{
-				deltas[vertexIndex].u += (float)vert.u * m_multiplier * factor;
-				deltas[vertexIndex].v += (float)vert.v * m_multiplier * factor;
-			}
-		}, concurrency::static_partitioner());
+			UInt32 vertexIndex = delta.index;
+			deltas[vertexIndex].u += (float)delta.u * m_multiplier * factor;
+			deltas[vertexIndex].v += (float)delta.v * m_multiplier * factor;
+		}
 	}
 	else
 	{
-		UInt32 size = m_uvDeltas.size();
-		for (UInt32 i = 0; i < size; i++)
-		{
-			TriShapePackedUVDelta * delta = &m_uvDeltas.at(i);
+		_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertCount);
+	}
+}
 
-			UInt16 vertexIndex = delta->index;
-			if (vertexIndex < vertCount)
+void TriShapePackedUVData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+{
+	VertexFlags flags = NiSkinPartition::GetVertexFlags(vertexData->m_VertexDesc);
+	if ((flags & VF_UV))
+	{
+		UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
+		UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_TEXCOORD0);
+		if (m_maxIndex < vertexCount)
+		{
+			for (const auto & delta : m_uvDeltas)
 			{
-				deltas[vertexIndex].u += (float)delta->u * m_multiplier * factor;
-				deltas[vertexIndex].v += (float)delta->v * m_multiplier * factor;
+				UVCoord * texCoord = reinterpret_cast<UVCoord*>(&vertexData->m_RawVertexData[vertexSize * delta.index + offset]);
+				texCoord->u += (float)delta.u * m_multiplier * factor;
+				texCoord->v += (float)delta.v * m_multiplier * factor;
 			}
-			else {
-				_DMESSAGE("%s - Vertex %d out of bounds U:%f V:%f", __FUNCTION__, vertexIndex, delta->u, delta->v);
-			}
+		}
+		else
+		{
+			_ERROR("%s - Failed to apply morphs to geometry - morphs largest index is %d mesh vertex size is %d", __FUNCTION__, m_maxIndex, (UInt32)vertexCount);
 		}
 	}
 }
@@ -488,7 +498,7 @@ namespace MinD3D11
 	};
 };
 
-void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph)
+void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * dxLock)
 {
 	BSFixedString nodeName = bodyMorph.first.data;
 	BSGeometry * geometry = rootNode->GetAsBSGeometry();
@@ -507,22 +517,10 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 				if (bodyData) {
 					NiAutoRefCounter arc(bodyData);
 					// Undo old morphs for this trishape
-					if (g_parallelMorphing)
-					{
-						concurrency::parallel_for((UInt16)0, geometryData->m_usVertices, [&](UInt16 i)
-						{
-							if (!isAttaching)
-								geometryData->m_pkVertex[i] -= bodyData->vertexData[i];
-							bodyData->vertexData[i] = NiPoint3(0, 0, 0);
-						}, concurrency::static_partitioner());
-					}
-					else
-					{
-						for (UInt16 i = 0; i < geometryData->m_usVertices; i++) {
-							if (!isAttaching)
-								geometryData->m_pkVertex[i] -= bodyData->vertexData[i];
-							bodyData->vertexData[i] = NiPoint3(0, 0, 0);
-						}
+					for (UInt16 i = 0; i < geometryData->m_usVertices; i++) {
+						if (!isAttaching)
+							geometryData->m_pkVertex[i] -= bodyData->vertexData[i];
+						bodyData->vertexData[i] = NiPoint3(0, 0, 0);
 					}
 
 					geometryData->m_usDirtyFlags = 0x0001;
@@ -560,8 +558,8 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 								NiAutoRefCounter arc(bodyData);
 								bodyMorph.second.ApplyMorphs(refr, [&](const TriShapeVertexDataPtr morphData, float morphFactor)
 								{
-									morphData->ApplyMorph(targetShapeData->m_usVertices, bodyData->vertexData, morphFactor);
-									morphData->ApplyMorph(targetShapeData->m_usVertices, targetShapeData->m_pkVertex, morphFactor);
+									morphData->ApplyMorphRaw(targetShapeData->m_usVertices, bodyData->vertexData, morphFactor);
+									morphData->ApplyMorphRaw(targetShapeData->m_usVertices, targetShapeData->m_pkVertex, morphFactor);
 								}, nullptr);
 							}
 
@@ -584,14 +582,12 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 				NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
 				if (skinPartition) {
 					// Undo morphs on the old shape
-					BSFaceGenBaseMorphExtraData * bodyData = (BSFaceGenBaseMorphExtraData *)bodyGeometry->GetExtraData("FOD");
-					NiBinaryExtraData * uvData = (NiBinaryExtraData *)bodyGeometry->GetExtraData("FODUV");
+					NiBinaryExtraData * bodyData = (NiBinaryExtraData *)bodyGeometry->GetExtraData("SHAPEDATA");
 					
 					bool existingMorphs = !isAttaching && bodyData;
-					bool existingUV = !isAttaching && uvData;
 
 					// Apply new morphs to new shape
-					if (bodyMorph.second.HasMorphs(refr) || existingMorphs || existingUV)
+					if (bodyMorph.second.HasMorphs(refr) || existingMorphs)
 					{
 						if (skinPartition)
 						{
@@ -599,143 +595,76 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 							CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
 
 							// Reset the Vertices directly
-							if (bodyData)
+							if (bodyData && newSkinPartition)
 							{
 								if (!isAttaching)
 								{
-									for (UInt32 i = 0; i < newSkinPartition->vertexCount; ++i)
+									// Overwrite the vertex data with the original source data
+									for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
 									{
-										for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
-										{
-											auto & partition = newSkinPartition->m_pkPartitions[p];
+										auto & partition = newSkinPartition->m_pkPartitions[p];
+										UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
 
-											UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
-											UInt32 offset = newSkinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_POSITION);
-
-											NiPoint3 * position = reinterpret_cast<NiPoint3*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offset]);
-											*position -= bodyData->vertexData[i];
-										}
+										memcpy(partition.shapeData->m_RawVertexData, bodyData->m_data, newSkinPartition->vertexCount * vertexSize);
 									}
 								}
-
-								memset(bodyData->vertexData, 0, sizeof(NiPoint3)*newSkinPartition->vertexCount);
-							}
-
-							// Reset the UV directly
-							if (uvData && bodyMorph.second.HasUV())
-							{
-								if (!isAttaching)
-								{
-									for (UInt32 i = 0; i < newSkinPartition->vertexCount; ++i)
-									{
-										for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
-										{
-											auto & partition = newSkinPartition->m_pkPartitions[p];
-											VertexFlags flags = newSkinPartition->GetVertexFlags(partition.vertexDesc);
-											if (flags & VF_UV)
-											{
-												UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
-												UInt32 offset = newSkinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_TEXCOORD0);
-
-												TriShapePackedUVData::UVCoord * position = reinterpret_cast<TriShapePackedUVData::UVCoord*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offset]);
-												auto source = reinterpret_cast<TriShapePackedUVData::UVCoord *>(uvData->m_data);
-												(*position).u -= source[i].u;
-												(*position).v -= source[i].v;
-											}
-										}
-									}
-								}
-
-								memset(uvData->m_data, 0, uvData->m_size);
 							}
 
 							if (newSkinPartition)
 							{
-								// No old morphs, add one
+								// No existing morphs, copy the current vertex block
 								if (!bodyData) {
-									bodyData = BSFaceGenBaseMorphExtraData::Create(nullptr, false);
-									bodyData->vertexCount = skinPartition->vertexCount;
-									bodyData->modelVertexCount = skinPartition->vertexCount;
-									bodyData->vertexData = (NiPoint3*)Heap_Allocate(sizeof(NiPoint3) * bodyData->vertexCount);
-									memset(bodyData->vertexData, 0, sizeof(NiPoint3) * bodyData->vertexCount);
-									bodyGeometry->AddExtraData(bodyData);
-								}
+									auto & partition = newSkinPartition->m_pkPartitions[0];
+									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
 
-								if (!uvData && bodyMorph.second.HasUV()) {
-									uvData = NiBinaryExtraData::Create("FODUV", nullptr, 0);
-									uvData->m_size = skinPartition->vertexCount * sizeof(TriShapePackedUVData::UVCoord);
-									uvData->m_data = (char*)Heap_Allocate(sizeof(TriShapePackedUVData::UVCoord) * skinPartition->vertexCount);
-									memset(uvData->m_data, 0, uvData->m_size);
-									bodyGeometry->AddExtraData(uvData);
+									bodyData = NiBinaryExtraData::Create("SHAPEDATA", reinterpret_cast<char*>(partition.shapeData->m_RawVertexData), newSkinPartition->vertexCount * vertexSize);
+									bodyGeometry->AddExtraData(bodyData);
 								}
 
 								if (bodyData)
 								{
-									UInt32 vertexCount = skinPartition->vertexCount;
-									// Apply Morph data to the new partition
-									std::vector<NiPoint3> vertices(skinPartition->vertexCount);
-									memset(&vertices.at(0), 0, sizeof(NiPoint3)*vertexCount);
-									std::vector<TriShapePackedUVData::UVCoord> uvOffsets;
-									if (bodyMorph.second.HasUV())
-									{
-										uvOffsets.resize(vertexCount);
-										memset(&uvOffsets.at(0), 0, sizeof(TriShapePackedUVData::UVCoord)*vertexCount);
-									}
+									auto & partition = newSkinPartition->m_pkPartitions[0];
+									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+									UInt32 vertexCount = newSkinPartition->vertexCount;
 
 									std::function<void(const TriShapeVertexDataPtr, float)> vertexMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
 									{
-										morphData->ApplyMorph(vertexCount, bodyData->vertexData, morphFactor);
-										morphData->ApplyMorph(vertexCount, &vertices.at(0), morphFactor);
+										if (morphFactor != 0.0f)
+										{
+											morphData->ApplyMorph(vertexCount, partition.shapeData, morphFactor);
+										}
 									};
 
 									std::function<void(const TriShapeVertexDataPtr, float)> uvMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
 									{
-										morphData->ApplyMorph(vertexCount, uvData->m_data, morphFactor);
-										morphData->ApplyMorph(vertexCount, &uvOffsets.at(0), morphFactor);
+										if (morphFactor != 0.0f)
+										{
+											morphData->ApplyMorph(vertexCount, partition.shapeData, morphFactor);
+										}
 									};
 
 									// Applies all morphs for this shape
 									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
-								}
 
-								// Do Subresource update
-								for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
-								{
-									auto & partition = newSkinPartition->m_pkPartitions[p];
-									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
-									UInt32 offsetPos = newSkinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_POSITION);
-
-									if (bodyMorph.second.HasMorphs(refr) && bodyData)
-									{
-										for (UInt32 i = 0; i < newSkinPartition->vertexCount; ++i)
-										{
-											NiPoint3 * position = reinterpret_cast<NiPoint3*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offsetPos]);
-											*position += bodyData->vertexData[i];
-										}
-									}
-
-									if (bodyMorph.second.HasUV() && uvData)
-									{
-										VertexFlags flags = newSkinPartition->GetVertexFlags(partition.vertexDesc);
-										if ((flags & VF_UV))
-										{
-											UInt32 offsetUV = newSkinPartition->GetVertexAttributeOffset(partition.vertexDesc, VertexAttribute::VA_TEXCOORD0);
-											for (UInt32 i = 0; i < newSkinPartition->vertexCount; ++i)
-											{
-												TriShapePackedUVData::UVCoord * position = reinterpret_cast<TriShapePackedUVData::UVCoord*>(&partition.shapeData->m_RawVertexData[vertexSize * i + offsetUV]);
-												auto source = reinterpret_cast<TriShapePackedUVData::UVCoord *>(uvData->m_data);
-												(*position).u += source[i].u;
-												(*position).v += source[i].v;
-											}
-										}
-									}
-
+									// Copy the vertex data back onto the GPU
 									auto deviceContext = reinterpret_cast<MinD3D11::ID3D11DeviceContext4*>(g_renderManager->context);
-									deviceContext->vtable->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(partition.shapeData->m_VertexBuffer), 0, nullptr, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize, 0);
+									if(dxLock) dxLock->lock();
+									deviceContext->vtable->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(partition.shapeData->m_VertexBuffer), 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+									if (dxLock) dxLock->unlock();
+									// Copy the remaining partitions from the first partition
+									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
+									{
+										auto & pPartition = newSkinPartition->m_pkPartitions[p];
+										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
+										if (dxLock) dxLock->lock();
+										deviceContext->vtable->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(pPartition.shapeData->m_VertexBuffer), 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+										if (dxLock) dxLock->unlock();
+									}
 								}
-							}
 
-							skinInstance->m_spSkinPartition = newSkinPartition;
+								skinInstance->m_spSkinPartition = newSkinPartition;
+								newSkinPartition->DecRef(); // DeepCopy started refcount at 1
+							}
 						}
 					}
 				}
@@ -746,9 +675,31 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 
 void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching)
 {
-	for (const auto & it : vertexMap)
+	if (g_parallelMorphing)
 	{
-		ApplyMorph(refr, rootNode, isAttaching, it);
+		std::mutex dxLock;
+		concurrency::structured_task_group task_group;
+		std::vector<concurrency::task_handle<std::function<void()>>> task_list;
+		for (const auto & it : vertexMap)
+		{
+			task_list.push_back(concurrency::make_task<std::function<void()>>([&]()
+			{
+				ApplyMorph(refr, rootNode, isAttaching, it, &dxLock);
+			}));
+		}
+		for (auto & task : task_list)
+		{
+			task_group.run(task);
+		}
+
+		task_group.wait();
+	}
+	else
+	{
+		for (const auto & it : vertexMap)
+		{
+			ApplyMorph(refr, rootNode, isAttaching, it, nullptr);
+		}
 	}
 }
 
@@ -1038,8 +989,19 @@ bool MorphCache::CacheFile(const char * relativePath)
 					for (UInt32 k = 0; k < vertexNum; k++)
 					{
 						TriShapeVertexDelta vertexDelta;
+						float x, y, z;
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.index, sizeof(UInt32));
-						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.diff, sizeof(NiPoint3));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&x, sizeof(float));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&y, sizeof(float));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&z, sizeof(float));
+						vertexDelta.delta.m128_f32[0] = (float)x * multiplier;
+						vertexDelta.delta.m128_f32[1] = (float)y * multiplier;
+						vertexDelta.delta.m128_f32[2] = (float)z * multiplier;
+						vertexDelta.delta.m128_f32[3] = 0;
+
+						if (vertexDelta.index > fullVertexData->m_maxIndex)
+							fullVertexData->m_maxIndex = vertexDelta.index;
+
 						fullVertexData->m_vertexDeltas.push_back(vertexDelta);
 					}
 
@@ -1053,10 +1015,18 @@ bool MorphCache::CacheFile(const char * relativePath)
 					for (UInt32 k = 0; k < vertexNum; k++)
 					{
 						TriShapePackedVertexDelta vertexDelta;
+						SInt16 x, y, z;
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.index, sizeof(UInt16));
-						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.x, sizeof(SInt16));
-						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.y, sizeof(SInt16));
-						trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.z, sizeof(SInt16));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&x, sizeof(SInt16));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&y, sizeof(SInt16));
+						trishapeMap.memoryUsage += binaryStream.Read((char *)&z, sizeof(SInt16));
+						vertexDelta.delta.m128_f32[0] = (float)x * multiplier;
+						vertexDelta.delta.m128_f32[1] = (float)y * multiplier;
+						vertexDelta.delta.m128_f32[2] = (float)z * multiplier;
+						vertexDelta.delta.m128_f32[3] = 0;
+
+						if (vertexDelta.index > packedVertexData->m_maxIndex)
+							packedVertexData->m_maxIndex = vertexDelta.index;
 
 						packedVertexData->m_vertexDeltas.push_back(vertexDelta);
 					}
@@ -1149,6 +1119,9 @@ bool MorphCache::CacheFile(const char * relativePath)
 					trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.index, sizeof(UInt16));
 					trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.u, sizeof(SInt16));
 					trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexDelta.v, sizeof(SInt16));
+
+					if (vertexDelta.index > packedUVData->m_maxIndex)
+						packedUVData->m_maxIndex = vertexDelta.index;
 
 					packedUVData->m_uvDeltas.push_back(vertexDelta);
 				}

@@ -6,6 +6,7 @@
 #include "skse64/GameTypes.h"
 #include "skse64/GameThreads.h"
 #include "skse64/NiTypes.h"
+#include "skse64/NiGeometry.h"
 
 #ifdef min
 #undef min
@@ -22,6 +23,10 @@
 #include <functional>
 #include <memory>
 #include <ctime>
+#include <mutex>
+
+#include <DirectXMath.h>
+#include <DirectXPackedVector.h>
 
 class TESObjectREFR;
 struct SKSESerializationInterface;
@@ -77,16 +82,14 @@ class TriShapeVertexDelta
 {
 public:
 	UInt16		index;
-	NiPoint3	diff;
+	DirectX::XMVECTOR delta;
 };
 
 class TriShapePackedVertexDelta
 {
 public:
 	UInt16	index;
-	SInt16	x;
-	SInt16	y;
-	SInt16	z;
+	DirectX::XMVECTOR delta;
 };
 
 class TriShapePackedUVDelta
@@ -100,25 +103,34 @@ public:
 class TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor) = 0;
+	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor) = 0;
+	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor) = 0;
 };
 typedef std::shared_ptr<TriShapeVertexData> TriShapeVertexDataPtr;
 
 class TriShapeFullVertexData : public TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
+	TriShapeFullVertexData() : m_maxIndex(0) { }
 
-	std::vector<TriShapeVertexDelta> m_vertexDeltas;
+	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
+
+	UInt32								m_maxIndex;
+	std::vector<TriShapeVertexDelta>	m_vertexDeltas;
 };
 typedef std::shared_ptr<TriShapeFullVertexData> TriShapeFullVertexDataPtr;
 
 class TriShapePackedVertexData : public TriShapeVertexData
 {
 public:
-	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
+	TriShapePackedVertexData() : m_maxIndex(0) { }
+
+	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
 
 	float									m_multiplier;
+	UInt32									m_maxIndex;
 	std::vector<TriShapePackedVertexDelta>	m_vertexDeltas;
 };
 typedef std::shared_ptr<TriShapePackedVertexData> TriShapePackedVertexDataPtr;
@@ -126,15 +138,19 @@ typedef std::shared_ptr<TriShapePackedVertexData> TriShapePackedVertexDataPtr;
 class TriShapePackedUVData : public TriShapeVertexData
 {
 public:
+	TriShapePackedUVData() : m_maxIndex(0) { }
+
 	struct UVCoord
 	{
 		half_float::half u;
 		half_float::half v;
 	};
 
-	virtual void ApplyMorph(UInt16 vertCount, void * vertices, float factor);
+	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
 
 	float								m_multiplier;
+	UInt32								m_maxIndex;
 	std::vector<TriShapePackedUVDelta>	m_uvDeltas;
 };
 typedef std::shared_ptr<TriShapePackedUVData> TriShapePackedUVDataPtr;
@@ -172,7 +188,7 @@ class MorphFileCache
 	friend class BodyMorphInterface;
 public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
-	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph);
+	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * dxLock);
 
 private:
 	TriShapeMap vertexMap;
