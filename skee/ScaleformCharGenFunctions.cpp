@@ -817,7 +817,7 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 {
 #ifdef FIXME
-	LPDIRECT3DDEVICE9 pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
+	ID3D11Device * pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
 	if (!pDevice) {
 		_ERROR("%s - Failed to acquire DirectX device.", __FUNCTION__);
 		return;

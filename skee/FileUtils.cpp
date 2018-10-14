@@ -1,8 +1,12 @@
 #include "FileUtils.h"
 
+#include <unordered_set>
+#include <queue>
+
 #include "skse64/GameStreams.h"
 #include "skse64/GameData.h"
 #include "skse64/GameForms.h"
+#include "skse64/GameRTTI.h"
 
 // trim from start
 namespace std
@@ -179,6 +183,39 @@ TESForm * GetFormFromIdentifier(const std::string & formIdentifier)
 	}
 
 	return LookupFormByID(formId);
+}
+
+void VisitLeveledCharacter(TESLevCharacter * character, std::function<void(TESNPC*)> functor)
+{
+	std::unordered_set<TESLevCharacter*> visited;
+	std::queue<TESLevCharacter*> visit;
+
+	visit.push(character);
+
+	while (!visit.empty())
+	{
+		character = visit.front();
+		visit.pop();
+
+		if (character)
+		{
+			for (UInt32 i = 0; i < character->leveledList.length; i++)
+			{
+				TESForm * form = character->leveledList.entries[i].form;
+				if (form) {
+					TESLevCharacter * levCharacter = DYNAMIC_CAST(form, TESForm, TESLevCharacter);
+					if (levCharacter && visited.find(levCharacter) == visited.end())
+						visit.push(levCharacter);
+
+					TESNPC * npc = DYNAMIC_CAST(form, TESForm, TESNPC);
+					if (npc)
+						functor(npc);
+				}
+			}
+
+			visited.insert(character);
+		}
+	}
 }
 
 void ForEachMod(std::function<void(ModInfo *)> functor)

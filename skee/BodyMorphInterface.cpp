@@ -38,6 +38,7 @@ extern bool								g_parallelMorphing;
 extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
+extern bool								g_deferredBodyMorph;
 
 UInt32 BodyMorphInterface::GetVersion()
 {
@@ -464,41 +465,10 @@ extern const _UpdateReferenceNode UpdateReferenceNode = (_UpdateReferenceNode)0x
 
 #include <fstream>
 #include <regex>
+#include <d3d11.h>
+#include <d3d11_4.h>
 
-namespace MinD3D11
-{
-	struct D3D11_BOX {
-		UINT left;
-		UINT top;
-		UINT front;
-		UINT right;
-		UINT bottom;
-		UINT back;
-	};
-
-	typedef void (*_UpdateSubresource)(
-		struct ID3D11DeviceContext4	*pContext,
-		struct ID3D11Resource		*pDstResource,
-		UINT						DstSubresource,
-		const D3D11_BOX				*pDstBox,
-		const void					*pSrcData,
-		UINT						SrcRowPitch,
-		UINT						SrcDepthPitch
-	);
-
-	struct ID3D11DeviceContext4Vtbl
-	{
-		void * _functions[0x30];
-		_UpdateSubresource UpdateSubresource;
-	};
-
-	struct ID3D11DeviceContext4
-	{
-		ID3D11DeviceContext4Vtbl *vtable;
-	};
-};
-
-void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * dxLock)
+void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
 {
 	BSFixedString nodeName = bodyMorph.first.data;
 	BSGeometry * geometry = rootNode->GetAsBSGeometry();
@@ -506,6 +476,7 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 	NiAVObject * bodyNode = geometry ? geometry : legacyGeometry ? legacyGeometry : rootNode->GetObjectByName(&nodeName.data);
 	if (bodyNode)
 	{
+#if 0
 		NiGeometry * legacyGeometry = bodyNode->GetAsNiGeometry();
 		if (legacyGeometry)
 		{
@@ -573,6 +544,7 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 				}
 			}
 		}
+#endif
 
 		BSGeometry * bodyGeometry = bodyNode->GetAsBSGeometry();
 		if (bodyGeometry)
@@ -646,24 +618,23 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									// Applies all morphs for this shape
 									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
 
-									// Copy the vertex data back onto the GPU
-									auto deviceContext = reinterpret_cast<MinD3D11::ID3D11DeviceContext4*>(g_renderManager->context);
-									if(dxLock) dxLock->lock();
-									deviceContext->vtable->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(partition.shapeData->m_VertexBuffer), 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
-									if (dxLock) dxLock->unlock();
-									// Copy the remaining partitions from the first partition
-									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
-									{
-										auto & pPartition = newSkinPartition->m_pkPartitions[p];
-										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
-										if (dxLock) dxLock->lock();
-										deviceContext->vtable->UpdateSubresource(reinterpret_cast<struct ID3D11DeviceContext4*>(deviceContext), reinterpret_cast<MinD3D11::ID3D11Resource*>(pPartition.shapeData->m_VertexBuffer), 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
-										if (dxLock) dxLock->unlock();
-									}
-								}
+									skinInstance->m_spSkinPartition = newSkinPartition;
+									newSkinPartition->DecRef(); // DeepCopy started refcount at 1
 
-								skinInstance->m_spSkinPartition = newSkinPartition;
-								newSkinPartition->DecRef(); // DeepCopy started refcount at 1
+									if (mutex) mutex->lock();
+
+									auto updateTask = new NIOVTaskUpdateSkinPartition(newSkinPartition);
+									if (g_task && deferred)
+									{
+										g_task->AddTask(updateTask);
+									}
+									else
+									{
+										updateTask->Run();
+										updateTask->Dispose();
+									}
+									if (mutex) mutex->unlock();
+								}
 							}
 						}
 					}
@@ -673,18 +644,18 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 	}
 }
 
-void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching)
+void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, bool defer)
 {
 	if (g_parallelMorphing)
 	{
-		std::mutex dxLock;
+		std::mutex mtx;
 		concurrency::structured_task_group task_group;
 		std::vector<concurrency::task_handle<std::function<void()>>> task_list;
 		for (const auto & it : vertexMap)
 		{
 			task_list.push_back(concurrency::make_task<std::function<void()>>([&]()
 			{
-				ApplyMorph(refr, rootNode, isAttaching, it, &dxLock);
+				ApplyMorph(refr, rootNode, isAttaching, it, &mtx, defer);
 			}));
 		}
 		for (auto & task : task_list)
@@ -698,12 +669,12 @@ void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bo
 	{
 		for (const auto & it : vertexMap)
 		{
-			ApplyMorph(refr, rootNode, isAttaching, it, nullptr);
+			ApplyMorph(refr, rootNode, isAttaching, it, nullptr, defer);
 		}
 	}
 }
 
-void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching)
+void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, bool deferUpdate)
 {
 	MorphFileCache * fileCache = nullptr;
 
@@ -724,7 +695,7 @@ void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 	});
 
 	if (fileCache && !fileCache->vertexMap.empty())
-		fileCache->ApplyMorphs(refr, rootNode, isAttaching);
+		fileCache->ApplyMorphs(refr, rootNode, isAttaching, deferUpdate);
 
 	Shrink();
 }
@@ -790,7 +761,7 @@ TESObjectARMO * GetActorSkin(Actor * actor)
 	return NULL;
 }
 
-void MorphCache::UpdateMorphs(TESObjectREFR * refr)
+void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 {
 	if(!refr)
 		return;
@@ -821,7 +792,7 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr)
 				if (armor->armorAddons.GetNthItem(i, arma)) {
 					if (arma->isValidRace(actor->race)) { // Only search AAs that fit this race
 						VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiNode * skeletonRoot, NiAVObject * armorNode) {
-							ApplyMorphs(refr, armorNode);
+							ApplyMorphs(refr, armorNode, false, deferUpdate);
 #ifdef _NO_REATTACH
 							g_overlayInterface.RebuildOverlays(armor->bipedObject.GetSlotMask(), arma->biped.GetSlotMask(), refr, skeletonRoot, armorNode);
 #endif
@@ -880,7 +851,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 	}
 
 #ifdef _DEBUG
-	_MESSAGE("%s - Parsing: %s", __FUNCTION__, filePath.data);
+	_DMESSAGE("%s - Parsing: %s", __FUNCTION__, filePath.data);
 #endif
 
 	BSResourceNiBinaryStream binaryStream(filePath.data);
@@ -915,7 +886,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 			BSFixedString trishapeName(trishapeNameRaw);
 
 #ifdef _DEBUG
-			_MESSAGE("%s - Reading TriShape %s", __FUNCTION__, trishapeName.data);
+			_DMESSAGE("%s - Reading TriShape %s", __FUNCTION__, trishapeName.data);
 #endif
 
 			if (!packed) {
@@ -943,7 +914,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				BSFixedString morphName(morphNameRaw);
 
 #ifdef _DEBUG
-				_MESSAGE("%s - Reading Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
+				_DMESSAGE("%s - Reading Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
 #endif
 				if (tsize == 0) {
 					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.data, binaryStream.GetOffset());
@@ -972,7 +943,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				}
 
 #ifdef _DEBUG
-				_MESSAGE("%s - Total Vertices read: %d at (%08X)", __FUNCTION__, vertexNum, binaryStream.GetOffset());
+				_DMESSAGE("%s - Total Vertices read: %d at (%08X)", __FUNCTION__, vertexNum, binaryStream.GetOffset());
 #endif
 				if (vertexNum > (std::numeric_limits<UInt16>::max)())
 				{
@@ -994,10 +965,8 @@ bool MorphCache::CacheFile(const char * relativePath)
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&x, sizeof(float));
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&y, sizeof(float));
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&z, sizeof(float));
-						vertexDelta.delta.m128_f32[0] = (float)x * multiplier;
-						vertexDelta.delta.m128_f32[1] = (float)y * multiplier;
-						vertexDelta.delta.m128_f32[2] = (float)z * multiplier;
-						vertexDelta.delta.m128_f32[3] = 0;
+
+						vertexDelta.delta = DirectX::XMVectorScale(DirectX::XMVectorSet(x, y, z, 0), multiplier);
 
 						if (vertexDelta.index > fullVertexData->m_maxIndex)
 							fullVertexData->m_maxIndex = vertexDelta.index;
@@ -1020,10 +989,8 @@ bool MorphCache::CacheFile(const char * relativePath)
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&x, sizeof(SInt16));
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&y, sizeof(SInt16));
 						trishapeMap.memoryUsage += binaryStream.Read((char *)&z, sizeof(SInt16));
-						vertexDelta.delta.m128_f32[0] = (float)x * multiplier;
-						vertexDelta.delta.m128_f32[1] = (float)y * multiplier;
-						vertexDelta.delta.m128_f32[2] = (float)z * multiplier;
-						vertexDelta.delta.m128_f32[3] = 0;
+
+						vertexDelta.delta = DirectX::XMVectorScale(DirectX::XMVectorSet(x, y, z, 0), multiplier);
 
 						if (vertexDelta.index > packedVertexData->m_maxIndex)
 							packedVertexData->m_maxIndex = vertexDelta.index;
@@ -1052,7 +1019,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 			BSFixedString trishapeName(trishapeNameRaw);
 
 #ifdef _DEBUG
-			_MESSAGE("%s - Reading TriShape UV %s", __FUNCTION__, trishapeName.data);
+			_DMESSAGE("%s - Reading TriShape UV %s", __FUNCTION__, trishapeName.data);
 #endif
 
 			if (!packed) {
@@ -1080,7 +1047,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				BSFixedString morphName(morphNameRaw);
 
 #ifdef _DEBUG
-				_MESSAGE("%s - Reading UV Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
+				_DMESSAGE("%s - Reading UV Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
 #endif
 				if (tsize == 0) {
 					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.data, binaryStream.GetOffset());
@@ -1100,7 +1067,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				}
 
 #ifdef _DEBUG
-				_MESSAGE("%s - Total Vertices read: %d at (%08X)", __FUNCTION__, vertexNum, binaryStream.GetOffset());
+				_DMESSAGE("%s - Total Vertices read: %d at (%08X)", __FUNCTION__, vertexNum, binaryStream.GetOffset());
 #endif
 				if (vertexNum > (std::numeric_limits<UInt16>::max)())
 				{
@@ -1157,32 +1124,32 @@ void BodyMorphInterface::SetCacheLimit(UInt32 limit)
 	morphCache.memoryLimit = limit;
 }
 
-void BodyMorphInterface::ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool erase)
+void BodyMorphInterface::ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool attach)
 {
 	if(!refr || !rootNode) {
 #ifdef _DEBUG
-		_MESSAGE("%s - Error no reference or node found.", __FUNCTION__);
+		_DMESSAGE("%s - Error no reference or node found.", __FUNCTION__);
 #endif
 		return;
 	}
 
 #ifdef _DEBUG
-	_MESSAGE("%s - Applying Vertex Diffs to %08X on %s", __FUNCTION__, refr->formID, rootNode->m_name);
+	_DMESSAGE("%s - Applying Vertex Diffs to %08X on %s", __FUNCTION__, refr->formID, rootNode->m_name);
 #endif
 	if (g_enableBodyMorph)
 	{
-		morphCache.ApplyMorphs(refr, rootNode, erase);
+		morphCache.ApplyMorphs(refr, rootNode, attach, true);
 	}
 }
 
-void BodyMorphInterface::ApplyBodyMorphs(TESObjectREFR * refr)
+void BodyMorphInterface::ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate)
 {
 #ifdef _DEBUG
-	_MESSAGE("%s - Updating morphs for %08X.", __FUNCTION__, refr->formID);
+	_DMESSAGE("%s - Updating morphs for %08X.", __FUNCTION__, refr->formID);
 #endif
 	if (g_enableBodyMorph)
 	{
-		morphCache.UpdateMorphs(refr);
+		morphCache.UpdateMorphs(refr, deferUpdate);
 	}
 }
 
@@ -1201,7 +1168,35 @@ void NIOVTaskUpdateModelWeight::Run()
 	TESForm * form = LookupFormByID(m_formId);
 	Actor * actor = DYNAMIC_CAST(form, TESForm, Actor);
 	if(actor) {
-		g_bodyMorphInterface.ApplyBodyMorphs(actor);
+		g_bodyMorphInterface.ApplyBodyMorphs(actor, false);
+	}
+}
+
+NIOVTaskUpdateSkinPartition::NIOVTaskUpdateSkinPartition(NiSkinPartition * partition)
+{
+	m_partition = partition;
+}
+
+void NIOVTaskUpdateSkinPartition::Dispose(void)
+{
+	delete this;
+}
+
+void NIOVTaskUpdateSkinPartition::Run()
+{
+	if (m_partition)
+	{
+		auto & partition = m_partition->m_pkPartitions[0];
+		UInt32 vertexSize = m_partition->GetVertexSize(partition.vertexDesc);
+		UInt32 vertexCount = m_partition->vertexCount;
+
+		auto deviceContext = g_renderManager->context;
+
+		for (UInt32 p = 0; p < m_partition->m_uiPartitions; ++p)
+		{
+			auto & pPartition = m_partition->m_pkPartitions[p];
+			deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+		}
 	}
 }
 
@@ -1252,17 +1247,20 @@ void BodyMorphInterface::UpdateModelWeight(TESObjectREFR * refr, bool immediate)
 	}
 }
 
-bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
+bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString  filePath)
 {
-	BSResourceNiBinaryStream file(filePath.data);
+	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
 		return false;
 	}
 
+	BSResourceTextFile<0x7FFF> textFile(&file);
+
 	UInt32 lineCount = 0;
 	std::string str = "";
+	UInt32 loadedTemplates = 0;
 
-	while (BSReadLine(&file, &str))
+	while (textFile.ReadLine(&str))
 	{
 		lineCount++;
 		str = std::trim(str);
@@ -1273,7 +1271,7 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
 
 		std::vector<std::string> side = std::explode(str, '=');
 		if (side.size() < 2) {
-			_ERROR("%s - Error - Line (%d) loading a morph from %s has no left-hand side.", __FUNCTION__, lineCount, filePath.data);
+			_ERROR("%s - Error - Template has no left-hand side.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
 			continue;
 		}
 
@@ -1304,7 +1302,9 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
 
 					std::vector<std::string> pairs = std::explode(selectors[k], '@');
 					if (pairs.size() < 2) {
-						error = "Must have value pair with @";
+						error = "Must have value pair with @ (";
+						error += selectors[k];
+						error += ")";
 						break;
 					}
 
@@ -1316,7 +1316,9 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
 
 					std::string morphValues = std::trim(pairs[1]);
 					if (morphValues.length() == 0) {
-						error = "Empty values";
+						error = "Empty values for (";
+						error += morphName;
+						error += ")";
 						break;
 					}
 
@@ -1327,22 +1329,26 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
 					if (range.size() > 1) {
 						std::string lowerRange = std::trim(range[0]);
 						if (lowerRange.length() == 0) {
-							error = "Empty lower range";
+							error = "Empty lower range for (";
+							error += morphName;
+							error += ")";
 							break;
 						}
 
-						lowerValue = strtof(lowerRange.c_str(), NULL);
+						lowerValue = atof(lowerRange.c_str());
 
 						std::string upperRange = std::trim(range[1]);
 						if (upperRange.length() == 0) {
-							error = "Empty upper range";
+							error = "Empty upper range for (";
+							error += morphName;
+							error += ")";
 							break;
 						}
 
-						upperValue = strtof(upperRange.c_str(), NULL);
+						upperValue = atof(upperRange.c_str());
 					}
 					else {
-						lowerValue = strtof(morphValues.c_str(), NULL);
+						lowerValue = atof(morphValues.c_str());
 						upperValue = lowerValue;
 					}
 
@@ -1366,29 +1372,62 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString filePath)
 		}
 
 		if (error.length() > 0) {
-			_ERROR("%s - Error - Line (%d) could not parse morphs from %s. (%s)", __FUNCTION__, lineCount, filePath.data, error.c_str());
+			_ERROR("%s - Error - Could not parse morphs %s.\tLine (%d) [%s]", __FUNCTION__, error.c_str(), lineCount, filePath.c_str());
 			continue;
 		}
 
-		if (bodyGenSets->size() > 0)
+		if (bodyGenSets->size() > 0) {
 			bodyGenTemplates[templateName] = bodyGenSets;
+			loadedTemplates++;
+		}
 	}
 
+	_MESSAGE("%s - Info - Loaded %d template(s).\t[%s]", __FUNCTION__, loadedTemplates, filePath.c_str());
 	return true;
+}
+
+void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], UInt8 modIndex, UInt16 lightIndex, UInt32 gender, TESRace * raceFilter)
+{
+	for (UInt32 i = 0; i < (*g_dataHandler)->npcs.count; i++)
+	{
+		TESNPC * npc = nullptr;
+		if ((*g_dataHandler)->npcs.GetNthItem(i, npc))
+		{
+			bool matchMod = modIndex == 0xFF || (npc->formID >> 24) == modIndex;
+			bool matchLightMod = lightIndex == 0xFFFF || (((npc->formID & 0xFF000000) == 0xFE000000) && (lightIndex == ((npc->formID >> 12) & 0xFFF)));
+
+			bool matchRace = (raceFilter == nullptr || npc->race.race == raceFilter);
+			if (npc && npc->nextTemplate == nullptr && matchMod && matchLightMod && matchRace)
+			{
+				if (gender == 0xFF)
+				{
+					activeNPCs[0].push_back(npc);
+					activeNPCs[1].push_back(npc);
+				}
+				else
+					activeNPCs[gender].push_back(npc);
+			}
+		}
+	}
 }
 
 bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 {
-	BSResourceNiBinaryStream file(filePath.data);
+	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
 		return false;
 	}
 
+	BSResourceTextFile<0x7FFF> textFile(&file);
+
 	UInt32 lineCount = 0;
 	std::string str = "";
-	UInt32 totalTargets = 0;
+	UInt32 maleTargets = 0;
+	UInt32 femaleTargets = 0;
+	UInt32 maleOverwrite = 0;
+	UInt32 femaleOverwrite = 0;
 
-	while (BSReadLine(&file, &str))
+	while (textFile.ReadLine(&str))
 	{
 		lineCount++;
 		str = std::trim(str);
@@ -1399,7 +1438,7 @@ bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 
 		std::vector<std::string> side = std::explode(str, '=');
 		if (side.size() < 2) {
-			_ERROR("%s - Error - %s (%d) loading a morph from %s has no left-hand side.", __FUNCTION__, filePath.data, lineCount);
+			_ERROR("%s - Error - Morph has no left-hand side.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
 			continue;
 		}
 
@@ -1408,95 +1447,147 @@ bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 
 		std::vector<std::string> form = std::explode(lSide, '|');
 		if (form.size() < 2) {
-			_ERROR("%s - Error - %s (%d) morph left side from %s missing mod name or formID.", __FUNCTION__, filePath.data, lineCount);
+			_ERROR("%s - Error - Morph left side missing mod name or formID.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
 			continue;
 		}
 
-		std::vector<TESNPC*> activeNPCs;
-		std::string modNameText = std::trim(form[0]);
-		if (_strnicmp(modNameText.c_str(), "All", 3) == 0)
+		int paramIndex = 0;
+
+		std::vector<TESNPC*> activeNPCs[2];
+		std::string modNameText = std::trim(form[paramIndex]);
+		paramIndex++;
+
+		// All|Gender[|Race]
+		if (_strnicmp(modNameText.c_str(), "all", 3) == 0)
 		{
-			std::string genderText = std::trim(form[1]);
-			UInt8 gender = 0;
-			if (_strnicmp(genderText.c_str(), "Male", 4) == 0)
-				gender = 0;
-			else if (_strnicmp(genderText.c_str(), "Female", 6) == 0)
-				gender = 1;
-			else {
-				_ERROR("%s - Error - %s (%d) invalid gender specified.", __FUNCTION__, filePath.data, lineCount);
+			UInt8 gender = 0xFF;
+			if (form.size() > paramIndex)
+			{
+				std::string genderText = std::trim(form[paramIndex]);
+				std::transform(genderText.begin(), genderText.end(), genderText.begin(), ::tolower);
+				if (genderText.compare("male") == 0) {
+					gender = 0;
+					paramIndex++;
+				}
+				else if (genderText.compare("female") == 0) {
+					gender = 1;
+					paramIndex++;
+				}
+			}
+
+			TESRace * foundRace = nullptr;
+			if (form.size() > paramIndex)
+			{
+				std::string raceText = std::trim(form[paramIndex]);
+				foundRace = GetRaceByName(raceText);
+				if (foundRace == nullptr)
+				{
+					_ERROR("%s - Error - Invalid race %s specified.\tLine (%d) [%s]", __FUNCTION__, raceText.c_str(), lineCount, filePath.c_str());
+					continue;
+				}
+				paramIndex++;
+			}
+
+			GetFilteredNPCList(activeNPCs, 0xFF, 0xFFFF, gender, foundRace);
+		}
+		else
+		{
+			UInt8 modIndex = (*g_dataHandler)->GetLoadedModIndex(modNameText.c_str());
+			UInt16 lightIndex = (*g_dataHandler)->GetLoadedLightModIndex(modNameText.c_str());
+
+			if (modIndex == 0xFF && lightIndex == 0xFFFF) {
+				_WARNING("%s - Warning - Mod '%s' not a loaded mod.\tLine (%d) [%s]", __FUNCTION__, modNameText.c_str(), lineCount, filePath.c_str());
 				continue;
 			}
 
-			DataHandler * dataHandler = DataHandler::GetSingleton();
+			TESForm * foundForm = nullptr;
+			std::string formIdText = std::trim(form[paramIndex]);
+			paramIndex++;
 
-			bool raceFilter = false;
-			TESRace * foundRace = nullptr;
-			if (form.size() >= 3)
-			{
-				std::string raceText = std::trim(form[2]);
-				for (UInt32 i = 0; i < dataHandler->races.count; i++)
-				{
-					TESRace * race = nullptr;
-					if (dataHandler->races.GetNthItem(i, race)) {
-						if (race && _strnicmp(raceText.c_str(), race->editorId.data, raceText.size()) == 0) {
-							foundRace = race;
-							break;
-						}
-					}
+			UInt8 gender = 0xFF;
+			if (form.size() > paramIndex) {
+				std::string genderText = std::trim(form[paramIndex]);
+				std::transform(genderText.begin(), genderText.end(), genderText.begin(), ::tolower);
+				if (genderText.compare("male") == 0) {
+					gender = 0;
+					paramIndex++;
 				}
-				raceFilter = true;
+				else if (genderText.compare("female") == 0) {
+					gender = 1;
+					paramIndex++;
+				}
+			}
 
-				if (foundRace == nullptr)
+			// Fallout4.esm|All[|Gender][|Race]
+			if (_strnicmp(formIdText.c_str(), "all", 3) == 0)
+			{
+				TESRace * foundRace = nullptr;
+				if (form.size() > paramIndex)
 				{
-					_ERROR("%s - Error - %s (%d) invalid race %s specified.", __FUNCTION__, filePath.data, lineCount, raceText.c_str());
+					std::string raceText = std::trim(form[paramIndex]);
+					foundRace = GetRaceByName(raceText);
+					if (foundRace == nullptr)
+					{
+						_ERROR("%s - Error - Invalid race '%s' specified.\tLine (%d) [%s]", __FUNCTION__, raceText.c_str(), lineCount, filePath.c_str());
+						continue;
+					}
+					paramIndex++;
+				}
+
+				GetFilteredNPCList(activeNPCs, modIndex, lightIndex, gender, foundRace);
+			}
+			else // Fallout4.esm|XXXX[|Gender]
+			{
+				UInt32 formLower = strtoul(formIdText.c_str(), NULL, 16);
+				if (formLower == 0) {
+					_ERROR("%s - Error - Invalid formID.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
+					continue;
+				}
+
+				UInt32 formId = 0;
+				if (lightIndex != 0xFFFF)
+					formId = 0xFE000000 | (UInt32(lightIndex) << 12) | (formLower & 0xFFFFFF);
+				else
+					formId = UInt32(modIndex) << 24 | formLower & 0xFFFFFF;
+
+				foundForm = LookupFormByID(formId);
+				if (!foundForm) {
+					_ERROR("%s - Error - Invalid form %08X.\tLine (%d) [%s]", __FUNCTION__, formId, lineCount, filePath.c_str());
 					continue;
 				}
 			}
 
-			for (UInt32 i = 0; i < dataHandler->npcs.count; i++)
+
+			if (foundForm)
 			{
-				TESNPC * npc = nullptr;
-				if (dataHandler->npcs.GetNthItem(i, npc)) {
-					if (npc && npc->nextTemplate == nullptr && CALL_MEMBER_FN(npc, GetSex)() == gender && (raceFilter == false || npc->race.race == foundRace))
-						activeNPCs.push_back(npc);
+				TESLevCharacter * levCharacter = DYNAMIC_CAST(foundForm, TESForm, TESLevCharacter);
+				if (levCharacter) {
+					VisitLeveledCharacter(levCharacter, [&](TESNPC * npc)
+					{
+						if (gender == 0xFF) {
+							activeNPCs[0].push_back(npc);
+							activeNPCs[1].push_back(npc);
+						}
+						else
+							activeNPCs[gender].push_back(npc);
+					});
+				}
+
+				TESNPC * npc = DYNAMIC_CAST(foundForm, TESForm, TESNPC);
+				if (npc) {
+					if (gender == 0xFF) {
+						activeNPCs[0].push_back(npc);
+						activeNPCs[1].push_back(npc);
+					}
+					else
+						activeNPCs[gender].push_back(npc);
+				}
+
+				if (!npc && !levCharacter) {
+					_ERROR("%s - Error - Invalid form %08X not an ActorBase or LeveledActor.\tLine (%d) [%s]", __FUNCTION__, foundForm->formID, lineCount, filePath.c_str());
+					continue;
 				}
 			}
-		}
-		else
-		{
-			BSFixedString modText(modNameText.c_str());
-			UInt8 modIndex = DataHandler::GetSingleton()->GetModIndex(modText.data);
-			if (modIndex == -1) {
-				_WARNING("%s - Warning - %s (%d) Mod %s not a loaded mod.", __FUNCTION__, filePath.data, lineCount, modText.data);
-				continue;
-			}
-
-			std::string formIdText = std::trim(form[1]);
-			UInt32 formLower = strtoul(formIdText.c_str(), NULL, 16);
-
-			if (formLower == 0) {
-				_ERROR("%s - Error - %s (%d) invalid formID.", __FUNCTION__, filePath.data, lineCount);
-				continue;
-			}
-
-			UInt32 formId = modIndex << 24 | formLower & 0xFFFFFF;
-			TESForm * foundForm = LookupFormByID(formId);
-			if (!foundForm) {
-				_ERROR("%s - Error - %s (%d) invalid form %08X.", __FUNCTION__, filePath.data, lineCount, formId);
-				continue;
-			}
-
-			// Dont apply randomization to the player
-			if (formId == 7)
-				continue;
-
-			TESNPC * npc = DYNAMIC_CAST(foundForm, TESForm, TESNPC);
-			if (!npc) {
-				_ERROR("%s - Error - %s (%d) invalid form %08X not an ActorBase.", __FUNCTION__, filePath.data, lineCount, formId);
-				continue;
-			}
-
-			activeNPCs.push_back(npc);
 		}
 
 		BodyGenDataTemplatesPtr dataTemplates = std::make_shared<BodyGenDataTemplates>();
@@ -1513,24 +1604,55 @@ bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 				if (temp != bodyGenTemplates.end())
 					templateList.push_back(temp->second);
 				else
-					_WARNING("%s - Warning - %s (%d) template %s not found.", __FUNCTION__, filePath.data, lineCount, templateName.data);
+					_WARNING("%s - Warning - template %s not found.\tLine (%d) [%s]", __FUNCTION__, templateName.c_str(), lineCount, filePath.c_str());
 			}
 
 			dataTemplates->push_back(templateList);
 		}
 
-		for (auto & npc : activeNPCs)
+		for (auto & npc : activeNPCs[0])
 		{
-			bodyGenData[npc] = dataTemplates;
+			if (bodyGenData[0].find(npc) == bodyGenData[0].end()) {
 #ifdef _DEBUG
-			_DMESSAGE("%s - Read target %s", __FUNCTION__, npc->fullName.name.data);
+				_DMESSAGE("%s - Read male target %s (%08X)", __FUNCTION__, npc->fullName.name.c_str(), npc->formID);
 #endif
+				maleTargets++;
+			}
+			else {
+				maleOverwrite++;
+			}
+
+			bodyGenData[0][npc] = dataTemplates;
+
+
 		}
 
-		totalTargets += activeNPCs.size();
+		for (auto & npc : activeNPCs[1])
+		{
+			if (bodyGenData[1].find(npc) == bodyGenData[1].end()) {
+#ifdef _DEBUG
+				_DMESSAGE("%s - Read female target %s (%08X)", __FUNCTION__, npc->fullName.name.c_str(), npc->formID);
+#endif
+				femaleTargets++;
+			}
+			else {
+				femaleOverwrite++;
+			}
+
+			bodyGenData[1][npc] = dataTemplates;
+		}
+
+		if (maleOverwrite)
+			_MESSAGE("%s - Info - %d male NPC targets(s) overwritten.\tLine (%d) [%s]", __FUNCTION__, maleOverwrite, lineCount, filePath.c_str());
+		if (femaleOverwrite)
+			_MESSAGE("%s - Info - %d female NPC targets(s) overwritten.\tLine (%d) [%s]", __FUNCTION__, femaleOverwrite, lineCount, filePath.c_str());
+
+		maleOverwrite = 0;
+		femaleOverwrite = 0;
 	}
 
-	_DMESSAGE("%s - Read %d target(s) from %s", __FUNCTION__, totalTargets, filePath.data);
+	_MESSAGE("%s - Info - Acquired %d male NPC target(s).\t[%s]", __FUNCTION__, maleTargets, filePath.c_str());
+	_MESSAGE("%s - Info - Acquired %d female NPC target(s).\t[%s]", __FUNCTION__, femaleTargets, filePath.c_str());
 	return true;
 }
 
@@ -1609,22 +1731,23 @@ UInt32 BodyMorphInterface::EvaluateBodyMorphs(TESObjectREFR * actor)
 {
 	TESNPC * actorBase = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
 	if (actorBase) {
-		BodyGenData::iterator morphSet = bodyGenData.end();
+		UInt64 gender = CALL_MEMBER_FN(actorBase, GetSex)();
+		bool isFemale = gender == 1 ? true : false;
+		BodyGenData::iterator morphSet = bodyGenData[gender].end();
 		do {
-			morphSet = bodyGenData.find(actorBase);
+			morphSet = bodyGenData[gender].find(actorBase);
 			actorBase = actorBase->nextTemplate;
-		} while (actorBase && morphSet == bodyGenData.end());
+		} while (actorBase && morphSet == bodyGenData[gender].end());
 
 		// Found a matching template
-		if (morphSet != bodyGenData.end()) {
-			std::random_device rd;
-			std::default_random_engine gen(rd());
-
+		if (morphSet != bodyGenData[gender].end()) {
 			auto & templates = morphSet->second;
-			UInt32 ret = templates->Evaluate([&](BSFixedString morphName, float value)
+			UInt32 ret = templates->Evaluate([&](const BSFixedString & morphName, float value)
 			{
 				SetMorph(actor, morphName, "RSMBodyGen", value);
 			});
+
+			_VMESSAGE("%s - Generated %d BodyMorphs for %s (%08X)", __FUNCTION__, ret, CALL_MEMBER_FN(actor, GetReferenceName)(), actor->formID);
 			return ret;
 		}
 	}
@@ -1727,7 +1850,7 @@ void BodyMorphSet::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 	intfc->WriteRecordData(&numMorphs, sizeof(numMorphs));
 
 #ifdef _DEBUG
-	_MESSAGE("%s - Saving %d morphs", __FUNCTION__, numMorphs);
+	_DMESSAGE("%s - Saving %d morphs", __FUNCTION__, numMorphs);
 #endif
 
 	for(auto it = this->begin(); it != this->end(); ++it)
@@ -1763,7 +1886,7 @@ bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 							continue;
 
 #ifdef _DEBUG
-						_MESSAGE("%s - Loaded morph %s %f", __FUNCTION__, value.m_name, value.m_value);
+						_DMESSAGE("%s - Loaded morph %s %f", __FUNCTION__, value.m_name, value.m_value);
 #endif
 
 						this->insert(value);
@@ -1801,7 +1924,7 @@ void ActorMorphs::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 		intfc->WriteRecordData(&handle, sizeof(handle));
 
 #ifdef _DEBUG
-		_MESSAGE("%s - Saving Morph Handle %016llX", __FUNCTION__, handle);
+		_DMESSAGE("%s - Saving Morph Handle %016llX", __FUNCTION__, handle);
 #endif
 
 		// Value
@@ -1819,7 +1942,7 @@ void BodyMorphData::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 	intfc->WriteRecordData(&numMorphs, sizeof(numMorphs));
 
 #ifdef _DEBUG
-	_MESSAGE("%s - Saving %d morphs", __FUNCTION__, numMorphs);
+	_DMESSAGE("%s - Saving %d morphs", __FUNCTION__, numMorphs);
 #endif
 
 	for (auto & morph : *this)
@@ -1961,7 +2084,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	if(morphMap.empty())
 		return false;
 
-	if (g_enableBodyGen)
+	if (g_enableBodyMorph)
 	{
 		m_data.insert_or_assign(newHandle, morphMap);
 
@@ -1969,7 +2092,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 
 #ifdef _DEBUG
 		if (refr)
-			_MESSAGE("%s - Loaded MorphSet Handle %016llX actor %s", __FUNCTION__, newHandle, CALL_MEMBER_FN(refr, GetReferenceName)());
+			_DMESSAGE("%s - Loaded MorphSet Handle %016llX actor %s", __FUNCTION__, newHandle, CALL_MEMBER_FN(refr, GetReferenceName)());
 #endif
 
 		g_bodyMorphInterface.UpdateModelWeight(refr);

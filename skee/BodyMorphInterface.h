@@ -36,6 +36,8 @@ class TESObjectARMO;
 class TESObjectARMA;
 class NiExtraData;
 class TESNPC;
+class TESRace;
+class NiSkinPartition;
 
 #define MORPH_MOD_DIRECTORY "actors\\character\\BodyGenData\\"
 
@@ -187,8 +189,8 @@ class MorphFileCache
 	friend class MorphCache;
 	friend class BodyMorphInterface;
 public:
-	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
-	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * dxLock);
+	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
+	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
 
 private:
 	TriShapeMap vertexMap;
@@ -211,8 +213,8 @@ public:
 	BSFixedString CreateTRIPath(const char * relativePath);
 	bool CacheFile(const char * modelPath);
 
-	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
-	void UpdateMorphs(TESObjectREFR * refr);
+	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool attaching = false, bool deferUpdate = false);
+	void UpdateMorphs(TESObjectREFR * refr, bool deferUpdate = false);
 
 	void Shrink();
 
@@ -231,6 +233,18 @@ public:
 	
 private:
 	UInt32	m_formId;
+};
+
+class NIOVTaskUpdateSkinPartition : public TaskDelegate
+{
+public:
+	virtual void Run();
+	virtual void Dispose();
+
+	NIOVTaskUpdateSkinPartition(NiSkinPartition * partition);
+
+private:
+	NiPointer<NiSkinPartition> m_partition;
 };
 
 class BodyGenMorphData
@@ -310,7 +324,8 @@ public:
 	virtual void ClearMorphs(TESObjectREFR * actor);
 
 	virtual void ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
-	virtual void ApplyBodyMorphs(TESObjectREFR * refr);
+
+	virtual void ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true);
 	virtual void UpdateModelWeight(TESObjectREFR * refr, bool immediate = false);
 
 	virtual void SetCacheLimit(UInt32 limit);
@@ -327,9 +342,14 @@ public:
 	virtual void VisitStrings(std::function<void(BSFixedString)> functor);
 	virtual void VisitActors(std::function<void(TESObjectREFR*)> functor);
 
+protected:
+	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], UInt8 modIndex, UInt16 lightIndex, UInt32 gender, TESRace * raceFilter);
+
 private:
 	ActorMorphs	actorMorphs;
 	MorphCache	morphCache;
 	BodyGenTemplates bodyGenTemplates;
-	BodyGenData	bodyGenData;
+	BodyGenData	bodyGenData[2];
+
+	friend class NIOVTaskUpdateMorph;
 };

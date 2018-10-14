@@ -38,7 +38,7 @@ void SaveSourceDDS(NiSourceTexture * pkSrcTexture, const char * pcFileName)
 	UInt32 uiWidth = pkSrcTexture->GetWidth();
 	UInt32 uiHeight = pkSrcTexture->GetHeight();
 
-	LPDIRECT3DDEVICE9 pkD3DDevice9 = (LPDIRECT3DDEVICE9)NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
+	ID3D11Device * pkD3DDevice9 = (ID3D11Device *)NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
 	if (D3DXCreateTexture(pkD3DDevice9, uiWidth, uiHeight, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &pkD3DTexture) != -1)
 	{
 		if(!pkD3DTexture) {

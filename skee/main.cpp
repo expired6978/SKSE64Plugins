@@ -55,6 +55,9 @@ SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
 
+// Temporary custom interface
+SKSETaskInterface			g_taskOverride;
+
 // Handlers
 IInterfaceMap				g_interfaceMap;
 DyeMap						g_dyeMap;
@@ -102,6 +105,7 @@ bool	g_enableFaceOverlays = true;
 bool	g_immediateFace = false;
 bool	g_enableEquippableTransforms = true;
 bool	g_parallelMorphing = true;
+bool	g_deferredBodyMorph = false;
 UInt16	g_scaleMode = 0;
 UInt16	g_bodyMorphMode = 0;
 
@@ -646,9 +650,9 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_50)
+	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_53)
 	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_50;
+		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_53;
 		char buf[512];
 		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
 			GET_EXE_VERSION_MAJOR(runtimeVersion),
@@ -716,6 +720,12 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		return false;
 	}
 
+	// REMOVE THIS AFTER SKSE64 UPDATE
+	g_taskOverride.AddTask = g_task->AddTask;
+	g_taskOverride.AddUITask = g_task->AddUITask;
+	g_task = &g_taskOverride;
+	// -------------------------------
+
 	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
 		_ERROR("couldn't get messaging interface");
@@ -769,7 +779,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_overlayInterface.SetDefaultTexture(defaultTexture);
 
 	SKEE64GetConfigValue("General", "iLoadMode", &g_loadMode);
-	
+	SKEE64GetConfigValue("General", "bDeferredBodyMorph", &g_deferredBodyMorph);
 
 	SKEE64GetConfigValue("General", "iScaleMode", &g_scaleMode);
 	SKEE64GetConfigValue("General", "iBodyMorphMode", &g_bodyMorphMode);

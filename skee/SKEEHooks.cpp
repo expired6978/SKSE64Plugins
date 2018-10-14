@@ -34,6 +34,9 @@
 #include "skse64_common/SafeWrite.h"
 #include "xbyak/xbyak.h"
 
+#include "common/ICriticalSection.h"
+#include <queue>
+
 extern SKSETaskInterface	* g_task;
 
 extern ItemDataInterface	g_itemDataInterface;
@@ -65,6 +68,8 @@ extern bool					g_externalHeads;
 extern bool					g_extendedMorphs;
 extern bool					g_allowAllMorphs;
 
+extern SKSETaskInterface	g_taskOverride;
+
 RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE60);
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
@@ -80,15 +85,50 @@ RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B08A0);
 RelocAddr<_AddGFXArgument> AddGFXArgument(0x00857000);
 
 // 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x008B4BBE);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2410);
 RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC950);
 RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4A10);
 
 RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360A30);
 RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C20);
 
-// More in hook function
 
+// REMOVE THIS AFTER SKSE64 UPDATE
+ICriticalSection			s_taskQueueLock;
+std::queue<TaskDelegate*>	s_tasks;
+
+typedef void(*_ProcessTaskInterface)();
+RelocAddr <_ProcessTaskInterface> ProcessTaskInterface_Hook_Original(0x002E9B40);
+
+static bool IsTaskQueueEmpty()
+{
+	IScopedCriticalSection scoped(&s_taskQueueLock);
+	return s_tasks.empty();
+}
+
+void ProcessTaskInterface_Hook()
+{
+	ProcessTaskInterface_Hook_Original();
+
+	while (!IsTaskQueueEmpty())
+	{
+		s_taskQueueLock.Enter();
+		TaskDelegate * cmd = s_tasks.front();
+		s_tasks.pop();
+		s_taskQueueLock.Leave();
+
+		cmd->Run();
+		cmd->Dispose();
+	}
+}
+
+void ProcessTaskInterface_AddTask(TaskDelegate * cmd)
+{
+	s_taskQueueLock.Enter();
+	s_tasks.push(cmd);
+	s_taskQueueLock.Leave();
+}
+// ---------------------------------------
 
 typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
 extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
@@ -563,7 +603,7 @@ void RaceSexMenu_Hooked::RenderMenu_Hooked(void)
 {
 	CALL_MEMBER_FN(this, RenderMenu)();
 
-	LPDIRECT3DDEVICE9 pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
+	ID3D11Device * pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
 	if (!pDevice) // This shouldnt happen
 		return;
 
@@ -1067,6 +1107,12 @@ bool InstallSKEEHooks()
 		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 		return false;
 	}
+
+	// REMOVE THIS AFTER SKSE64 UPDATE
+	RelocAddr <uintptr_t> ProcessTaskInterface_Target(0x005B31E0 + 0x6A0);
+	g_branchTrampoline.Write5Call(ProcessTaskInterface_Target.GetUIntPtr(), (uintptr_t)ProcessTaskInterface_Hook);
+	g_taskOverride.AddTask = ProcessTaskInterface_AddTask;
+	// -------------------------------
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5420 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
