@@ -28,8 +28,8 @@ UInt32 OverrideInterface::GetVersion()
 void OverrideInterface::AddRawOverride(UInt64 handle, bool isFemale, UInt64 armorHandle, UInt64 addonHandle, BSFixedString nodeName, OverrideVariant & value)
 {
 	armorData.Lock();
-	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][nodeName].erase(value);
-	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][nodeName].insert(value);
+	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].erase(value);
+	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].insert(value);
 	armorData.Release();
 }
 
@@ -39,16 +39,16 @@ void OverrideInterface::AddOverride(TESObjectREFR * refr, bool isFemale, TESObje
 	UInt64 armorHandle = GetHandle(armor, armor->formType);
 	UInt64 addonHandle = GetHandle(addon, addon->formType);
 	armorData.Lock();
-	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][nodeName].erase(value);
-	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][nodeName].insert(value);
+	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].erase(value);
+	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].insert(value);
 	armorData.Release();
 }
 
 void OverrideInterface::AddRawNodeOverride(UInt64 handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value)
 {
 	nodeData.Lock();
-	nodeData.m_data[handle][isFemale ? 1 : 0][nodeName].erase(value);
-	nodeData.m_data[handle][isFemale ? 1 : 0][nodeName].insert(value);
+	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].erase(value);
+	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].insert(value);
 	nodeData.Release();
 }
 
@@ -56,16 +56,16 @@ void OverrideInterface::AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSF
 {
 	UInt64 handle = GetHandle(refr, refr->formType);
 	nodeData.Lock();
-	nodeData.m_data[handle][isFemale ? 1 : 0][nodeName].erase(value);
-	nodeData.m_data[handle][isFemale ? 1 : 0][nodeName].insert(value);
+	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].erase(value);
+	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].insert(value);
 	nodeData.Release();
 }
 
 void OverrideInterface::AddRawWeaponOverride(UInt64 handle, bool isFemale, bool firstPerson, UInt64 weaponHandle, BSFixedString nodeName, OverrideVariant & value)
 {
 	weaponData.Lock();
-	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][nodeName].erase(value);
-	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][nodeName].insert(value);
+	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].erase(value);
+	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].insert(value);
 	weaponData.Release();
 }
 
@@ -74,8 +74,8 @@ void OverrideInterface::AddWeaponOverride(TESObjectREFR * refr, bool isFemale, b
 	UInt64 handle = GetHandle(refr, refr->formType);
 	UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
 	weaponData.Lock();
-	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][nodeName].erase(value);
-	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][nodeName].insert(value);
+	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].erase(value);
+	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].insert(value);
 	weaponData.Release();
 }
 
@@ -109,7 +109,7 @@ OverrideVariant * OverrideInterface::GetOverride(TESObjectREFR * refr, bool isFe
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(nodeName);
+				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					OverrideVariant ovr;
@@ -136,7 +136,7 @@ OverrideVariant * OverrideInterface::GetNodeOverride(TESObjectREFR * refr, bool 
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(nodeName);
+		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			OverrideVariant ovr;
@@ -165,7 +165,7 @@ OverrideVariant * OverrideInterface::GetWeaponOverride(TESObjectREFR * refr, boo
 		auto & ait = it->second[gender][firstPerson].find(weaponHandle);
 		if (ait != it->second[gender][firstPerson].end())
 		{
-			auto & oit = ait->second.find(nodeName);
+			auto & oit = ait->second.find(g_stringTable.GetString(nodeName));
 			if (oit != ait->second.end())
 			{
 				OverrideVariant ovr;
@@ -334,7 +334,7 @@ void OverrideInterface::RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, b
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(nodeName);
+				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					dit->second.erase(oit);
@@ -360,7 +360,7 @@ void OverrideInterface::RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFe
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(nodeName);
+				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					OverrideVariant ovr;
@@ -385,7 +385,7 @@ void OverrideInterface::RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool is
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(nodeName);
+		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			it->second[gender].erase(oit);
@@ -401,7 +401,7 @@ void OverrideInterface::RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, 
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(nodeName);
+		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			OverrideVariant ovr;
@@ -447,7 +447,7 @@ void OverrideInterface::RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool 
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weaponHandle);
 		if(ait != it->second[gender][firstPerson].end())
 		{
-			OverrideRegistration<BSFixedString>::iterator oit = ait->second.find(nodeName);
+			OverrideRegistration<StringTableItem>::iterator oit = ait->second.find(g_stringTable.GetString(nodeName));
 			if(oit != ait->second.end())
 			{
 				ait->second.erase(oit);
@@ -470,7 +470,7 @@ void OverrideInterface::RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weaponHandle);
 		if(ait != it->second[gender][firstPerson].end())
 		{
-			OverrideRegistration<BSFixedString>::iterator oit = ait->second.find(nodeName);
+			OverrideRegistration<StringTableItem>::iterator oit = ait->second.find(g_stringTable.GetString(nodeName));
 			if(oit != ait->second.end())
 			{
 				OverrideVariant ovr;
@@ -797,10 +797,10 @@ void OverrideInterface::SetHandleProperties(UInt64 handle, bool immediate)
 
 				VisitArmorAddon(actor, armor, addon, [&](bool isFP, NiNode * rootNode, NiAVObject * armorNode)
 				{
-					dit->second.Visit([&](const BSFixedString & key, OverrideSet * set)
+					dit->second.Visit([&](const StringTableItem & key, OverrideSet * set)
 					{
-						BSFixedString nodeName(key.data);
-						NiAVObject * foundNode = key == BSFixedString("") ? armorNode : armorNode->GetObjectByName(&nodeName.data);
+						BSFixedString nodeName(key->c_str());
+						NiAVObject * foundNode = nodeName == BSFixedString("") ? armorNode : armorNode->GetObjectByName(&nodeName.data);
 						if (foundNode) {
 							set->Visit([&](OverrideVariant * value)
 							{
@@ -878,10 +878,10 @@ void OverrideInterface::SetHandleNodeProperties(UInt64 handle, bool immediate)
 			if(root)
 			{
 				root->IncRef();
-				nit->second[gender].Visit([&](const BSFixedString & key, OverrideSet * set)
+				nit->second[gender].Visit([&](const StringTableItem & key, OverrideSet * set)
 				{
-					BSFixedString nodeName(key.data);
-					NiAVObject * foundNode = key == BSFixedString("") ? root : root->GetObjectByName(&nodeName.data);
+					BSFixedString nodeName(key->c_str());
+					NiAVObject * foundNode = nodeName == BSFixedString("") ? root : root->GetObjectByName(&nodeName.data);
 					if (foundNode) {
 						set->Visit([&](OverrideVariant * value)
 						{
@@ -942,10 +942,10 @@ void OverrideInterface::SetHandleWeaponProperties(UInt64 handle, bool immediate)
 					// Find the Armor node
 					NiAVObject * weaponNode = root->GetObjectByName(&weaponName.data);
 					if (weaponNode) {
-						ait->second.Visit([&](const BSFixedString & key, OverrideSet * set)
+						ait->second.Visit([&](const StringTableItem & key, OverrideSet * set)
 						{
-							BSFixedString nodeName(key.data);
-							NiAVObject * foundNode = key == BSFixedString("") ? weaponNode : weaponNode->GetObjectByName(&nodeName.data);
+							BSFixedString nodeName(key->c_str());
+							NiAVObject * foundNode = nodeName == BSFixedString("") ? weaponNode : weaponNode->GetObjectByName(&nodeName.data);
 							if (foundNode) {
 								set->Visit([&](OverrideVariant * value)
 								{
@@ -1042,7 +1042,7 @@ void OverrideInterface::SetHandleSkinProperties(UInt64 handle, bool immediate)
 	}
 }
 
-void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(BSFixedString, OverrideVariant&)> functor)
+void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(SKEEFixedString, OverrideVariant&)> functor)
 {
 	UInt64 handle = GetHandle(refr, refr->formType);
 	
@@ -1058,7 +1058,7 @@ void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(BSFi
 		for (auto & ovr : nit->second[gender]) // Loop Overrides
 		{
 			for (auto prop : ovr.second) {
-				functor(ovr.first, prop);
+				functor(*ovr.first, prop);
 			}
 		}
 	}
@@ -1160,12 +1160,12 @@ void OverrideInterface::SetHandleArmorAddonProperties(UInt64 handle, UInt64 armo
 class NodeOverrideApplicator : public GeometryVisitor
 {
 public:
-	NodeOverrideApplicator::NodeOverrideApplicator(OverrideRegistration<BSFixedString> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
+	NodeOverrideApplicator::NodeOverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
 
 	virtual bool Accept(BSGeometry * geometry)
 	{
-		BSFixedString nodeName(geometry->m_name);
-		OverrideRegistration<BSFixedString>::iterator nit = m_overrides->find(nodeName);
+		SKEEFixedString nodeName(geometry->m_name);
+		auto nit = m_overrides->find(g_stringTable.GetString(nodeName));
 		if(nit != m_overrides->end())
 		{
 			nit->second.Visit([&](OverrideVariant * value)
@@ -1177,14 +1177,14 @@ public:
 		return false;
 	}
 
-	OverrideRegistration<BSFixedString>		* m_overrides;
+	OverrideRegistration<StringTableItem>	* m_overrides;
 	bool									m_immediate;
 };
 
 class OverrideApplicator : public GeometryVisitor
 {
 public:
-	OverrideApplicator::OverrideApplicator(OverrideRegistration<BSFixedString> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
+	OverrideApplicator::OverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
 
 	virtual bool Accept(BSGeometry * geometry)
 	{
@@ -1196,8 +1196,8 @@ public:
 	{
 		for(auto & geometry : m_geometryList)
 		{
-			BSFixedString objectName(m_geometryList.size() == 1 ? "" : geometry->m_name);
-			OverrideRegistration<BSFixedString>::iterator nit = m_overrides->find(objectName);
+			SKEEFixedString objectName(m_geometryList.size() == 1 ? "" : geometry->m_name);
+			auto nit = m_overrides->find(g_stringTable.GetString(objectName));
 			if(nit != m_overrides->end())
 			{
 				nit->second.Visit([&](OverrideVariant* value)
@@ -1210,7 +1210,7 @@ public:
 	}
 
 	std::vector<BSGeometry*>				m_geometryList;
-	OverrideRegistration<BSFixedString>		* m_overrides;
+	OverrideRegistration<StringTableItem>	* m_overrides;
 	bool									m_immediate;
 };
 
@@ -1488,7 +1488,7 @@ void OverrideVariant::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 			break;
 		case kType_String:
 			{
-				g_stringTable.WriteString<UInt16>(intfc, data.str, kVersion);
+				g_stringTable.WriteString(intfc, str);
 			}
 			break;
 		case kType_Identifier:
@@ -1506,7 +1506,7 @@ void OverrideVariant::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 #endif
 }
 
-bool OverrideVariant::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool OverrideVariant::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1578,8 +1578,16 @@ bool OverrideVariant::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 						break;
 					case kType_String:
 						{
-							BSFixedString str = g_stringTable.ReadString<UInt16>(intfc, kVersion);
-							this->data.str = str.data;
+							if (kVersion >= OverrideInterface::kSerializationVersion3)
+							{
+								this->str = g_stringTable.ReadString(intfc, stringTable);
+							}
+							else if (kVersion >= OverrideInterface::kSerializationVersion1)
+							{
+								SKEEFixedString str;
+								Serialization::ReadData(intfc, &str);
+								this->str = g_stringTable.GetString(str);
+							}
 						}
 						break;
 					case kType_Identifier:
@@ -1623,18 +1631,17 @@ bool OverrideVariant::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	return error;
 }
 
-void OverrideInterface::VisitStrings(std::function<void(BSFixedString)> functor)
+void OverrideInterface::VisitStrings(std::function<void(SKEEFixedString)> functor)
 {
 	for (auto & i1 : armorData.m_data){
 		for (UInt8 gender = 0; gender <= 1; gender++) {
 			for (UInt8 fp = 0; fp <= 1; fp++) {
 				for (auto & i2 : i1.second[gender][fp]) {
 					for (auto & i3 : i2.second) {
-						functor(i3.first);
+						functor(*i3.first);
 						for (auto & i4 : i3.second){
 							if (i4.type == OverrideVariant::kType_String) {
-								BSFixedString str(i4.data.str);
-								functor(str);
+								functor(*i4.str);
 							}
 						}
 					}
@@ -1648,11 +1655,10 @@ void OverrideInterface::VisitStrings(std::function<void(BSFixedString)> functor)
 			for (UInt8 fp = 0; fp <= 1; fp++) {
 				for (auto & i2 : i1.second[gender][fp]) {
 					for (auto & i3 : i2.second) {
-						functor(i3.first);
+						functor(*i3.first);
 						for (auto & i4 : i3.second) {
 							if (i4.type == OverrideVariant::kType_String) {
-								BSFixedString str(i4.data.str);
-								functor(str);
+								functor(*i4.str);
 							}
 						}
 					}
@@ -1664,11 +1670,10 @@ void OverrideInterface::VisitStrings(std::function<void(BSFixedString)> functor)
 	for (auto & i1 : nodeData.m_data) {
 		for (UInt8 fp = 0; fp <= 1; fp++) {
 			for (auto & i2 : i1.second[fp]) {
-				functor(i2.first);
+				functor(*i2.first);
 				for (auto & i3 : i2.second) {
 					if (i3.type == OverrideVariant::kType_String) {
-						BSFixedString str(i3.data.str);
-						functor(str);
+						functor(*i3.str);
 					}
 				}
 			}
@@ -1681,8 +1686,7 @@ void OverrideInterface::VisitStrings(std::function<void(BSFixedString)> functor)
 				for (auto & i2 : i1.second[gender][fp]) {
 					for (auto & i3 : i2.second) {
 						if (i3.type == OverrideVariant::kType_String) {
-							BSFixedString str(i3.data.str);
-							functor(str);
+							functor(*i3.str);
 						}
 					}
 				}
@@ -1707,7 +1711,7 @@ void OverrideSet::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 		const_cast<OverrideVariant&>((*it)).Save(intfc, kVersion);
 }
 
-bool OverrideSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool OverrideSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1730,7 +1734,7 @@ bool OverrideSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 				for (UInt32 i = 0; i < numOverrides; i++)
 				{
 					OverrideVariant value;
-					if (!value.Load(intfc, version))
+					if (!value.Load(intfc, version, stringTable))
 					{
 						if(value.type == OverrideVariant::kType_None)
 							continue;
@@ -1739,7 +1743,7 @@ bool OverrideSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 						if (value.type != OverrideVariant::kType_String)
 							_MESSAGE("Loaded override value %d %X", value.key, value.data.u);
 						else
-							_MESSAGE("Loaded override value %d %s", value.key, value.data.GetStr()->data);
+							_MESSAGE("Loaded override value %d %s", value.key, value.str->c_str());
 #endif
 
 						this->insert(value);
@@ -1768,14 +1772,14 @@ bool OverrideSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 
 // OverrideRegistration
 template<>
-bool ReadKey(SKSESerializationInterface * intfc, BSFixedString & key, UInt32 kVersion)
+bool ReadKey(SKSESerializationInterface * intfc, StringTableItem & key, UInt32 kVersion, const StringIdMap & stringTable)
 {
-	key = g_stringTable.ReadString<UInt16>(intfc, kVersion);
+	key = StringTable::ReadString(intfc, stringTable);
 	return false;
 }
 
 template<>
-bool ReadKey(SKSESerializationInterface * intfc, UInt32 & key, UInt32 kVersion)
+bool ReadKey(SKSESerializationInterface * intfc, UInt32 & key, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	if(!intfc->ReadRecordData(&key, sizeof(key))) {
 		return true;
@@ -1785,12 +1789,12 @@ bool ReadKey(SKSESerializationInterface * intfc, UInt32 & key, UInt32 kVersion)
 }
 
 template<>
-void WriteKey(SKSESerializationInterface * intfc, const BSFixedString key, UInt32 kVersion)
+void WriteKey(SKSESerializationInterface * intfc, const StringTableItem key, UInt32 kVersion)
 {
-	g_stringTable.WriteString<UInt16>(intfc, key, kVersion);
+	g_stringTable.WriteString(intfc, key);
 
 #ifdef _DEBUG
-	_MESSAGE("Saving Key %s", key.data);
+	_MESSAGE("Saving Key %s", key->c_str());
 #endif
 }
 
@@ -1822,7 +1826,7 @@ void OverrideRegistration<T>::Save(SKSESerializationInterface * intfc, UInt32 kV
 }
 
 template<typename T>
-bool OverrideRegistration<T>::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool OverrideRegistration<T>::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1845,7 +1849,7 @@ bool OverrideRegistration<T>::Load(SKSESerializationInterface * intfc, UInt32 kV
 			case 'NOEN':
 				{
 					T key;
-					if(ReadKey<T>(intfc, key, kVersion)) {
+					if(ReadKey<T>(intfc, key, kVersion, stringTable)) {
 						_MESSAGE("%s - Error loading node entry key", __FUNCTION__);
 						error = true;
 						return error;
@@ -1855,10 +1859,10 @@ bool OverrideRegistration<T>::Load(SKSESerializationInterface * intfc, UInt32 kV
 					bool loadError = false;
 					auto iter = this->find(key); // Find existing first
 					if(iter != this->end()) {
-						error = iter->second.Load(intfc, version);
+						error = iter->second.Load(intfc, version, stringTable);
 					} else { // No existing, create
 						OverrideSet set;
-						error = set.Load(intfc, version);
+						error = set.Load(intfc, version, stringTable);
 						emplace(key, set);
 					}
 					if(loadError)
@@ -1905,7 +1909,7 @@ void AddonRegistration::Save(SKSESerializationInterface * intfc, UInt32 kVersion
 	}
 }
 
-bool AddonRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool AddonRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1936,8 +1940,8 @@ bool AddonRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						return error;
 					}
 
-					OverrideRegistration<BSFixedString> overrideRegistration;
-					if (overrideRegistration.Load(intfc, version))
+					OverrideRegistration<StringTableItem> overrideRegistration;
+					if (overrideRegistration.Load(intfc, version, stringTable))
 					{
 						_MESSAGE("%s - Error loading ArmorAddon override registrations", __FUNCTION__);
 						error = true;
@@ -1994,7 +1998,7 @@ void ArmorRegistration::Save(SKSESerializationInterface * intfc, UInt32 kVersion
 	}
 }
 
-bool ArmorRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool ArmorRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -2015,7 +2019,7 @@ bool ArmorRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 				}
 
 				AddonRegistration addonRegistration;
-				if (addonRegistration.Load(intfc, version))
+				if (addonRegistration.Load(intfc, version, stringTable))
 				{
 					_MESSAGE("%s - Error loading ArmorAddon registrations", __FUNCTION__);
 					error = true;
@@ -2072,7 +2076,7 @@ void WeaponRegistration::Save(SKSESerializationInterface * intfc, UInt32 kVersio
 	}
 }
 
-bool WeaponRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool WeaponRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -2103,8 +2107,8 @@ bool WeaponRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersio
 						return error;
 					}
 
-					OverrideRegistration<BSFixedString> overrideRegistration;
-					if (overrideRegistration.Load(intfc, version))
+					OverrideRegistration<StringTableItem> overrideRegistration;
+					if (overrideRegistration.Load(intfc, version, stringTable))
 					{
 						_MESSAGE("%s - Error loading Weapon override registrations", __FUNCTION__);
 						error = true;
@@ -2161,7 +2165,7 @@ void SkinRegistration::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 	}
 }
 
-bool SkinRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool SkinRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -2193,7 +2197,7 @@ bool SkinRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 					}
 
 					OverrideSet overrideSet;
-					if (overrideSet.Load(intfc, version))
+					if (overrideSet.Load(intfc, version, stringTable))
 					{
 						_MESSAGE("%s - Error loading skin override set", __FUNCTION__);
 						error = true;
@@ -2222,7 +2226,7 @@ bool SkinRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	return error;
 }
 
-bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle)
+bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable)
 {
 	bool error = false;
 	
@@ -2234,8 +2238,8 @@ bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 
 		return error;
 	}
 
-	MultiRegistration<OverrideRegistration<BSFixedString>,2> reg;
-	if (reg.Load(intfc, kVersion))
+	MultiRegistration<OverrideRegistration<StringTableItem>,2> reg;
+	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading override gender registrations", __FUNCTION__);
 		error = true;
@@ -2306,7 +2310,7 @@ void ActorRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 
 	}
 }
 
-bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle)
+bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable)
 {
 	bool error = false;
 
@@ -2320,7 +2324,7 @@ bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 
 	}
 
 	MultiRegistration<ArmorRegistration,2> reg;
-	if (reg.Load(intfc, kVersion))
+	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading armor gender registrations", __FUNCTION__);
 		error = true;
@@ -2380,7 +2384,7 @@ void WeaponRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32
 	}
 }
 
-bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle)
+bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable)
 {
 	bool error = false;
 
@@ -2394,7 +2398,7 @@ bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32
 	}
 
 	MultiRegistration<MultiRegistration<WeaponRegistration,2>,2> reg;
-	if (reg.Load(intfc, kVersion))
+	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading weapon registrations", __FUNCTION__);
 		error = true;
@@ -2454,7 +2458,7 @@ void SkinRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 k
 	}
 }
 
-bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle)
+bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable)
 {
 	bool error = false;
 
@@ -2468,7 +2472,7 @@ bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 k
 	}
 
 	MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2> reg;
-	if (reg.Load(intfc, kVersion))
+	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading skin registrations", __FUNCTION__);
 		error = true;
@@ -2518,7 +2522,7 @@ void OverrideInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersion
 	skinData.Save(intfc, kVersion);
 }
 
-bool OverrideInterface::LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion)
+bool OverrideInterface::LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 #ifdef _DEBUG
 	_MESSAGE("%s - Loading Weapon Overrides...", __FUNCTION__);
@@ -2526,7 +2530,7 @@ bool OverrideInterface::LoadWeaponOverrides(SKSESerializationInterface* intfc, U
 	bool immediate = (g_loadMode == 1) || (g_firstLoad && g_loadMode == 0);
 
 	UInt64 handle = 0;
-	if(!weaponData.Load(intfc, kVersion, &handle))
+	if(!weaponData.Load(intfc, kVersion, &handle, stringTable))
 	{
 		if(handle != 0)
 			SetHandleWeaponProperties(handle, immediate);
@@ -2535,7 +2539,7 @@ bool OverrideInterface::LoadWeaponOverrides(SKSESerializationInterface* intfc, U
 	return false;
 }
 
-bool OverrideInterface::LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion)
+bool OverrideInterface::LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 #ifdef _DEBUG
 	_MESSAGE("%s - Loading Overrides...", __FUNCTION__);
@@ -2543,7 +2547,7 @@ bool OverrideInterface::LoadOverrides(SKSESerializationInterface* intfc, UInt32 
 	bool immediate = (g_loadMode == 1) || (g_firstLoad && g_loadMode == 0);
 
 	UInt64 handle = 0;
-	if(!armorData.Load(intfc, kVersion, &handle))
+	if(!armorData.Load(intfc, kVersion, &handle, stringTable))
 	{
 		if(handle != 0)
 			SetHandleProperties(handle, immediate);
@@ -2552,7 +2556,7 @@ bool OverrideInterface::LoadOverrides(SKSESerializationInterface* intfc, UInt32 
 	return false;
 }
 
-bool OverrideInterface::LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion)
+bool OverrideInterface::LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 #ifdef _DEBUG
 	_MESSAGE("%s - Loading Node Overrides...", __FUNCTION__);
@@ -2560,7 +2564,7 @@ bool OverrideInterface::LoadNodeOverrides(SKSESerializationInterface* intfc, UIn
 	bool immediate = (g_loadMode == 1) || (g_firstLoad && g_loadMode == 0);
 
 	UInt64 handle = 0;
-	if(!nodeData.Load(intfc, kVersion, &handle))
+	if(!nodeData.Load(intfc, kVersion, &handle, stringTable))
 	{
 		if(handle != 0)
 			SetHandleNodeProperties(handle, immediate);
@@ -2569,7 +2573,7 @@ bool OverrideInterface::LoadNodeOverrides(SKSESerializationInterface* intfc, UIn
 	return false;
 }
 
-bool OverrideInterface::LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion)
+bool OverrideInterface::LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 #ifdef _DEBUG
 	_MESSAGE("%s - Loading Skin Overrides...", __FUNCTION__);
@@ -2577,7 +2581,7 @@ bool OverrideInterface::LoadSkinOverrides(SKSESerializationInterface* intfc, UIn
 	bool immediate = (g_loadMode == 1) || (g_firstLoad && g_loadMode == 0);
 
 	UInt64 handle = 0;
-	if (!skinData.Load(intfc, kVersion, &handle))
+	if (!skinData.Load(intfc, kVersion, &handle, stringTable))
 	{
 		if (handle != 0)
 			SetHandleSkinProperties(handle, immediate);
@@ -2601,15 +2605,15 @@ void OverrideInterface::DumpMap()
 				for(AddonRegistration::iterator dit = ait->second.begin(); dit != ait->second.end(); ++dit) // Loop Addons
 				{
 					_MESSAGE("Addon Handle: %016llX children %d", dit->first, dit->second.size());
-					for(OverrideRegistration<BSFixedString>::iterator nit = dit->second.begin(); nit != dit->second.end(); ++nit) // Loop Overrides
+					for(auto nit = dit->second.begin(); nit != dit->second.end(); ++nit) // Loop Overrides
 					{
-						_MESSAGE("Override Node: %s children %d", nit->first.data, nit->second.size());
+						_MESSAGE("Override Node: %s children %d", nit->first->c_str(), nit->second.size());
 						for(OverrideSet::iterator iter = nit->second.begin(); iter != nit->second.end(); ++iter)
 						{
 							switch((*iter).type)
 							{
 							case OverrideVariant::kType_String:
-								_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).data.str);
+								_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).str->c_str());
 								break;
 							case OverrideVariant::kType_Float:
 								_MESSAGE("Override: Key %d Value %f", (*iter).key, (*iter).data.f);
@@ -2629,15 +2633,15 @@ void OverrideInterface::DumpMap()
 		for(UInt8 gender = 0; gender < 2; gender++)
 		{
 			_MESSAGE("Node Handle: %016llX children %d", nit->first, nit->second[gender].size());
-			for(OverrideRegistration<BSFixedString>::iterator oit = nit->second[gender].begin(); oit != nit->second[gender].end(); ++oit) // Loop Overrides
+			for(auto oit = nit->second[gender].begin(); oit != nit->second[gender].end(); ++oit) // Loop Overrides
 			{
-				_MESSAGE("Override Node: %s children %d", oit->first.data, oit->second.size());
+				_MESSAGE("Override Node: %s children %d", oit->first->c_str(), oit->second.size());
 				for(OverrideSet::iterator iter = oit->second.begin(); iter != oit->second.end(); ++iter)
 				{
 					switch((*iter).type)
 					{
 					case OverrideVariant::kType_String:
-						_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).data.str);
+						_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).str->c_str());
 						break;
 					case OverrideVariant::kType_Float:
 						_MESSAGE("Override: Key %d Value %f", (*iter).key, (*iter).data.f);

@@ -8,6 +8,8 @@
 #include "skse64/NiTypes.h"
 #include "skse64/NiGeometry.h"
 
+#include "StringTable.h"
+
 #ifdef min
 #undef min
 #endif
@@ -44,14 +46,14 @@ class NiSkinPartition;
 class BodyMorph
 {
 public:
-	bool operator<(const BodyMorph & rhs) const	{ return m_name < rhs.m_name; }
-	bool operator==(const BodyMorph & rhs) const	{ return m_name == rhs.m_name; }
+	bool operator<(const BodyMorph & rhs) const { return *m_name < *rhs.m_name; }
+	bool operator==(const BodyMorph & rhs) const	{ return *m_name == *rhs.m_name; }
 
-	BSFixedString	m_name;
+	StringTableItem	m_name;
 	float			m_value;
 
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 class BodyMorphSet : public std::set<BodyMorph>
@@ -59,14 +61,14 @@ class BodyMorphSet : public std::set<BodyMorph>
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class BodyMorphData : public std::unordered_map<BSFixedString, std::unordered_map<BSFixedString, float>>
+class BodyMorphData : public std::unordered_map<StringTableItem, std::unordered_map<StringTableItem, float>>
 {
 public:
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 class ActorMorphs : public SafeDataHolder<std::unordered_map<UInt64, BodyMorphData>>
@@ -77,7 +79,7 @@ public:
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 class TriShapeVertexDelta
@@ -158,7 +160,7 @@ public:
 typedef std::shared_ptr<TriShapePackedUVData> TriShapePackedUVDataPtr;
 
 
-class BodyMorphMap : public std::unordered_map<BSFixedString, std::pair<TriShapeVertexDataPtr, TriShapeVertexDataPtr>>
+class BodyMorphMap : public std::unordered_map<SKEEFixedString, std::pair<TriShapeVertexDataPtr, TriShapeVertexDataPtr>>
 {
 	friend class MorphCache;
 public:
@@ -173,7 +175,7 @@ private:
 	bool m_hasUV;
 };
 
-class TriShapeMap : public std::unordered_map<BSFixedString, BodyMorphMap>
+class TriShapeMap : public std::unordered_map<SKEEFixedString, BodyMorphMap>
 {
 public:
 	TriShapeMap()
@@ -190,14 +192,14 @@ class MorphFileCache
 	friend class BodyMorphInterface;
 public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
-	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
+	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
 
 private:
 	TriShapeMap vertexMap;
 	std::time_t accessed;
 };
 
-class MorphCache : public SafeDataHolder<std::unordered_map<BSFixedString, MorphFileCache>>
+class MorphCache : public SafeDataHolder<std::unordered_map<SKEEFixedString, MorphFileCache>>
 {
 	friend class BodyMorphInterface;
 
@@ -208,9 +210,9 @@ public:
 		memoryLimit = totalMemory;
 	}
 
-	typedef std::unordered_map<BSFixedString, TriShapeMap>	FileMap;
+	typedef std::unordered_map<SKEEFixedString, TriShapeMap>	FileMap;
 
-	BSFixedString CreateTRIPath(const char * relativePath);
+	SKEEFixedString CreateTRIPath(const char * relativePath);
 	bool CacheFile(const char * modelPath);
 
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool attaching = false, bool deferUpdate = false);
@@ -250,7 +252,7 @@ private:
 class BodyGenMorphData
 {
 public:
-	BSFixedString	name;
+	SKEEFixedString	name;
 	float			lower;
 	float			upper;
 };
@@ -258,35 +260,35 @@ public:
 class BodyGenMorphSelector : public std::vector<BodyGenMorphData>
 {
 public:
-	UInt32 Evaluate(std::function<void(BSFixedString, float)> eval);
+	UInt32 Evaluate(std::function<void(SKEEFixedString, float)> eval);
 };
 
 class BodyGenMorphs : public std::vector<BodyGenMorphSelector>
 {
 public:
-	UInt32 Evaluate(std::function<void(BSFixedString, float)> eval);
+	UInt32 Evaluate(std::function<void(SKEEFixedString, float)> eval);
 };
 
 class BodyGenTemplate : public std::vector<BodyGenMorphs>
 {
 public:
-	UInt32 Evaluate(std::function<void(BSFixedString, float)> eval);
+	UInt32 Evaluate(std::function<void(SKEEFixedString, float)> eval);
 };
 typedef std::shared_ptr<BodyGenTemplate> BodyGenTemplatePtr;
 
 
-typedef std::unordered_map<BSFixedString, BodyGenTemplatePtr> BodyGenTemplates;
+typedef std::unordered_map<SKEEFixedString, BodyGenTemplatePtr> BodyGenTemplates;
 
 class BodyTemplateList : public std::vector<BodyGenTemplatePtr>
 {
 public:
-	UInt32 Evaluate(std::function<void(BSFixedString, float)> eval);
+	UInt32 Evaluate(std::function<void(SKEEFixedString, float)> eval);
 };
 
 class BodyGenDataTemplates : public std::vector<BodyTemplateList>
 {
 public:
-	UInt32 Evaluate(std::function<void(BSFixedString, float)> eval);
+	UInt32 Evaluate(std::function<void(SKEEFixedString, float)> eval);
 };
 typedef std::shared_ptr<BodyGenDataTemplates> BodyGenDataTemplatesPtr;
 
@@ -300,26 +302,27 @@ public:
 		kCurrentPluginVersion = 3,
 		kSerializationVersion1 = 1,
 		kSerializationVersion2 = 2,
-		kSerializationVersion = kSerializationVersion2
+		kSerializationVersion3 = 3,
+		kSerializationVersion = kSerializationVersion3
 	};
 	virtual UInt32 GetVersion();
 
 	// Serialization
 	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	virtual void Revert();
 
 	void LoadMods();
 
-	virtual void SetMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey, float relative);
-	virtual float GetMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey);
-	virtual void ClearMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey);
+	virtual void SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative);
+	virtual float GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
+	virtual void ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
 
-	virtual float GetBodyMorphs(TESObjectREFR * actor, BSFixedString morphName);
-	virtual void ClearBodyMorphNames(TESObjectREFR * actor, BSFixedString morphName);
+	virtual float GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName);
+	virtual void ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName);
 
-	virtual void VisitMorphs(TESObjectREFR * actor, std::function<void(BSFixedString, std::unordered_map<BSFixedString, float> *)> functor);
-	virtual void VisitKeys(TESObjectREFR * actor, BSFixedString name, std::function<void(BSFixedString, float)> functor);
+	virtual void VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString, std::unordered_map<StringTableItem, float> *)> functor);
+	virtual void VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor);
 
 	virtual void ClearMorphs(TESObjectREFR * actor);
 
@@ -331,15 +334,15 @@ public:
 	virtual void SetCacheLimit(UInt32 limit);
 	virtual bool HasMorphs(TESObjectREFR * actor);
 
-	virtual bool ReadBodyMorphs(BSFixedString filePath);
-	virtual bool ReadBodyMorphTemplates(BSFixedString filePath);
+	virtual bool ReadBodyMorphs(SKEEFixedString filePath);
+	virtual bool ReadBodyMorphTemplates(SKEEFixedString filePath);
 	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor);
 
-	virtual bool HasBodyMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey);
-	virtual bool HasBodyMorphName(TESObjectREFR * actor, BSFixedString morphName);
-	virtual bool HasBodyMorphKey(TESObjectREFR * actor, BSFixedString morphKey);
-	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, BSFixedString morphKey);
-	virtual void VisitStrings(std::function<void(BSFixedString)> functor);
+	virtual bool HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
+	virtual bool HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName);
+	virtual bool HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey);
+	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey);
+	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
 	virtual void VisitActors(std::function<void(TESObjectREFR*)> functor);
 
 protected:

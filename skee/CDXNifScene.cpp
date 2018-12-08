@@ -35,7 +35,7 @@ void CDXNifScene::CreateBrushes()
 	m_brushes.push_back(new CDXNifMoveBrush);
 }
 
-void CDXNifScene::Setup(LPDIRECT3DDEVICE9 pDevice)
+void CDXNifScene::Setup(ID3D11Device * pDevice)
 {
 	if (m_textureGroup)
 		Release();

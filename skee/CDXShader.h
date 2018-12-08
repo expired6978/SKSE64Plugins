@@ -11,7 +11,7 @@ class CDXShader
 {
 public:
 	CDXShader();
-	void CreateEffect(LPDIRECT3DDEVICE9 pDevice);
+	void CreateEffect(ID3D11Device * pDevice);
 	void Release();
 
 	D3DXHANDLE	m_hAmbient;

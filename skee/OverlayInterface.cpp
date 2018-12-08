@@ -771,13 +771,13 @@ void OverlayInterface::RevertOverlays(TESObjectREFR * reference, bool resetDiffu
 	for(UInt32 i = 0; i < g_numFaceOverlays; i++)
 	{
 		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FEET_NODE, i);
+		sprintf_s(buff, MAX_PATH, FACE_NODE, i);
 		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
 	}
 	for(UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
 	{
 		memset(buff, 0, MAX_PATH);
-		sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
+		sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
 		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
 	}
 }

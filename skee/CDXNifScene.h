@@ -17,7 +17,7 @@ class CDXNifScene : public CDXEditableScene
 public:
 	CDXNifScene();
 
-	virtual void Setup(LPDIRECT3DDEVICE9 pDevice);
+	virtual void Setup(ID3D11Device * pDevice);
 	virtual void Release();
 	virtual void CreateBrushes();
 

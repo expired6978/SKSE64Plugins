@@ -148,7 +148,7 @@ void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 	}
 }
 
-NIOVTaskUpdateTexture::NIOVTaskUpdateTexture(BSGeometry * geometry, UInt32 index, BSFixedString texture)
+NIOVTaskUpdateTexture::NIOVTaskUpdateTexture(BSGeometry * geometry, UInt32 index, StringTableItem texture)
 {
 	m_geometry = geometry;
 	if (m_geometry)
@@ -179,7 +179,7 @@ void NIOVTaskUpdateTexture::Run()
 					const char * texturePath = material->textureSet->GetTexturePath(i);
 					newTextureSet->SetTexturePath(i, texturePath);
 				}
-				newTextureSet->SetTexturePath(m_index, m_texture.data);
+				newTextureSet->SetTexturePath(m_index, m_texture->AsBSFixedString().c_str());
 				material->ReleaseTextures();
 				material->SetTextureSet(newTextureSet);
 				CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
@@ -297,7 +297,7 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 				// Special cases
 			case OverrideVariant::kParam_ShaderTexture:
 				{
-					BSFixedString texture;
+					SKEEFixedString texture;
 					UnpackValue(&texture, value);
 
 					if(immediate)
@@ -309,14 +309,14 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 								const char * texturePath = material->textureSet->GetTexturePath(i);
 								newTextureSet->SetTexturePath(i, texturePath);
 							}
-							newTextureSet->SetTexturePath(value->index, texture.data);
+							newTextureSet->SetTexturePath(value->index, texture.AsBSFixedString().c_str());
 							material->ReleaseTextures();
 							material->SetTextureSet(newTextureSet);
 							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
 							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
 						}
 					} else {
-						g_task->AddTask(new NIOVTaskUpdateTexture(geometry, value->index, texture));
+						g_task->AddTask(new NIOVTaskUpdateTexture(geometry, value->index, g_stringTable.GetString(texture)));
 					}
 					return;
 				}

@@ -19,6 +19,10 @@
 #include "skse64/NiTextures.h"
 #include "skse64/NiExtraData.h"
 
+#include <d3d11_4.h>
+
+#include "DirectXTex/DirectXTex.h"
+
 #ifdef FIXME
 #include <d3dx9.h>
 #pragma comment(lib, "d3dx9.lib")
@@ -90,6 +94,38 @@ void SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
 	SaveSourceDDS(pkSrcTexture, pcFileName);
 }
 #endif
+
+void SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
+{
+	if (pkTexture->rendererData)
+	{
+		auto texture = pkTexture->rendererData;
+		if (texture)
+		{
+			auto context = g_renderManager->context;
+			ID3D11Device * device = nullptr;
+			context->GetDevice(&device);
+
+			DirectX::ScratchImage si;
+			if (texture->texture)
+			{
+				DirectX::CaptureTexture(device, context, texture->texture, si);
+			}
+
+			auto image = si.GetImage(0, 0, 0);
+			if (image)
+			{
+				size_t len = strlen(pcFileName) + 1;
+				wchar_t * fileName = new wchar_t[len];
+				memset(fileName, 0, sizeof(len) * 2);
+				size_t converted = 0;
+				mbstowcs_s(&converted, fileName, len, pcFileName, len * 2);
+				DirectX::SaveToDDSFile(*image, DirectX::DDS_FLAGS_NONE, fileName);
+				delete[] fileName;
+			}
+		}
+	}
+}
 
 BSGeometry * GetHeadGeometry(Actor * actor, UInt32 partType)
 {
@@ -172,9 +208,7 @@ void ExportTintMaskDDS(Actor * actor, BSFixedString filePath)
 				if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen)
 				{
 					BSLightingShaderMaterialFacegen * maskedMaterial = (BSLightingShaderMaterialFacegen *)material;
-#ifdef FIXME
 					SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), filePath.data);
-#endif
 				}
 			}
 		}
@@ -239,7 +273,7 @@ void SKSETaskExportHead::Run()
 	if (!actorBase || !faceNode)
 		return;
 
-	BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
+	/*BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
 	if (animationData) {
 		FaceGen::GetSingleton()->isReset = 0;
 		for (UInt32 t = BSFaceGenAnimationData::kKeyframeType_Expression; t <= BSFaceGenAnimationData::kKeyframeType_Phoneme; t++)
@@ -250,7 +284,7 @@ void SKSETaskExportHead::Run()
 			keyframe->isUpdated = 0;
 		}
 		UpdateModelFace(faceNode);
-	}
+	}*/
 
 	IFileStream::MakeAllDirs(m_nifPath.data);
 
@@ -267,13 +301,11 @@ void SKSETaskExportHead::Run()
 		if (!object)
 			continue;
 
-		if (BSGeometry * geometry = object->GetAsBSGeometry()) {
-#ifdef FIXME_GEOMETRY
+		if (NiGeometry * geometry = object->GetAsNiGeometry()) {
 			NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
 			NiGeometryData * newGeometryData = NULL;
 			if (geometryData)
 				CALL_MEMBER_FN(geometryData, DeepCopy)((NiObject **)&newGeometryData);
-#endif
 
 			NiProperty * trishapeEffect = niptr_cast<NiProperty>(geometry->m_spEffectState);
 			NiProperty * newTrishapeEffect = NULL;
@@ -288,7 +320,144 @@ void SKSETaskExportHead::Run()
 			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 			NiSkinInstance * newSkinInstance = NULL;
 			if (skinInstance) {
-				newSkinInstance = skinInstance->Clone(false);
+				newSkinInstance = skinInstance->Clone();
+				newSkinInstance->m_pkRootParent = skinnedNode;
+
+				UInt32 numBones = 0;
+				NiSkinData * skinData = niptr_cast<NiSkinData>(skinInstance->m_spSkinData);
+				NiSkinData * newSkinData = NULL;
+				if (skinData) {
+					numBones = skinData->m_uiBones;
+					CALL_MEMBER_FN(skinData, DeepCopy)((NiObject **)&newSkinData);
+				}
+
+				NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
+				NiSkinPartition * newSkinPartition = NULL;
+				if (skinPartition)
+					CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
+
+				newSkinInstance->m_spSkinData = newSkinData;
+				newSkinData->DecRef();
+
+				newSkinInstance->m_spSkinPartition = newSkinPartition;
+				newSkinPartition->DecRef();
+
+				// Remap the bones to new NiNode instances
+				if (numBones > 0)
+				{
+					newSkinInstance->m_ppkBones = (NiAVObject**)Heap_Allocate(numBones * sizeof(NiAVObject*));
+					for (UInt32 i = 0; i < numBones; i++)
+					{
+						NiAVObject * bone = skinInstance->m_ppkBones[i];
+						if (bone)
+						{
+							auto it = boneMap.find(bone);
+							if (it == boneMap.end()) {
+								NiNode * newBone = NiNode::Create();
+								newBone->m_name = bone->m_name;
+								newBone->m_flags = bone->m_flags;
+								boneMap.insert(std::make_pair(bone, newBone));
+								newSkinInstance->m_ppkBones[i] = newBone;
+							}
+							else
+								newSkinInstance->m_ppkBones[i] = it->second;
+						}
+						else
+						{
+							newSkinInstance->m_ppkBones[i] = nullptr;
+						}
+					}
+				}
+			}
+
+			NiGeometry * newGeometry = NULL;
+
+			if (NiTriShape * trishape = geometry->GetAsNiTriShape()) {
+				NiTriShape * newTrishape = NiTriShape::Create(static_cast<NiTriShapeData*>(newGeometryData));
+				newGeometryData->DecRef();
+				newTrishape->m_localTransform = geometry->m_localTransform;
+				newTrishape->m_name = geometry->m_name;
+#ifdef FIXME
+				memcpy(&newTrishape->unk88, &geometry->unk88, 0x1F);
+#endif
+				newTrishape->m_spEffectState = newTrishapeEffect;
+				newTrishape->m_spPropertyState = newTrishapeProperty;
+				newTrishape->m_spSkinInstance = newSkinInstance;
+				newGeometry = newTrishape;
+			}
+			else if (NiTriBasedGeom * trigeom = geometry->GetAsNiTriBasedGeom()) {
+
+				NiTriStrips * tristrips = ni_cast(trigeom, NiTriStrips);
+				if (tristrips)
+				{
+					NiTriStrips * newTristrips = NiTriStrips::Create(static_cast<NiTriShapeData*>(newGeometryData));
+					newGeometryData->DecRef();
+					newTristrips->m_localTransform = geometry->m_localTransform;
+					newTristrips->m_name = geometry->m_name;
+#ifdef FIXME
+					memcpy(&newTristrips->unk88, &geometry->unk88, 0x1F);
+#endif
+					newTristrips->m_spEffectState = newTrishapeEffect;
+					newTristrips->m_spPropertyState = newTrishapeProperty;
+					newTristrips->m_spSkinInstance = newSkinInstance;
+					newGeometry = newTristrips;
+				}
+			}
+
+			if (newGeometry)
+			{
+				auto textureData = GetTextureSetForPartByName(actorBase, newGeometry->m_name);
+				if (textureData.first && textureData.second) {
+					BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(newGeometry->m_spEffectState);
+					if (shaderProperty) {
+						if (ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(shaderProperty);
+							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(shaderProperty->material);
+							if (material && material->textureSet) {
+								for (UInt32 i = 0; i < BGSTextureSet::kNumTextures; i++)
+									material->textureSet->SetTexturePath(i, textureData.first->textureSet.GetTexturePath(i));
+
+								if (textureData.second->type == BGSHeadPart::kTypeFace)
+									material->textureSet->SetTexturePath(6, m_ddsPath.data);
+							}
+						}
+					}
+
+					// Save the previous tint mask
+					BSShaderProperty * originalShaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+					if (originalShaderProperty) {
+						if (ni_is_type(originalShaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(originalShaderProperty);
+							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(originalShaderProperty->material);
+							if (material) {
+								if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
+									BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
+									SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
+								}
+							}
+						}
+					}
+				}
+
+				skinnedNode->AttachChild(newGeometry, true);
+			}
+		}
+		else if (BSGeometry * geometry = object->GetAsBSGeometry()) {
+
+			NiProperty * trishapeEffect = niptr_cast<NiProperty>(geometry->m_spEffectState);
+			NiProperty * newTrishapeEffect = NULL;
+			if (trishapeEffect)
+				CALL_MEMBER_FN(trishapeEffect, DeepCopy)((NiObject **)&newTrishapeEffect);
+
+			NiProperty * trishapeProperty = niptr_cast<NiProperty>(geometry->m_spPropertyState);
+			NiProperty * newTrishapeProperty = NULL;
+			if (trishapeProperty)
+				CALL_MEMBER_FN(trishapeProperty, DeepCopy)((NiObject **)&newTrishapeProperty);
+
+			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
+			NiSkinInstance * newSkinInstance = NULL;
+			if (skinInstance) {
+				newSkinInstance = skinInstance->Clone();
 				newSkinInstance->m_pkRootParent = skinnedNode;
 
 				UInt32 numBones = 0;
@@ -340,34 +509,81 @@ void SKSETaskExportHead::Run()
 
 			BSGeometry * newGeometry = NULL;
 
-#ifdef FIXME_GEOMETRY
-			if (NiTriShape * trishape = geometry->GetAsNiTriShape()) {
-				NiTriShape * newTrishape = NiTriShape::Create(static_cast<NiTriShapeData*>(newGeometryData));
-				newGeometryData->DecRef();
-				newTrishape->m_localTransform = geometry->m_localTransform;
-				newTrishape->m_name = geometry->m_name;
-#ifdef FIXME
-				memcpy(&newTrishape->unk88, &geometry->unk88, 0x1F);
-#endif
-				newTrishape->m_spEffectState = newTrishapeEffect;
-				newTrishape->m_spPropertyState = newTrishapeProperty;
-				newTrishape->m_spSkinInstance = newSkinInstance;
+			BSTriShape * trishape = geometry->GetAsBSTriShape();
+			if (trishape)
+			{
+				BSTriShape * newTrishape = nullptr;
+				BSDynamicTriShape * dynamicShape = ni_cast(trishape, BSDynamicTriShape);
+				if (dynamicShape)
+				{
+					void* memory = Heap_Allocate(sizeof(BSDynamicTriShape));
+					memset(memory, 0, sizeof(BSDynamicTriShape));
+					BSDynamicTriShape* xData = (BSDynamicTriShape*)memory;
+					xData->ctor();
+					newTrishape = xData;
+					if (dynamicShape->diffBlock)
+					{
+						xData->diffBlock = (float*)Heap_Allocate(trishape->numVertices * sizeof(float) * 4);
+						memcpy(xData->diffBlock, dynamicShape->diffBlock, trishape->numVertices * sizeof(float) * 4);
+					}
+
+					xData->unk168 = dynamicShape->unk168;
+					xData->unk170 = dynamicShape->unk170;
+					xData->unk178 = dynamicShape->unk178;
+				}
+				else
+				{
+					newTrishape = CreateBSTriShape();
+				}
+
+				if (newTrishape)
+				{
+					newTrishape->m_localTransform = geometry->m_localTransform;
+					newTrishape->m_name = geometry->m_name;
+					newTrishape->m_spEffectState = newTrishapeEffect;
+					if (newTrishapeEffect)
+						newTrishapeEffect->DecRef();
+
+					newTrishape->m_spPropertyState = newTrishapeProperty;
+					if (newTrishapeProperty)
+						newTrishapeProperty->DecRef();
+
+					newTrishape->m_spSkinInstance = newSkinInstance;
+
+					newTrishape->geometryData = trishape->geometryData;
+					if (newTrishape->geometryData)
+					{
+						newTrishape->geometryData->refCount++;
+					}
+					
+					newTrishape->m_flags = trishape->m_flags;
+
+					newTrishape->unkE4 = trishape->unkE4;
+					newTrishape->unkE8 = trishape->unkE8;
+					newTrishape->unkEC = trishape->unkEC;
+					newTrishape->unkF0 = trishape->unkF0;
+
+					newTrishape->unk104 = trishape->unk104;
+					newTrishape->unk108 = trishape->unk108;
+					newTrishape->unk109 = trishape->unk109;
+
+					newTrishape->unk110 = trishape->unk110;
+					newTrishape->unk118 = trishape->unk118;
+					newTrishape->unk140 = trishape->unk140;
+					newTrishape->unk148 = trishape->unk148;
+					newTrishape->unk150 = trishape->unk150;
+					newTrishape->unk151 = trishape->unk151;
+					newTrishape->unk152 = trishape->unk152;
+					newTrishape->unk154 = trishape->unk154;
+
+					newTrishape->unk158 = trishape->unk158;
+					newTrishape->numVertices = trishape->numVertices;
+					newTrishape->unk15C = trishape->unk15C;
+					newTrishape->unk15D = trishape->unk15D;
+				}
+
 				newGeometry = newTrishape;
 			}
-			else if (NiTriStrips * tristrips = geometry->GetAsNiTriStrips()) {
-				NiTriStrips * newTristrips = NiTriStrips::Create(static_cast<NiTriStripsData*>(newGeometryData));
-				newGeometryData->DecRef();
-				newTristrips->m_localTransform = geometry->m_localTransform;
-				newTristrips->m_name = geometry->m_name;
-#ifdef FIXME
-				memcpy(&newTristrips->unk88, &geometry->unk88, 0x1F);
-#endif
-				newTristrips->m_spEffectState = newTrishapeEffect;
-				newTristrips->m_spPropertyState = newTrishapeProperty;
-				newTristrips->m_spSkinInstance = newSkinInstance;
-				newGeometry = newTristrips;
-			}
-#endif
 
 			if (newGeometry)
 			{
@@ -397,9 +613,7 @@ void SKSETaskExportHead::Run()
 							if (material) {
 								if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
 									BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
-#ifdef FIXME
 									SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
-#endif
 								}
 							}
 						}
@@ -416,8 +630,9 @@ void SKSETaskExportHead::Run()
 
 	rootNode->AttachChild(skinnedNode, true);
 
-	UInt8 niStreamMemory[0x5B4];
-	memset(niStreamMemory, 0, 0x5B4);
+	static const int MAX_SIZE = sizeof(NiStream) + 0x200;
+	UInt8 niStreamMemory[MAX_SIZE];
+	memset(niStreamMemory, 0, MAX_SIZE);
 	NiStream * niStream = (NiStream *)niStreamMemory;
 	CALL_MEMBER_FN(niStream, ctor)();
 	CALL_MEMBER_FN(niStream, AddObject)(rootNode);
@@ -426,12 +641,12 @@ void SKSETaskExportHead::Run()
 
 	rootNode->DecRef();
 
-	if (animationData) {
+	/*if (animationData) {
 		animationData->overrideFlag = 0;
 		CALL_MEMBER_FN(animationData, Reset)(1.0, 1, 1, 0, 0);
 		FaceGen::GetSingleton()->isReset = 1;
 		UpdateModelFace(faceNode);
-	}
+	}*/
 }
 
 bool VisitObjects(NiAVObject * parent, std::function<bool(NiAVObject*)> functor)

@@ -3,8 +3,11 @@
 #include "IPluginInterface.h"
 #include "IHashType.h"
 
+#include "StringTable.h"
+
 #include "skse64/GameTypes.h"
 #include "skse64/NiTypes.h"
+
 #include <set>
 #include <vector>
 #include <unordered_map>
@@ -25,13 +28,13 @@ class OverrideSet : public std::set<OverrideVariant>
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	virtual void Visit(std::function<bool(OverrideVariant*)> functor);
 };
 
 template<typename T>
-bool ReadKey(SKSESerializationInterface * intfc, T & key, UInt32 kVersion);
+bool ReadKey(SKSESerializationInterface * intfc, T & key, UInt32 kVersion, const StringIdMap & stringTable);
 
 template<typename T>
 void WriteKey(SKSESerializationInterface * intfc, const T key, UInt32 kVersion);
@@ -42,17 +45,17 @@ class OverrideRegistration : public std::unordered_map<T, OverrideSet>
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	virtual void Visit(std::function<bool(const T & key, OverrideSet *)> functor);
 };
 
-class AddonRegistration : public std::unordered_map<UInt64, OverrideRegistration<BSFixedString>>
+class AddonRegistration : public std::unordered_map<UInt64, OverrideRegistration<StringTableItem>>
 {
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 class ArmorRegistration : public std::unordered_map<UInt64, AddonRegistration>
@@ -60,15 +63,15 @@ class ArmorRegistration : public std::unordered_map<UInt64, AddonRegistration>
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class WeaponRegistration : public std::unordered_map<UInt64, OverrideRegistration<BSFixedString>>
+class WeaponRegistration : public std::unordered_map<UInt64, OverrideRegistration<StringTableItem>>
 {
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 class SkinRegistration : public std::unordered_map<UInt32, OverrideSet>
@@ -76,7 +79,7 @@ class SkinRegistration : public std::unordered_map<UInt32, OverrideSet>
 public:
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
 template<typename T, UInt32 N>
@@ -85,7 +88,7 @@ class MultiRegistration
 public:
 	// Serialization
 
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 	{
 		bool error = false;
 
@@ -108,7 +111,7 @@ public:
 			}
 
 			T regs;
-			if (regs.Load(intfc, kVersion))
+			if (regs.Load(intfc, kVersion, stringTable))
 			{
 				_MESSAGE("%s - Error loading multi-registrations (%d/%d)", __FUNCTION__, i + 1, size);
 				error = true;
@@ -178,19 +181,19 @@ public:
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
 
-class NodeRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<BSFixedString>, 2>>>
+class NodeRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>>
 {
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<BSFixedString>, 2>>	RegMap;
+	typedef std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>	RegMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
@@ -202,7 +205,7 @@ public:
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
@@ -214,7 +217,7 @@ public:
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
@@ -227,7 +230,8 @@ public:
 		kCurrentPluginVersion = 1,
 		kSerializationVersion1 = 1,
 		kSerializationVersion2 = 2,
-		kSerializationVersion = kSerializationVersion2
+		kSerializationVersion3 = 2,
+		kSerializationVersion = kSerializationVersion3
 	};
 	virtual UInt32 GetVersion();
 
@@ -235,9 +239,9 @@ public:
 	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion) { return false; };
 	virtual void Revert();
 
-	virtual bool LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion);
-	virtual bool LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion);
-	virtual bool LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion);
+	virtual bool LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	virtual bool LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	virtual bool LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	// Specific overrides
 	virtual void AddRawOverride(UInt64 handle, bool isFemale, UInt64 armorHandle, UInt64 addonHandle, BSFixedString nodeName, OverrideVariant & value);
@@ -315,7 +319,7 @@ public:
 	virtual void GetWeaponProperty(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value);
 
 	// Skin API
-	virtual bool LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion);
+	virtual bool LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	virtual void AddRawSkinOverride(UInt64 handle, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
 	virtual void AddSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
 	virtual OverrideVariant * GetSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
@@ -330,9 +334,9 @@ public:
 	virtual void GetSkinProperty(TESObjectREFR * refr, bool firstPerson, UInt32 slotMask, OverrideVariant * value);
 
 
-	virtual void VisitNodes(TESObjectREFR * refr, std::function<void(BSFixedString, OverrideVariant&)> functor);
+	virtual void VisitNodes(TESObjectREFR * refr, std::function<void(SKEEFixedString, OverrideVariant&)> functor);
 	virtual void VisitSkin(TESObjectREFR * refr, bool isFemale, bool firstPerson, std::function<void(UInt32, OverrideVariant&)> functor);
-	virtual void VisitStrings(std::function<void(BSFixedString)> functor);
+	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
 
 #ifdef _DEBUG
 	void DumpMap();

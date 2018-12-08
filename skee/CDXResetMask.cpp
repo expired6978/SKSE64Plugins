@@ -7,7 +7,7 @@ CDXResetMask::CDXResetMask(CDXMesh * mesh)
 	m_mesh = mesh;
 
 	CDXMeshVert* pVertices = NULL;
-	LPDIRECT3DVERTEXBUFFER9 pVB = m_mesh->GetVertexBuffer();
+	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
 
 	pVB->Lock(0, 0, (void**)&pVertices, 0);
 	for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {
@@ -38,7 +38,7 @@ void CDXResetMask::Redo()
 	CDXMeshVert* pVertices = NULL;
 	CDXMeshIndex* pIndices = NULL;
 
-	LPDIRECT3DVERTEXBUFFER9 pVB = m_mesh->GetVertexBuffer();
+	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
 
 	pVB->Lock(0, 0, (void**)&pVertices, 0);
 
@@ -54,7 +54,7 @@ void CDXResetMask::Undo()
 	CDXMeshVert* pVertices = NULL;
 	CDXMeshIndex* pIndices = NULL;
 
-	LPDIRECT3DVERTEXBUFFER9 pVB = m_mesh->GetVertexBuffer();
+	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
 
 	pVB->Lock(0, 0, (void**)&pVertices, 0);
 

@@ -20,9 +20,9 @@ public:
 	CDXNifMesh();
 	~CDXNifMesh();
 
-	static CDXNifMesh * Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry);
+	static CDXNifMesh * Create(ID3D11Device * pDevice, NiGeometry * geometry);
 
-	virtual void Pass(LPDIRECT3DDEVICE9 pDevice, UInt32 iPass, CDXShader * shader);
+	virtual void Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader);
 
 	NiGeometry * GetNifGeometry();
 	bool IsMorphable();

@@ -13,10 +13,10 @@ CDXMesh::CDXMesh()
 	m_indexBuffer = NULL;
 	m_primitiveCount = 0;
 	m_visible = true;
-	m_material = NULL;
-	m_primitiveType = D3DPT_TRIANGLELIST;
+	//m_material = NULL;
+	//m_primitiveType = D3DPT_TRIANGLELIST;
 
-	D3DXMatrixIdentity(&m_transform);
+	m_transform = DirectX::XMMatrixIdentity();
 }
 
 CDXMesh::~CDXMesh()
@@ -37,11 +37,11 @@ void CDXMesh::Release()
 		m_indexBuffer->Release();
 		m_indexBuffer = NULL;
 	}
-	if(m_material) {
+	/*if(m_material) {
 		m_material->Release();
 		delete m_material;
 		m_material = NULL;
-	}
+	}*/
 }
 
 void CDXMesh::SetMaterial(CDXMaterial * material)
@@ -49,7 +49,7 @@ void CDXMesh::SetMaterial(CDXMaterial * material)
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	m_material = material;
+	//m_material = material;
 }
 
 CDXMaterial * CDXMesh::GetMaterial()
@@ -57,7 +57,7 @@ CDXMaterial * CDXMesh::GetMaterial()
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	return m_material;
+	return nullptr;//m_material;
 }
 
 void CDXMesh::SetVisible(bool visible)
@@ -75,14 +75,14 @@ bool CDXMesh::IsVisible()
 	return m_visible;
 }
 
-LPDIRECT3DVERTEXBUFFER9 CDXMesh::GetVertexBuffer()
+ID3D11Buffer * CDXMesh::GetVertexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_vertexBuffer;
 }
-LPDIRECT3DINDEXBUFFER9 CDXMesh::GetIndexBuffer()
+ID3D11Buffer * CDXMesh::GetIndexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -99,29 +99,29 @@ UInt32 CDXMesh::GetVertexCount()
 	return m_vertCount;
 }
 
-D3DXVECTOR3 CalculateFaceNormal(UInt32 f, CDXMeshIndex * faces, CDXMeshVert * vertices)
+DirectX::XMVECTOR CalculateFaceNormal(UInt32 f, CDXMeshIndex * faces, CDXMeshVert * vertices)
 {
-	D3DXVECTOR3 vNormal(0, 0, 0);
+	DirectX::XMVECTOR vNormal;
 	CDXMeshVert * v1 = &vertices[faces[f]];
 	CDXMeshVert * v2 = &vertices[faces[f + 1]];
 	CDXMeshVert * v3 = &vertices[faces[f + 2]];
 
-	D3DXVECTOR3 e1 = *(D3DXVECTOR3*)v2 - *(D3DXVECTOR3*)v1;
-	D3DXVECTOR3 e2 = *(D3DXVECTOR3*)v3 - *(D3DXVECTOR3*)v2;
+	auto e1 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v2->Position), DirectX::XMLoadFloat3(&v1->Position));
+	auto e2 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v3->Position), DirectX::XMLoadFloat3(&v2->Position));
 
-	D3DXVec3Cross(&vNormal, &e1, &e2);
-	D3DXVec3Normalize(&vNormal, &vNormal);
+	vNormal = DirectX::XMVector3Cross(e1, e2);
+	vNormal = DirectX::XMVector3Normalize(vNormal);
 	return vNormal;
 }
 
-bool IntersectSphere(float radius, float & dist, CDXVec3 & center, CDXVec3 & rayOrigin, CDXVec3 & rayDir)
+bool IntersectSphere(float radius, float & dist, CDXVec & center, CDXVec & rayOrigin, CDXVec & rayDir)
 {
 	//FLOAT t0 = -1, t1 = -1; // solutions for t if the ray intersects
 
-	CDXVec3 L = center - rayOrigin;
-	float tca = D3DXVec3Dot(&L, &rayDir);
+	CDXVec L = DirectX::XMVectorSubtract(center, rayOrigin);
+	float tca = DirectX::XMVector3Dot(L, rayDir).m128_f32[0];
 	if (tca < 0) return false;
-	float d2 = D3DXVec3Dot(&L, &L) - tca * tca;
+	float d2 = DirectX::XMVector3Dot(L, L).m128_f32[0] - tca * tca;
 	if (d2 > radius) return false;
 	float thc = sqrt(radius - d2);
 	//t0 = tca - thc;
@@ -130,24 +130,23 @@ bool IntersectSphere(float radius, float & dist, CDXVec3 & center, CDXVec3 & ray
 	return true;
 }
 
-bool IntersectTriangle( const CDXVec3& orig, const CDXVec3& dir, CDXVec3& v0, CDXVec3& v1, CDXVec3& v2, float* t, float* u, float* v )
+bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVec& v1, CDXVec& v2, float* t, float* u, float* v )
 {
 	// Find vectors for two edges sharing vert0
-	CDXVec3 edge1 = v1 - v0;
-	CDXVec3 edge2 = v2 - v0;
+	CDXVec edge1 = DirectX::XMVectorSubtract(v1, v0);
+	CDXVec edge2 = DirectX::XMVectorSubtract(v2, v0);
 
 	// Begin calculating determinant - also used to calculate U parameter
-	CDXVec3 pvec;
-	D3DXVec3Cross(&pvec, &dir, &edge2);
+	CDXVec pvec = DirectX::XMVector3Cross(dir, edge2);
 
 	// If determinant is near zero, ray lies in plane of triangle
-	float det = D3DXVec3Dot(&edge1, &pvec);
+	float det = DirectX::XMVector3Dot(edge1, pvec).m128_f32[0];
 
-	CDXVec3 tvec;
+	CDXVec tvec;
 	if(det > 0) {
-		tvec = orig - v0;
+		tvec = DirectX::XMVectorSubtract(orig, v0);
 	} else {
-		tvec = v0 - orig;
+		tvec = DirectX::XMVectorSubtract(v0, orig);
 		det = -det;
 	}
 
@@ -155,21 +154,20 @@ bool IntersectTriangle( const CDXVec3& orig, const CDXVec3& dir, CDXVec3& v0, CD
 		return false;
 
 	// Calculate U parameter and test bounds
-	*u = D3DXVec3Dot(&tvec, &pvec);
+	*u = DirectX::XMVector3Dot(tvec, pvec).m128_f32[0];
 	if(*u < 0.0f || *u > det)
 		return false;
 
 	// Prepare to test V parameter
-	CDXVec3 qvec;
-	D3DXVec3Cross(&qvec, &tvec, &edge1);
+	CDXVec qvec = DirectX::XMVector3Cross(tvec, edge1);
 
 	// Calculate V parameter and test bounds
-	*v = D3DXVec3Dot(&dir, &qvec);
+	*v = DirectX::XMVector3Dot(dir, qvec).m128_f32[0];
 	if(*v < 0.0f || *u + *v > det)
 		return false;
 
 	// Calculate t, scale parameters, ray intersects triangle
-	*t = D3DXVec3Dot(&edge2, &qvec);
+	*t = DirectX::XMVector3Dot(edge2, qvec).m128_f32[0];
 	float fInvDet = 1.0f / det;
 	*t *= fInvDet;
 	*u *= fInvDet;
@@ -190,28 +188,27 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 		return false;
 
 	float hitDist = FLT_MAX;
-	CDXVec3 hitNormal(0, 0, 0);
+	CDXVec hitNormal = DirectX::XMVectorZero();
 
 	// Edges = Face * 3
 	for(UInt32 e = 0; e < m_primitiveCount * 3; e += 3)
 	{
-		CDXVec3 v0 = pVertices[pIndices[e + 0]].Position;
-		CDXVec3 v1 = pVertices[pIndices[e + 1]].Position;
-		CDXVec3 v2 = pVertices[pIndices[e + 2]].Position;
+		CDXVec v0 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 0]].Position);
+		CDXVec v1 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 1]].Position);
+		CDXVec v2 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 2]].Position);
 
 		// Calculate the norm of the face
-		CDXVec3 fNormal(0,0,0);
-		CDXVec3 f1 = v1 - v0;
-		CDXVec3 f2 = v2 - v1;
-		D3DXVec3Cross(&fNormal, &f1, &f2);
-		D3DXVec3Normalize(&fNormal, &fNormal);
+		CDXVec fNormal = DirectX::XMVectorZero();
+		CDXVec f1 = DirectX::XMVectorSubtract(v1, v0);
+		CDXVec f2 = DirectX::XMVectorSubtract(v2, v1);
+		fNormal = DirectX::XMVector3Cross(f1, f2);
+		fNormal = DirectX::XMVector3Normalize(fNormal);
 
 		// Normalize the direction, just in case
-		CDXVec3 vDir = rayInfo.direction;
-		D3DXVec3Normalize(&vDir, &vDir);
+		CDXVec vDir = DirectX::XMVector3Normalize(rayInfo.direction);
 
 		// Skip faces that are in the same direction as the ray
-		if(D3DXVec3Dot(&vDir, &fNormal) >= 0)
+		if(DirectX::XMVector3Dot(vDir, fNormal).m128_f32[0] >= 0)
 			continue;
 
 		// Skip face that doesn't intersect with the ray
@@ -231,14 +228,15 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 	pickInfo.dist = hitDist;
 
 	if (hitDist != FLT_MAX) {
-		CDXVec3 vHit = rayInfo.origin + rayInfo.direction * hitDist;
+		CDXVec hitVec = DirectX::XMVectorReplicate(hitDist);
+		CDXVec vHit = DirectX::XMVectorMultiplyAdd(rayInfo.direction, hitVec, rayInfo.origin);
 		pickInfo.origin = vHit;
 		pickInfo.normal = hitNormal;
 		pickInfo.isHit = true;
 	}
 	else {
-		pickInfo.origin = CDXVec3(0, 0, 0);
-		pickInfo.normal = CDXVec3(0, 0, 0);
+		pickInfo.origin = DirectX::XMVectorZero();
+		pickInfo.normal = DirectX::XMVectorZero();
 		pickInfo.isHit = false;
 	}
 
@@ -253,8 +251,8 @@ CDXMeshVert* CDXMesh::LockVertices()
 	if (!m_vertexBuffer)
 		return NULL;
 
-	if (FAILED(m_vertexBuffer->Lock(0, 0, (void**)&pVertices, D3DLOCK_DISCARD)))
-		return NULL;
+	/*if (FAILED(m_vertexBuffer->Lock(0, 0, (void**)&pVertices, D3DLOCK_DISCARD)))
+		return NULL;*/
 
 	return pVertices;
 }
@@ -265,27 +263,27 @@ CDXMeshIndex* CDXMesh::LockIndices()
 	if (!m_indexBuffer)
 		return NULL;
 
-	if (FAILED(m_indexBuffer->Lock(0, 0, (void**)&pIndices, D3DLOCK_DISCARD)))
-		return NULL;
+	/*if (FAILED(m_indexBuffer->Lock(0, 0, (void**)&pIndices, D3DLOCK_DISCARD)))
+		return NULL;*/
 
 	return pIndices;
 }
 
 void CDXMesh::UnlockVertices()
 {
-	m_vertexBuffer->Unlock();
+	//m_vertexBuffer->Unlock();
 }
 void CDXMesh::UnlockIndices()
 {
-	m_indexBuffer->Unlock();
+	//m_indexBuffer->Unlock();
 }
 
-void CDXMesh::Render(LPDIRECT3DDEVICE9 pDevice, CDXShader * shader)
+void CDXMesh::Render(ID3D11Device * pDevice, CDXShader * shader)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	ID3DXEffect * effect = shader->GetEffect();
+	/*ID3DXEffect * effect = shader->GetEffect();
 	effect->SetMatrix(shader->m_hTransform, &m_transform);
 
 	if (m_material && m_material->IsWireframe()) {
@@ -310,17 +308,16 @@ void CDXMesh::Render(LPDIRECT3DDEVICE9 pDevice, CDXShader * shader)
 		effect->EndPass();
 	}
 
-	effect->End();
+	effect->End();*/
 }
 
-void CDXMesh::Pass(LPDIRECT3DDEVICE9 pDevice, UInt32 iPass, CDXShader * shader)
+void CDXMesh::Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader)
 {
 	if (!m_vertexBuffer || !m_indexBuffer)
 		return;
 
-	pDevice->SetStreamSource(0, m_vertexBuffer, 0, sizeof(CDXMeshVert));
-	pDevice->SetIndices(m_indexBuffer);
-	pDevice->DrawIndexedPrimitive((D3DPRIMITIVETYPE)m_primitiveType, 0, 0, m_vertCount, 0, m_primitiveCount);
+	//pDevice->SetStreamSource(0, m_vertexBuffer, 0, sizeof(CDXMeshVert));
+	//pDevice->SetIndices(m_indexBuffer);
+	//pDevice->DrawIndexedPrimitive((D3DPRIMITIVETYPE)m_primitiveType, 0, 0, m_vertCount, 0, m_primitiveCount);
 }
-
 #endif

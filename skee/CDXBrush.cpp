@@ -307,7 +307,7 @@ bool CDXInflateBrush::UpdateStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mes
 		for (auto i : hitVertex) {
 			normal += mesh->CalculateVertexNormal(i.first);
 		}
-		D3DXVec3Normalize(&normal, &normal);
+		XMVector3Normalize(&normal, &normal);
 
 		for (auto i : hitVertex) {
 			CDXInflateStroke::InflateInfo strokeInfo;

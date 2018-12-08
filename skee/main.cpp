@@ -27,7 +27,7 @@
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
 
-#include "MorphHandler.h"
+#include "FaceMorphInterface.h"
 #include "PartHandler.h"
 
 #include "ShaderUtilities.h"
@@ -46,7 +46,6 @@
 IDebugLog	gLog;
 
 PluginHandle					g_pluginHandle = kPluginHandle_Invalid;
-const UInt32					kSerializationDataVersion = 1;
 
 // Interfaces
 SKSESerializationInterface		* g_serialization = nullptr;
@@ -54,9 +53,7 @@ SKSEScaleformInterface			* g_scaleform = nullptr;
 SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
-
-// Temporary custom interface
-SKSETaskInterface			g_taskOverride;
+SKEETaskInterface				g_taskOverride;
 
 // Handlers
 IInterfaceMap				g_interfaceMap;
@@ -67,8 +64,7 @@ OverlayInterface			g_overlayInterface;
 BodyMorphInterface			g_bodyMorphInterface;
 ItemDataInterface			g_itemDataInterface;
 NiTransformInterface		g_transformInterface;
-
-MorphHandler g_morphHandler;
+FaceMorphInterface			g_morphInterface;
 PartSet	g_partSet;
 
 StringTable g_stringTable;
@@ -285,7 +281,8 @@ void SKEE64Serialization_Revert(SKSESerializationInterface * intfc)
 	g_itemDataInterface.Revert();
 	g_dyeMap.Revert();
 	g_transformInterface.Revert();
-	g_morphHandler.Revert();
+	g_morphInterface.Revert();
+	g_stringTable.Revert();
 }
 
 class StopWatch
@@ -318,31 +315,13 @@ void SKEE64Serialization_Save(SKSESerializationInterface * intfc)
 
 	StopWatch sw;
 	UInt32 strCount = 0;
-	sw.Start();
-	g_transformInterface.VisitStrings([&](BSFixedString str)
-	{
-		g_stringTable.StringToId(str.data, strCount);
-		strCount++;
-	});
-	g_overrideInterface.VisitStrings([&](BSFixedString str)
-	{
-		g_stringTable.StringToId(str.data, strCount);
-		strCount++;
-	});
-	g_bodyMorphInterface.VisitStrings([&](BSFixedString str)
-	{
-		g_stringTable.StringToId(str.data, strCount);
-		strCount++;
-	});
-
-	_DMESSAGE("%s - Pooled strings %dms", __FUNCTION__, sw.Stop());
 
 	sw.Start();
 	g_stringTable.Save(intfc, StringTable::kSerializationVersion);
 	_DMESSAGE("%s - Serialized string table %dms", __FUNCTION__, sw.Stop());
 
 	sw.Start();
-	g_morphHandler.Save(intfc, kSerializationDataVersion);
+	g_morphInterface.Save(intfc, FaceMorphInterface::kSerializationVersion);
 	_DMESSAGE("%s - Player morph data %dms", __FUNCTION__, sw.Stop());
 
 	sw.Start();
@@ -364,8 +343,6 @@ void SKEE64Serialization_Save(SKSESerializationInterface * intfc)
 	sw.Start();
 	g_itemDataInterface.Save(intfc, ItemDataInterface::kSerializationVersion);
 	_DMESSAGE("%s - Serialized item data %dms", __FUNCTION__, sw.Stop());
-
-	g_stringTable.Clear();
 }
 
 void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
@@ -375,23 +352,25 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 	UInt32 type, length, version;
 	bool error = false;
 
+	std::unordered_map<UInt32, StringTableItem> stringTable;
+
 	StopWatch sw;
 	sw.Start();
 	while (intfc->GetNextRecordInfo(&type, &version, &length))
 	{
 		switch (type)
 		{
-			case 'STTB':	g_stringTable.Load(intfc, version);							break;
-			case 'MRST':	g_morphHandler.LoadMorphData(intfc, version);				break;
-			case 'SCDT':	g_morphHandler.LoadSculptData(intfc, version);				break;
-			case 'AOVL':	g_overlayInterface.Load(intfc, version);					break;
-			case 'ACEN':	g_overrideInterface.LoadOverrides(intfc, version);			break;
-			case 'NDEN':	g_overrideInterface.LoadNodeOverrides(intfc, version);		break;
-			case 'WPEN':	g_overrideInterface.LoadWeaponOverrides(intfc, version);	break;
-			case 'SKNR':	g_overrideInterface.LoadSkinOverrides(intfc, version);		break;
-			case 'MRPH':	g_bodyMorphInterface.Load(intfc, version);					break;
-			case 'ITEE':	g_itemDataInterface.Load(intfc, version);					break;
-			case 'ACTM':	g_transformInterface.Load(intfc, version);					break;
+			case 'STTB':	g_stringTable.Load(intfc, version, stringTable);						break;
+			case 'MRST':	g_morphInterface.LoadMorphData(intfc, version, stringTable);			break;
+			case 'SCDT':	g_morphInterface.LoadSculptData(intfc, version, stringTable);			break;
+			case 'AOVL':	g_overlayInterface.Load(intfc, version);								break;
+			case 'ACEN':	g_overrideInterface.LoadOverrides(intfc, version, stringTable);			break;
+			case 'NDEN':	g_overrideInterface.LoadNodeOverrides(intfc, version, stringTable);		break;
+			case 'WPEN':	g_overrideInterface.LoadWeaponOverrides(intfc, version, stringTable);	break;
+			case 'SKNR':	g_overrideInterface.LoadSkinOverrides(intfc, version, stringTable);		break;
+			case 'MRPH':	g_bodyMorphInterface.Load(intfc, version, stringTable);					break;
+			case 'ITEE':	g_itemDataInterface.Load(intfc, version);								break;
+			case 'ACTM':	g_transformInterface.Load(intfc, version, stringTable);					break;
 			default:
 				_MESSAGE("unhandled type %08X (%.4s)", type, &type);
 				error = true;
@@ -402,8 +381,7 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 
 	PlayerCharacter * player = (*g_thePlayer);
 	g_task->AddTask(new SKSETaskApplyMorphs(player));
-
-	g_stringTable.Clear();
+	
 	g_firstLoad = true;
 
 #ifdef _DEBUG
@@ -604,7 +582,7 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 				g_bodyMorphInterface.LoadMods();
 			}
 
-			g_morphHandler.LoadMods();
+			g_morphInterface.LoadMods();
 		}
 		break;
 	}
@@ -650,9 +628,9 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_53)
+	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_62)
 	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_53;
+		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_62;
 		char buf[512];
 		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
 			GET_EXE_VERSION_MAJOR(runtimeVersion),
@@ -720,11 +698,13 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		return false;
 	}
 
-	// REMOVE THIS AFTER SKSE64 UPDATE
-	g_taskOverride.AddTask = g_task->AddTask;
-	g_taskOverride.AddUITask = g_task->AddUITask;
-	g_task = &g_taskOverride;
-	// -------------------------------
+	if (g_task->interfaceVersion < 3)
+	{
+		g_taskOverride.AddTask = g_task->AddTask;
+		g_taskOverride.AddSKSETask = g_task->AddTask;
+		g_taskOverride.AddUITask = g_task->AddUITask;
+		g_task = &g_taskOverride;
+	}
 
 	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
@@ -743,6 +723,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_interfaceMap.AddInterface("BodyMorph", &g_bodyMorphInterface);
 	g_interfaceMap.AddInterface("ItemData", &g_itemDataInterface);
 	g_interfaceMap.AddInterface("TintMask", &g_tintMaskInterface);
+	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
 
 	_DMESSAGE("NetImmerse Override Enabled");
 

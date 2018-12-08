@@ -16,8 +16,8 @@ class CDXBrush;
 class CDXMaskAddBrush;
 class CDXInflateBrush;
 
-typedef D3DXMATRIXA16			CDXMatrix16;
-typedef D3DXMATRIX				CDXMatrix;
+typedef DirectX::XMFLOAT4X4A16			CDXMatrix16;
+typedef DirectX::XMFLOAT4X4				CDXMatrix;
 typedef std::vector<CDXMesh*>	CDXMeshList;
 
 class CDXScene
@@ -26,13 +26,13 @@ public:
 	CDXScene();
 	~CDXScene();
 
-	virtual void Setup(LPDIRECT3DDEVICE9 pDevice);
+	virtual void Setup(ID3D11Device * pDevice);
 	virtual void Release();
 
-	virtual void Render(LPDIRECT3DDEVICE9 pDevice);
+	virtual void Render(ID3D11Device * pDevice);
 
-	virtual void Begin(LPDIRECT3DDEVICE9 pDevice);
-	virtual void End(LPDIRECT3DDEVICE9 pDevice);
+	virtual void Begin(ID3D11Device * pDevice);
+	virtual void End(ID3D11Device * pDevice);
 
 	UInt32 GetNumMeshes() { return m_meshes.size(); }
 	CDXMesh * GetNthMesh(UInt32 i) { return m_meshes.at(i); }

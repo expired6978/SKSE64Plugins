@@ -7,6 +7,8 @@
 #include "skse64/NiNodes.h"
 #include "skse64/NiTypes.h"
 
+#include "StringTable.h"
+
 #include <functional>
 
 class NiExtraData;
@@ -18,14 +20,14 @@ struct SKSESerializationInterface;
 class NIOVTaskUpdateTexture : public TaskDelegate
 {
 public:
-	NIOVTaskUpdateTexture(BSGeometry * geometry, UInt32 index, BSFixedString texture);
+	NIOVTaskUpdateTexture(BSGeometry * geometry, UInt32 index, StringTableItem texture);
 
 	virtual void Run();
 	virtual void Dispose();
 
 	BSGeometry		* m_geometry;
 	UInt32			m_index;
-	BSFixedString	m_texture;
+	StringTableItem	m_texture;
 };
 
 class NIOVTaskUpdateWorldData : public TaskDelegate

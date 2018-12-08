@@ -1,9 +1,9 @@
-#ifdef FIXME
-
 #ifndef __CDXEDITABLEMESH__
 #define __CDXEDITABLEMESH__
 
 #pragma once
+
+#ifdef FIXME
 
 #include "CDXMesh.h"
 
@@ -26,8 +26,8 @@ typedef std::map<CDXMeshIndex, CDXAdjacentList>		CDXAdjacencyMap;
 typedef std::unordered_map<CDXMeshEdge, UInt32>		CDXEdgeMap;
 typedef std::unordered_set<CDXMeshIndex>			CDXVertexEdgeList;
 
-#define COLOR_UNSELECTED	D3DCOLOR_RGBA(255, 255, 255, 255)
-#define COLOR_SELECTED		D3DCOLOR_RGBA(0, 0, 255, 255)
+#define COLOR_UNSELECTED	CDXColor(255, 255, 255, 255)
+#define COLOR_SELECTED		CDXColor(0, 0, 255, 255)
 
 class CDXEditableMesh : public CDXMesh
 {
@@ -35,7 +35,7 @@ public:
 	CDXEditableMesh();
 	~CDXEditableMesh();
 
-	virtual void Render(LPDIRECT3DDEVICE9 pDevice, CDXShader * shader);
+	virtual void Render(ID3D11Device * pDevice, CDXShader * shader);
 	virtual bool IsEditable();
 	virtual bool IsLocked();
 
@@ -46,7 +46,7 @@ public:
 	void VisitAdjacencies(CDXMeshIndex i, std::function<bool(CDXMeshFace&)> functor);
 	bool IsEdgeVertex(CDXMeshIndex i) const;
 
-	CDXVec3 CalculateVertexNormal(CDXMeshIndex i);
+	CDXVec CalculateVertexNormal(CDXMeshIndex i);
 
 protected:
 	CDXAdjacencyMap		m_adjacency;
@@ -56,5 +56,4 @@ protected:
 };
 
 #endif
-
 #endif

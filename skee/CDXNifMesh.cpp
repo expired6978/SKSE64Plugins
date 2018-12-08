@@ -46,12 +46,12 @@ bool CDXNifMesh::IsMorphable()
 	return m_morphable;
 }
 
-CDXNifMesh * CDXNifMesh::Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry)
+CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
 {
 	UInt32 vertCount = 0;
 	UInt32 triangleCount = 0;
-	LPDIRECT3DVERTEXBUFFER9 vertexBuffer = NULL;
-	LPDIRECT3DINDEXBUFFER9 indexBuffer = NULL;
+	ID3D11Buffer * vertexBuffer = NULL;
+	ID3D11Buffer * indexBuffer = NULL;
 	LPDIRECT3DBASETEXTURE9 diffuseTexture = NULL;
 	UInt16 alphaFlags = 0;
 	UInt8 alphaThreshold = 0;
@@ -139,10 +139,10 @@ CDXNifMesh * CDXNifMesh::Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry
 				for (UInt32 i = 0; i < vertCount; i++) {
 					NiPoint3 xformed = localTransform * geometryData->m_pkVertex[i];
 					NiPoint2 uv = geometryData->m_pkTexture[i];
-					pVertices[i].Position = *(D3DXVECTOR3*)&xformed;
-					D3DXVECTOR3 vNormal(0, 0, 0);
+					pVertices[i].Position = *(DirectX::XMFLOAT3*)&xformed;
+					DirectX::XMFLOAT3 vNormal(0, 0, 0);
 					pVertices[i].Normal = vNormal;
-					pVertices[i].Tex = *(D3DXVECTOR2*)&uv;
+					pVertices[i].Tex = *(DirectX::XMFLOAT2*)&uv;
 					pVertices[i].Color = COLOR_UNSELECTED;
 
 					// Build adjacency table
@@ -209,11 +209,11 @@ CDXNifMesh * CDXNifMesh::Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry
 				if (nifMesh->m_morphable) {
 					for (UInt32 i = 0; i < vertCount; i++) {
 						// Setup normals
-						D3DXVECTOR3 vNormal(0, 0, 0);
+						DirectX::XMFLOAT3 vNormal(0, 0, 0);
 						if (!geometryData->m_pkNormal)
 							vNormal = nifMesh->CalculateVertexNormal(i);
 						else
-							vNormal = *(D3DXVECTOR3*)&geometryData->m_pkNormal[i];
+							vNormal = *(DirectX::XMFLOAT3*)&geometryData->m_pkNormal[i];
 
 						pVertices[i].Normal = vNormal;
 					}
@@ -223,10 +223,10 @@ CDXNifMesh * CDXNifMesh::Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry
 
 				CDXMaterial * material = new CDXMaterial;
 				material->SetDiffuseTexture(diffuseTexture);
-				material->SetSpecularColor(D3DXVECTOR3(1.0f, 1.0f, 1.0f));
-				material->SetAmbientColor(D3DXVECTOR3(0.2f, 0.2f, 0.2f));
-				material->SetDiffuseColor(D3DXVECTOR3(1.0f, 1.0f, 1.0f));
-				material->SetWireframeColor(D3DXVECTOR3(1.0f, 1.0f, 1.0f));
+				material->SetSpecularColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
+				material->SetAmbientColor(DirectX::XMFLOAT3(0.2f, 0.2f, 0.2f));
+				material->SetDiffuseColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
+				material->SetWireframeColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
 				material->SetShaderFlags1(shaderFlags1);
 				material->SetShaderFlags2(shaderFlags2);
 				if (alphaFlags != 0) {
@@ -245,7 +245,7 @@ CDXNifMesh * CDXNifMesh::Create(LPDIRECT3DDEVICE9 pDevice, NiGeometry * geometry
 	return nifMesh;
 }
 
-void CDXNifMesh::Pass(LPDIRECT3DDEVICE9 pDevice, UInt32 iPass, CDXShader * shader)
+void CDXNifMesh::Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader)
 {
 	ID3DXEffect * effect = shader->GetEffect();
 	if (m_material) {

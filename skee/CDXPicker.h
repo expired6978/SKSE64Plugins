@@ -1,7 +1,7 @@
-#ifdef FIXME
-
 #ifndef __CDXPICKER__
 #define __CDXPICKER__
+
+#ifdef FIXME
 
 #pragma once
 
@@ -10,9 +10,9 @@
 class CDXRayInfo
 {
 public:
-	CDXVec3 origin;
-	CDXVec3 direction;
-	CDXVec3 point;
+	CDXVec origin;
+	CDXVec direction;
+	CDXVec point;
 
 	CDXRayInfo()
 	{
@@ -21,17 +21,17 @@ public:
 
 	void Clear()
 	{
-		origin = CDXVec3(0, 0, 0);
-		direction = CDXVec3(0, 0, 0);
-		point = CDXVec3(0, 0, 0);
+		origin = DirectX::XMVectorZero();
+		direction = DirectX::XMVectorZero();
+		point = DirectX::XMVectorZero();
 	}
 };
 
 class CDXPickInfo
 {
 public:
-	CDXVec3		origin;
-	CDXVec3		normal;
+	CDXVec		origin;
+	CDXVec		normal;
 	CDXRayInfo	ray;
 	float		dist;
 	bool		isHit;
@@ -44,8 +44,8 @@ public:
 	void Clear()
 	{
 		dist = FLT_MAX;
-		origin = CDXVec3(0, 0, 0);
-		normal = CDXVec3(0, 0, 0);
+		origin = DirectX::XMVectorZero();
+		normal = DirectX::XMVectorZero();
 		isHit = false;
 	}
 };
@@ -58,5 +58,4 @@ public:
 };
 
 #endif
-
 #endif

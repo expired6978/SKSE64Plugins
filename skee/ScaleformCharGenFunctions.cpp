@@ -4,7 +4,7 @@
 #include "skse64_common/skse_version.h"
 
 #include "ScaleformCharGenFunctions.h"
-#include "MorphHandler.h"
+#include "FaceMorphInterface.h"
 #include "PartHandler.h"
 
 #include "skse64/GameAPI.h"
@@ -38,7 +38,7 @@ extern NiTransformInterface	* g_transformInterface;
 extern OverlayInterface		* g_overlayInterface;
 extern BodyMorphInterface	* g_bodyMorphInterface;
 
-extern MorphHandler g_morphHandler;
+extern FaceMorphInterface g_morphInterface;
 extern PartSet	g_partSet;
 
 extern SKSETaskInterface * g_task;
@@ -81,9 +81,9 @@ void SKSEScaleform_SavePreset::Invoke(Args * args)
 	const char	* strData = args->args[0].GetString();
 
 	if (saveJson)
-		args->result->SetBool(g_morphHandler.SaveJsonPreset(strData));
+		args->result->SetBool(g_morphInterface.SaveJsonPreset(strData));
 	else
-		args->result->SetBool(g_morphHandler.SaveBinaryPreset(strData));
+		args->result->SetBool(g_morphInterface.SaveBinaryPreset(strData));
 }
 
 void SKSEScaleform_LoadPreset::Invoke(Args * args)
@@ -102,9 +102,9 @@ void SKSEScaleform_LoadPreset::Invoke(Args * args)
 		object = &args->args[1];
 
 	auto presetData = std::make_shared<PresetData>();
-	bool loadError = loadJson ? g_morphHandler.LoadJsonPreset(strData, presetData) : g_morphHandler.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
+	bool loadError = loadJson ? g_morphInterface.LoadJsonPreset(strData, presetData) : g_morphInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
 	if (!loadError) {
-		g_morphHandler.ApplyPresetData(*g_thePlayer, presetData);
+		g_morphInterface.ApplyPresetData(*g_thePlayer, presetData);
 
 		RegisterNumber(object, "hairColor", presetData->hairColor);
 
@@ -116,7 +116,7 @@ void SKSEScaleform_LoadPreset::Invoke(Args * args)
 			args->movie->CreateObject(&tintObject);
 			RegisterNumber(&tintObject, "color", tint.color);
 			RegisterNumber(&tintObject, "index", tint.index);
-			RegisterString(&tintObject, args->movie, "texture", tint.name.data);
+			RegisterString(&tintObject, args->movie, "texture", tint.name.c_str());
 			tintArray.PushBack(&tintObject);
 		}
 
@@ -152,7 +152,7 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 
 	DataHandler * dataHandler = DataHandler::GetSingleton();
 	auto presetData = std::make_shared<PresetData>();
-	bool loadError = loadJson ? g_morphHandler.LoadJsonPreset(strData, presetData) : g_morphHandler.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
+	bool loadError = loadJson ? g_morphInterface.LoadJsonPreset(strData, presetData) : g_morphInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
 	if(!loadError) {
 		PlayerCharacter * player = (*g_thePlayer);
 		TESNPC * npc = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
@@ -197,7 +197,7 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 			args->movie->CreateObject(&tintObject);
 			RegisterNumber(&tintObject, "color", tint.color);
 			RegisterNumber(&tintObject, "index", tint.index);
-			RegisterString(&tintObject, args->movie, "texture", tint.name.data);
+			RegisterString(&tintObject, args->movie, "texture", tint.name.c_str());
 			tintArray.PushBack(&tintObject);
 		}
 		object->SetMember("tints", &tintArray);
@@ -261,7 +261,7 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 		i = 0;
 		for(auto & it : presetData->customMorphs) {
 			std::string morphName = "$";
-			morphName.append(it.name.data);
+			morphName.append(it.name.c_str());
 			GFxValue customObject;
 			args->movie->CreateObject(&customObject);
 			RegisterString(&customObject, args->movie, "name", morphName.c_str());
@@ -275,7 +275,7 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 		for (auto & it : presetData->bodyMorphData) {
 			GFxValue customObject;
 			args->movie->CreateObject(&customObject);
-			RegisterString(&customObject, args->movie, "name", it.first.data);
+			RegisterString(&customObject, args->movie, "name", it.first.c_str());
 
 			float morphSum = 0;
 			for (auto & keys : it.second)
@@ -364,7 +364,7 @@ void SKSEScaleform_GetSliderData::Invoke(Args * args)
 						// Provide case for custom parts
 						if(slider->index >= SLIDER_OFFSET) {
 							UInt32 sliderIndex = slider->index - SLIDER_OFFSET;
-							SliderInternalPtr sliderInternal = g_morphHandler.GetSliderByIndex(player->race, sliderIndex);
+							SliderInternalPtr sliderInternal = g_morphInterface.GetSliderByIndex(player->race, sliderIndex);
 							if(sliderInternal) {
 								RegisterNumber(args->result, "subType", sliderInternal->type);
 								switch (sliderInternal->type)
@@ -416,9 +416,8 @@ void SKSEScaleform_ExportHead::Invoke(Args * args)
 
 	const char	* strData = args->args[0].GetString();
 
-#ifdef FIXME
 	// Get the Editor's working actor
-	Actor * actor = g_World.GetWorkingActor();
+	Actor * actor = (*g_thePlayer);//g_World.GetWorkingActor();
 	if (!actor)
 		return;
 
@@ -428,7 +427,6 @@ void SKSEScaleform_ExportHead::Invoke(Args * args)
 	ddsPath.append(".dds");
 
 	g_task->AddTask(new SKSETaskExportHead(actor, nifPath.c_str(), ddsPath.c_str()));
-#endif
 }
 
 void SKSEScaleform_ImportHead::Invoke(Args * args)

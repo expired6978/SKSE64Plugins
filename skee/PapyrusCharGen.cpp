@@ -1,5 +1,5 @@
 #include "PapyrusCharGen.h"
-#include "MorphHandler.h"
+#include "FaceMorphInterface.h"
 #include "NifUtils.h"
 
 #include "common/IFileStream.h"
@@ -29,7 +29,7 @@
 #include "BodyMorphInterface.h"
 #include "OverlayInterface.h"
 
-extern MorphHandler g_morphHandler;
+extern FaceMorphInterface g_morphInterface;
 extern bool			g_externalHeads;
 extern bool			g_enableHeadExport;
 
@@ -68,7 +68,7 @@ public:
 	BSFixedString	m_fileName;
 };
 
-void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr presetData, MorphHandler::ApplyTypes applyType)
+void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr presetData, FaceMorphInterface::ApplyTypes applyType)
 {
 	CALL_MEMBER_FN(actor, SetRace)(race, actor == (*g_thePlayer));
 
@@ -91,16 +91,16 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 	}
 
 	// Sculpt data loaded here
-	g_morphHandler.EraseSculptData(npc);
+	g_morphInterface.EraseSculptData(npc);
 	if (presetData->sculptData) {
 		if (presetData->sculptData->size() > 0)
-			g_morphHandler.SetSculptTarget(npc, presetData->sculptData);
+			g_morphInterface.SetSculptTarget(npc, presetData->sculptData);
 	}
 
 	// Assign custom morphs here (values only)
-	g_morphHandler.EraseMorphData(npc);
+	g_morphInterface.EraseMorphData(npc);
 	for (auto & it : presetData->customMorphs)
-		g_morphHandler.SetMorphValue(npc, it.name, it.value);
+		g_morphInterface.SetMorphValue(npc, it.name, it.value);
 
 	// Wipe the HeadPart list and replace it with the default race list
 	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
@@ -143,7 +143,7 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 	// Queue a node update
 	CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
 
-	if ((applyType & MorphHandler::ApplyTypes::kPresetApplyOverrides) == MorphHandler::ApplyTypes::kPresetApplyOverrides) {
+	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyOverrides) == FaceMorphInterface::ApplyTypes::kPresetApplyOverrides) {
 		g_overrideInterface.RemoveAllReferenceNodeOverrides(actor);
 
 		g_overlayInterface.RevertOverlays(actor, true);
@@ -158,7 +158,7 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 		}
 	}
 
-	if ((applyType & MorphHandler::ApplyTypes::kPresetApplySkinOverrides) == MorphHandler::ApplyTypes::kPresetApplySkinOverrides)
+	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplySkinOverrides) == FaceMorphInterface::ApplyTypes::kPresetApplySkinOverrides)
 	{
 		for (UInt32 i = 0; i <= 1; i++) {
 			for (auto & slot : presetData->skinData[i]) {
@@ -169,7 +169,7 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 		}
 	}
 
-	if ((applyType & MorphHandler::ApplyTypes::kPresetApplyTransforms) == MorphHandler::ApplyTypes::kPresetApplyTransforms) {
+	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) == FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) {
 		g_transformInterface.RemoveAllReferenceTransforms(actor);
 		for (UInt32 i = 0; i <= 1; i++) {
 			for (auto & xForms : presetData->transformData[i]) {
@@ -183,7 +183,7 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 		g_transformInterface.UpdateNodeAllTransforms(actor);
 	}
 
-	if ((applyType & MorphHandler::ApplyTypes::kPresetApplyBodyMorphs) == MorphHandler::ApplyTypes::kPresetApplyBodyMorphs) {
+	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) == FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) {
 		g_bodyMorphInterface.ClearMorphs(actor);
 
 		for (auto & morph : presetData->bodyMorphData) {
@@ -204,7 +204,7 @@ namespace papyrusCharGen
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
 
-		g_morphHandler.SaveJsonPreset(slotPath);
+		g_morphInterface.SaveJsonPreset(slotPath);
 
 		if(g_enableHeadExport)
 			g_task->AddTask(new SKSETaskExportTintMask(tintPath, fileName.data));
@@ -335,10 +335,10 @@ namespace papyrusCharGen
 		sprintf_s(tintPath, "Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphHandler.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.slot", fileName.data);
-			loadError = g_morphHandler.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -347,9 +347,9 @@ namespace papyrusCharGen
 		}
 
 		presetData->tintTexture = tintPath;
-		g_morphHandler.AssignPreset(npc, presetData);
+		g_morphInterface.AssignPreset(npc, presetData);
 
-		ApplyPreset(actor, race, npc, presetData, (MorphHandler::ApplyTypes)flags);
+		ApplyPreset(actor, race, npc, presetData, (FaceMorphInterface::ApplyTypes)flags);
 		return true;
 	}
 
@@ -362,7 +362,7 @@ namespace papyrusCharGen
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
-		g_morphHandler.SaveJsonPreset(slotPath);
+		g_morphInterface.SaveJsonPreset(slotPath);
 
 		if(g_enableHeadExport)
 			g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
@@ -384,16 +384,16 @@ namespace papyrusCharGen
 			return false;
 		}
 
-		g_morphHandler.ErasePreset(npc);
+		g_morphInterface.ErasePreset(npc);
 
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphHandler.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.slot", fileName.data);
-			loadError = g_morphHandler.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -420,7 +420,7 @@ namespace papyrusCharGen
 		sprintf_s(destPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modName, modForm);
 		CopyFile(sourcePath, destPath, false);
 
-		ApplyPreset(actor, race, npc, presetData, (MorphHandler::ApplyTypes)flags);
+		ApplyPreset(actor, race, npc, presetData, (FaceMorphInterface::ApplyTypes)flags);
 		g_task->AddTask(new SKSETaskRefreshTintMask(actor, sourcePath));
 		return true;
 	}
@@ -441,10 +441,10 @@ namespace papyrusCharGen
 		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Presets\\%s.jslot", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphHandler.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Presets\\%s.slot", fileName.data);
-			loadError = g_morphHandler.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -461,7 +461,7 @@ namespace papyrusCharGen
 			npc->SetHairColor(hairColor);
 		}
 
-		g_morphHandler.ApplyPresetData(actor, presetData, true, (MorphHandler::ApplyTypes)flags);
+		g_morphInterface.ApplyPresetData(actor, presetData, true, (FaceMorphInterface::ApplyTypes)flags);
 
 		// Queue a node update
 		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
@@ -472,7 +472,7 @@ namespace papyrusCharGen
 	{
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Presets\\%s.jslot", fileName.data);
-		g_morphHandler.SaveJsonPreset(slotPath);
+		g_morphInterface.SaveJsonPreset(slotPath);
 	}
 
 	bool IsExternalEnabled(StaticFunctionTag*)
@@ -487,12 +487,12 @@ namespace papyrusCharGen
 			return false;
 		}
 
-		return g_morphHandler.ErasePreset(npc);
+		return g_morphInterface.ErasePreset(npc);
 	}
 
 	void ClearPresets(StaticFunctionTag*)
 	{
-		g_morphHandler.ClearPresets();
+		g_morphInterface.ClearPresets();
 	}
 
 	void ExportHead(StaticFunctionTag*, BSFixedString fileName)
@@ -512,7 +512,7 @@ namespace papyrusCharGen
 	{
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", fileName.data);
-		g_morphHandler.SaveJsonPreset(slotPath);
+		g_morphInterface.SaveJsonPreset(slotPath);
 	}
 };
 

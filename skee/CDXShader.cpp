@@ -29,7 +29,7 @@ void CDXShader::Release()
 	}
 }
 
-void CDXShader::CreateEffect(LPDIRECT3DDEVICE9 pDevice)
+void CDXShader::CreateEffect(ID3D11Device * pDevice)
 {
 	/*const char* g_strBuffer = "float3 g_vMaterialAmbient : Ambient = float3( 0.2f, 0.2f, 0.2f );   // Material's ambient color\r\n"
 		"float3 g_vMaterialDiffuse : Diffuse = float3( 1.0f, 1.0f, 1.0f );   // Material's diffuse color\r\n"

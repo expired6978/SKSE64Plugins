@@ -2,86 +2,215 @@
 
 #include "skse64/PluginAPI.h"
 
+extern StringTable g_stringTable;
 
-void StringTable::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
+using namespace Serialization;
+
+void DeleteStringEntry(const SKEEFixedString* string)
 {
-	intfc->OpenRecord('STTB', kVersion);
+	g_stringTable.RemoveString(*string);
+	delete string;
+}
 
-	UInt32 totalStrings = m_stringToId.size();
-	intfc->WriteRecordData(&totalStrings, sizeof(totalStrings));
+StringTableItem StringTable::GetString(const SKEEFixedString & str)
+{
+	IScopedCriticalSection locker(&m_lock);
 
-	for (auto & str : m_stringToId)
+	auto it = m_table.find(str);
+	if (it != m_table.end()) {
+		return it->second.lock();
+	}
+	else {
+		StringTableItem item = std::shared_ptr<SKEEFixedString>(new SKEEFixedString(str), DeleteStringEntry);
+		m_table.emplace(str, item);
+		m_tableVector.push_back(item);
+		return item;
+	}
+
+	return nullptr;
+}
+
+void StringTable::RemoveString(const SKEEFixedString & str)
+{
+	IScopedCriticalSection locker(&m_lock);
+
+	auto it = m_table.find(str);
+	if (it != m_table.end())
 	{
-		UInt16 length = strlen(str.first.data);
-		UInt32 strId = str.second;
-		intfc->WriteRecordData(&length, sizeof(length));
-		intfc->WriteRecordData(str.first.data, length);
-		intfc->WriteRecordData(&strId, sizeof(strId));
+		for (long int i = m_tableVector.size() - 1; i >= 0; --i)
+		{
+			if (m_tableVector[i].lock() == it->second.lock())
+				m_tableVector.erase(m_tableVector.begin() + i);
+		}
+
+		m_table.erase(it);
 	}
 }
 
-bool StringTable::Load(SKSESerializationInterface* intfc, UInt32 kVersion)
+UInt32 StringTable::GetStringID(const StringTableItem & str)
+{
+	for (long int i = m_tableVector.size() - 1; i >= 0; --i)
+	{
+		auto item = m_tableVector[i].lock();
+		if (item == str)
+			return i;
+	}
+
+	return -1;
+}
+
+void StringTable::Save(const SKSESerializationInterface * intfc, UInt32 kVersion)
+{
+	intfc->OpenRecord('STTB', kVersion);
+
+	UInt32 totalStrings = m_tableVector.size();
+	WriteData<UInt32>(intfc, &totalStrings);
+
+	for (auto & str : m_tableVector)
+	{
+		auto data = str.lock();
+		UInt16 length = 0;
+		if (!data) {
+			WriteData<UInt16>(intfc, &length);
+		}
+		else {
+			WriteData<SKEEFixedString>(intfc, data.get());
+		}
+	}
+}
+
+bool StringTable::Load(const SKSESerializationInterface * intfc, UInt32 kVersion, StringIdMap & stringTable)
 {
 	bool error = false;
 	UInt32 totalStrings = 0;
 
-	if (!intfc->ReadRecordData(&totalStrings, sizeof(totalStrings)))
+	if (kVersion >= kSerializationVersion3)
 	{
-		_ERROR("%s - Error loading total strings from table", __FUNCTION__);
-		error = true;
-		return error;
+		if (!ReadData<UInt32>(intfc, &totalStrings))
+		{
+			_ERROR("%s - Error loading total strings from table", __FUNCTION__);
+			error = true;
+			return error;
+		}
+
+		for (UInt32 i = 0; i < totalStrings; i++)
+		{
+			SKEEFixedString str;
+			if (!ReadData<SKEEFixedString>(intfc, &str)) {
+				_ERROR("%s - Error loading string", __FUNCTION__);
+				error = true;
+				return error;
+			}
+
+			StringTableItem item = GetString(str);
+			stringTable.emplace(i, item);
+		}
 	}
-
-	for (UInt32 i = 0; i < totalStrings; i++)
+	else if (kVersion >= kSerializationVersion2)
 	{
-		char * stringName = NULL;
-		UInt16 stringLength = 0;
-		if (!intfc->ReadRecordData(&stringLength, sizeof(stringLength)))
+		if (!intfc->ReadRecordData(&totalStrings, sizeof(totalStrings)))
 		{
-			_ERROR("%s - Error loading string length", __FUNCTION__);
+			_ERROR("%s - Error loading total strings from table", __FUNCTION__);
 			error = true;
 			return error;
 		}
 
-		stringName = new char[stringLength + 1];
-
-		if (stringLength > 0 && !intfc->ReadRecordData(stringName, stringLength)) {
-			_ERROR("%s - Error loading string of length %d", __FUNCTION__, stringLength);
-			error = true;
-			return error;
-		}
-
-		stringName[stringLength] = 0;
-
-		BSFixedString str(stringName);
-		delete[] stringName;
-
-		UInt32 stringId = 0;
-		if (!intfc->ReadRecordData(&stringId, sizeof(stringId)))
+		for (UInt32 i = 0; i < totalStrings; i++)
 		{
-			_ERROR("%s - Error loading string id", __FUNCTION__);
-			error = true;
-			return error;
-		}
+			char * stringName = NULL;
+			UInt16 stringLength = 0;
+			if (!intfc->ReadRecordData(&stringLength, sizeof(stringLength)))
+			{
+				_ERROR("%s - Error loading string length", __FUNCTION__);
+				error = true;
+				return error;
+			}
 
-		m_idToString.insert_or_assign(stringId, str);
+			stringName = new char[stringLength + 1];
+
+			if (stringLength > 0 && !intfc->ReadRecordData(stringName, stringLength)) {
+				_ERROR("%s - Error loading string of length %d", __FUNCTION__, stringLength);
+				error = true;
+				return error;
+			}
+
+			stringName[stringLength] = 0;
+
+			SKEEFixedString str(stringName);
+			delete[] stringName;
+
+			UInt32 stringId = 0;
+			if (!intfc->ReadRecordData(&stringId, sizeof(stringId)))
+			{
+				_ERROR("%s - Error loading string id", __FUNCTION__);
+				error = true;
+				return error;
+			}
+
+			StringTableItem item = GetString(str);
+			stringTable.emplace(stringId, item);
+		}
 	}
 
 	return error;
 }
 
-void StringTable::StringToId(const BSFixedString & str, const UInt32 & id)
+void StringTable::Revert()
 {
-	m_stringToId.insert_or_assign(str, id);
+	IScopedCriticalSection locker(&m_lock);
+	m_table.clear();
+	m_tableVector.clear();
 }
 
-void StringTable::IdToString(const UInt32 & id, const BSFixedString & str)
+template <typename T>
+bool Serialization::WriteData(const SKSESerializationInterface * intfc, const T * data)
 {
-	m_idToString.insert_or_assign(id, str);
+	return intfc->WriteRecordData(data, sizeof(T));
 }
 
-void StringTable::Clear()
+template <typename T>
+bool Serialization::ReadData(const SKSESerializationInterface * intfc, T * data)
 {
-	m_stringToId.clear();
-	m_idToString.clear();
+	return intfc->ReadRecordData(data, sizeof(T)) > 0;
+}
+
+template<>
+bool Serialization::WriteData<SKEEFixedString>(const SKSESerializationInterface * intfc, const SKEEFixedString * str)
+{
+	UInt16 len = str->length();
+	if (len > SHRT_MAX)
+		return false;
+	if (!intfc->WriteRecordData(&len, sizeof(len)))
+		return false;
+	if (len == 0)
+		return true;
+	if (!intfc->WriteRecordData(str->c_str(), len))
+		return false;
+	return true;
+}
+
+template<>
+bool Serialization::ReadData<SKEEFixedString>(const SKSESerializationInterface * intfc, SKEEFixedString * str)
+{
+	UInt16 len = 0;
+
+	if (!intfc->ReadRecordData(&len, sizeof(len)))
+		return false;
+	if (len == 0)
+		return true;
+	if (len > SHRT_MAX)
+		return false;
+
+	char * buf = new char[len + 1];
+	buf[0] = 0;
+
+	if (!intfc->ReadRecordData(buf, len)) {
+		delete[] buf;
+		return false;
+	}
+	buf[len] = 0;
+
+	*str = SKEEFixedString(buf);
+	delete[] buf;
+	return true;
 }

@@ -85,7 +85,7 @@ extern NiTransformInterface	g_transformInterface;
 
 void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, NiNode * skeleton, NiAVObject * objectRoot)
 {
-	std::set<BSFixedString> current_nodes, previous_nodes, diffs, changes, update;
+	std::set<SKEEFixedString> current_nodes, previous_nodes, diffs, changes, update;
 
 	UInt8 gender = 0;
 	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -97,7 +97,7 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 	{
 		for (int i = 0; i < globalData->m_size; i++)
 		{
-			BSFixedString node(globalData->m_data[i]);
+			SKEEFixedString node(globalData->m_data[i]);
 			previous_nodes.insert(node);
 		}
 	}
@@ -120,7 +120,7 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 				{
 					for (auto & objects : root)
 					{
-						BSFixedString node = objects["name"].asCString();
+						SKEEFixedString node = objects["name"].asCString();
 						current_nodes.insert(node);
 					}
 				}
@@ -207,7 +207,7 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 	}
 }
 
-void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonData, bool isFirstPerson, bool isFemale, std::set<BSFixedString> & nodes, std::set<BSFixedString> & changes)
+void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonData, bool isFirstPerson, bool isFemale, std::set<SKEEFixedString> & nodes, std::set<SKEEFixedString> & changes)
 {
 	try
 	{
@@ -224,7 +224,7 @@ void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonDat
 			bool changed = false;
 			for (auto & objects : root)
 			{
-				BSFixedString node = objects["name"].asCString();
+				SKEEFixedString node = objects["name"].asCString();
 				nodes.insert(node);
 
 				Json::Value pos = objects["pos"];

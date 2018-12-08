@@ -38,7 +38,8 @@ extern bool								g_parallelMorphing;
 extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
-extern bool								g_deferredBodyMorph;
+
+void ProcessTaskInterface_AddTask(TaskDelegate * cmd);
 
 UInt32 BodyMorphInterface::GetVersion()
 {
@@ -72,15 +73,15 @@ void BodyMorphInterface::Revert()
 	actorMorphs.m_data.clear();
 }
 
-void BodyMorphInterface::SetMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey, float relative)
+void BodyMorphInterface::SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
-	actorMorphs.m_data[handle][morphName][morphKey] = relative;
+	actorMorphs.m_data[handle][g_stringTable.GetString(morphName)][g_stringTable.GetString(morphKey)] = relative;
 }
 
-float BodyMorphInterface::GetMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey)
+float BodyMorphInterface::GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -88,10 +89,10 @@ float BodyMorphInterface::GetMorph(TESObjectREFR * actor, BSFixedString morphNam
 	auto & it = actorMorphs.m_data.find(handle);
 	if(it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(morphName);
+		auto & mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
-			auto & kit = mit->second.find(morphKey);
+			auto & kit = mit->second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit->second.end())
 			{
 				return kit->second;
@@ -102,7 +103,7 @@ float BodyMorphInterface::GetMorph(TESObjectREFR * actor, BSFixedString morphNam
 	return 0.0;
 }
 
-void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey)
+void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -110,10 +111,10 @@ void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, BSFixedString morphNa
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(morphName);
+		auto & mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
-			auto & kit = mit->second.find(morphKey);
+			auto & kit = mit->second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit->second.end())
 			{
 				mit->second.erase(kit);
@@ -122,7 +123,7 @@ void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, BSFixedString morphNa
 	}
 }
 
-bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, BSFixedString morphName, BSFixedString morphKey)
+bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -130,10 +131,10 @@ bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, BSFixedString morph
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & kit = it->second.find(morphName);
+		auto & kit = it->second.find(g_stringTable.GetString(morphName));
 		if (kit != it->second.end())
 		{
-			auto & mit = kit->second.find(morphKey);
+			auto & mit = kit->second.find(g_stringTable.GetString(morphKey));
 			if(mit != kit->second.end())
 				return true;
 		}
@@ -142,7 +143,7 @@ bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, BSFixedString morph
 	return false;
 }
 
-float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, BSFixedString morphName)
+float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -150,7 +151,7 @@ float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, BSFixedString mor
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(morphName);
+		auto & mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
 			float morphSum = 0;
@@ -178,7 +179,7 @@ float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, BSFixedString mor
 	return 0.0;
 }
 
-bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, BSFixedString morphKey)
+bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -188,7 +189,7 @@ bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, BSFixedString mo
 	{
 		for (auto & mit : it->second)
 		{
-			auto & kit = mit.second.find(morphKey);
+			auto & kit = mit.second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit.second.end())
 			{
 				return true;
@@ -199,7 +200,7 @@ bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, BSFixedString mo
 	return false;
 }
 
-void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, BSFixedString morphKey)
+void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -209,7 +210,7 @@ void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, BSFixedString
 	{
 		for (auto & mit : it->second)
 		{
-			auto & kit = mit.second.find(morphKey);
+			auto & kit = mit.second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit.second.end())
 			{
 				mit.second.erase(kit);
@@ -218,7 +219,7 @@ void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, BSFixedString
 	}
 }
 
-bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, BSFixedString morphName)
+bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -226,7 +227,7 @@ bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, BSFixedString m
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & kit = it->second.find(morphName);
+		auto & kit = it->second.find(g_stringTable.GetString(morphName));
 		if (kit != it->second.end())
 		{
 			return true;
@@ -236,7 +237,7 @@ bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, BSFixedString m
 	return false;
 }
 
-void BodyMorphInterface::ClearBodyMorphNames(TESObjectREFR * actor, BSFixedString morphName)
+void BodyMorphInterface::ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 
@@ -244,7 +245,7 @@ void BodyMorphInterface::ClearBodyMorphNames(TESObjectREFR * actor, BSFixedStrin
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(morphName);
+		auto & mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
 			mit->second.clear();
@@ -468,9 +469,9 @@ extern const _UpdateReferenceNode UpdateReferenceNode = (_UpdateReferenceNode)0x
 #include <d3d11.h>
 #include <d3d11_4.h>
 
-void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<BSFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
+void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
 {
-	BSFixedString nodeName = bodyMorph.first.data;
+	BSFixedString nodeName = bodyMorph.first.c_str();
 	BSGeometry * geometry = rootNode->GetAsBSGeometry();
 	NiGeometry * legacyGeometry = rootNode->GetAsNiGeometry();
 	NiAVObject * bodyNode = geometry ? geometry : legacyGeometry ? legacyGeometry : rootNode->GetObjectByName(&nodeName.data);
@@ -618,13 +619,20 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									// Applies all morphs for this shape
 									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
 
+									// Propagate the data to the other partitions
+									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
+									{
+										auto & pPartition = newSkinPartition->m_pkPartitions[p];
+										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
+									}
+
 									skinInstance->m_spSkinPartition = newSkinPartition;
 									newSkinPartition->DecRef(); // DeepCopy started refcount at 1
 
 									if (mutex) mutex->lock();
 
 									auto updateTask = new NIOVTaskUpdateSkinPartition(newSkinPartition);
-									if (g_task && deferred)
+									if (deferred)
 									{
 										g_task->AddTask(updateTask);
 									}
@@ -682,8 +690,8 @@ void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 	VisitObjects(rootNode, [&](NiAVObject* object) {
 		NiStringExtraData * stringData = ni_cast(object->GetExtraData("BODYTRI"), NiStringExtraData);
 		if (stringData) {
-			BSFixedString filePath = CreateTRIPath(stringData->m_pString);
-			CacheFile(filePath.data);
+			SKEEFixedString filePath = CreateTRIPath(stringData->m_pString);
+			CacheFile(filePath.c_str());
 			auto & it = m_data.find(filePath);
 			if (it != m_data.end()) {
 				fileCache = &it->second;
@@ -808,22 +816,22 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 #endif
 }
 
-BSFixedString MorphCache::CreateTRIPath(const char * relativePath)
+SKEEFixedString MorphCache::CreateTRIPath(const char * relativePath)
 {
 	if(relativePath == "")
-		return BSFixedString("");
+		return SKEEFixedString("");
 
 	std::string targetPath = "meshes\\";
 	targetPath += std::string(relativePath);
 	std::transform(targetPath.begin(), targetPath.end(), targetPath.begin(), ::tolower);
-	return BSFixedString(targetPath.c_str());
+	return SKEEFixedString(targetPath.c_str());
 }
 
 void MorphCache::Shrink()
 {
 	while (totalMemory > memoryLimit && m_data.size() > 0)
 	{
-		auto & it = std::min_element(m_data.begin(), m_data.end(), [](std::pair<BSFixedString, MorphFileCache> a, std::pair<BSFixedString, MorphFileCache> b)
+		auto & it = std::min_element(m_data.begin(), m_data.end(), [](std::pair<SKEEFixedString, MorphFileCache> a, std::pair<SKEEFixedString, MorphFileCache> b)
 		{
 			return (a.second.accessed < b.second.accessed);
 		});
@@ -839,7 +847,7 @@ void MorphCache::Shrink()
 
 bool MorphCache::CacheFile(const char * relativePath)
 {
-	BSFixedString filePath(relativePath);
+	SKEEFixedString filePath(relativePath);
 	if(relativePath == "")
 		return false;
 
@@ -851,10 +859,10 @@ bool MorphCache::CacheFile(const char * relativePath)
 	}
 
 #ifdef _DEBUG
-	_DMESSAGE("%s - Parsing: %s", __FUNCTION__, filePath.data);
+	_DMESSAGE("%s - Parsing: %s", __FUNCTION__, filePath.c_str());
 #endif
 
-	BSResourceNiBinaryStream binaryStream(filePath.data);
+	BSResourceNiBinaryStream binaryStream(filePath.c_str());
 	if(binaryStream.IsValid())
 	{
 		TriShapeMap trishapeMap;
@@ -917,7 +925,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				_DMESSAGE("%s - Reading Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
 #endif
 				if (tsize == 0) {
-					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.c_str(), binaryStream.GetOffset());
 				}
 
 				if (!packed) {
@@ -936,10 +944,10 @@ bool MorphCache::CacheFile(const char * relativePath)
 				}
 
 				if (vertexNum == 0) {
-					_WARNING("%s - %s - Read morph %s on %s with no vertices at (%08X)", __FUNCTION__, filePath.data, morphName.data, trishapeName.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read morph %s on %s with no vertices at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, trishapeName.data, binaryStream.GetOffset());
 				}
 				if (multiplier == 0.0f) {
-					_WARNING("%s - %s - Read morph %s on %s with zero multiplier at (%08X)", __FUNCTION__, filePath.data, morphName.data, trishapeName.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read morph %s on %s with zero multiplier at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, trishapeName.data, binaryStream.GetOffset());
 				}
 
 #ifdef _DEBUG
@@ -947,7 +955,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 #endif
 				if (vertexNum > (std::numeric_limits<UInt16>::max)())
 				{
-					_ERROR("%s - %s - Too many vertices for %s on %s read: %d at (%08X)", __FUNCTION__, filePath.data, morphName.data, vertexNum, trishapeName.data, binaryStream.GetOffset());
+					_ERROR("%s - %s - Too many vertices for %s on %s read: %d at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, vertexNum, trishapeName.data, binaryStream.GetOffset());
 					return false;
 				}
 
@@ -1050,7 +1058,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 				_DMESSAGE("%s - Reading UV Morph %s at (%08X)", __FUNCTION__, morphName.data, binaryStream.GetOffset());
 #endif
 				if (tsize == 0) {
-					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read empty name morph at (%08X)", __FUNCTION__, filePath.c_str(), binaryStream.GetOffset());
 				}
 
 				UInt32 vertexNum = 0;
@@ -1060,10 +1068,10 @@ bool MorphCache::CacheFile(const char * relativePath)
 				trishapeMap.memoryUsage += binaryStream.Read((char *)&vertexNum, sizeof(UInt16));
 
 				if (vertexNum == 0) {
-					_WARNING("%s - %s - Read morph %s on %s with no vertices at (%08X)", __FUNCTION__, filePath.data, morphName.data, trishapeName.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read morph %s on %s with no vertices at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, trishapeName.data, binaryStream.GetOffset());
 				}
 				if (multiplier == 0.0f) {
-					_WARNING("%s - %s - Read morph %s on %s with zero multiplier at (%08X)", __FUNCTION__, filePath.data, morphName.data, trishapeName.data, binaryStream.GetOffset());
+					_WARNING("%s - %s - Read morph %s on %s with zero multiplier at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, trishapeName.data, binaryStream.GetOffset());
 				}
 
 #ifdef _DEBUG
@@ -1071,7 +1079,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 #endif
 				if (vertexNum > (std::numeric_limits<UInt16>::max)())
 				{
-					_ERROR("%s - %s - Too many vertices for %s on %s read: %d at (%08X)", __FUNCTION__, filePath.data, morphName.data, vertexNum, trishapeName.data, binaryStream.GetOffset());
+					_ERROR("%s - %s - Too many vertices for %s on %s read: %d at (%08X)", __FUNCTION__, filePath.c_str(), morphName.data, vertexNum, trishapeName.data, binaryStream.GetOffset());
 					return false;
 				}
 
@@ -1191,8 +1199,9 @@ void NIOVTaskUpdateSkinPartition::Run()
 		UInt32 vertexCount = m_partition->vertexCount;
 
 		auto deviceContext = g_renderManager->context;
+		deviceContext->UpdateSubresource(partition.shapeData->m_VertexBuffer, 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
 
-		for (UInt32 p = 0; p < m_partition->m_uiPartitions; ++p)
+		for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
 		{
 			auto & pPartition = m_partition->m_pkPartitions[p];
 			deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
@@ -1200,7 +1209,7 @@ void NIOVTaskUpdateSkinPartition::Run()
 	}
 }
 
-void BodyMorphInterface::VisitMorphs(TESObjectREFR * actor, std::function<void(BSFixedString name, std::unordered_map<BSFixedString, float> * map)> functor)
+void BodyMorphInterface::VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)> functor)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -1208,23 +1217,23 @@ void BodyMorphInterface::VisitMorphs(TESObjectREFR * actor, std::function<void(B
 	{
 		for (auto & morph : it->second)
 		{
-			functor(morph.first, &morph.second);
+			functor(*morph.first, &morph.second);
 		}
 	}
 }
 
-void BodyMorphInterface::VisitKeys(TESObjectREFR * actor, BSFixedString name, std::function<void(BSFixedString, float)> functor)
+void BodyMorphInterface::VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor)
 {
 	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(name);
+		auto & mit = it->second.find(g_stringTable.GetString(name));
 		if (mit != it->second.end())
 		{
 			for (auto & morph : mit->second)
 			{
-				functor(morph.first, morph.second);
+				functor(*morph.first, morph.second);
 			}
 		}
 	}
@@ -1247,7 +1256,7 @@ void BodyMorphInterface::UpdateModelWeight(TESObjectREFR * refr, bool immediate)
 	}
 }
 
-bool BodyMorphInterface::ReadBodyMorphTemplates(BSFixedString  filePath)
+bool BodyMorphInterface::ReadBodyMorphTemplates(SKEEFixedString filePath)
 {
 	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
@@ -1411,7 +1420,7 @@ void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], U
 	}
 }
 
-bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
+bool BodyMorphInterface::ReadBodyMorphs(SKEEFixedString filePath)
 {
 	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
@@ -1623,8 +1632,6 @@ bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 			}
 
 			bodyGenData[0][npc] = dataTemplates;
-
-
 		}
 
 		for (auto & npc : activeNPCs[1])
@@ -1656,7 +1663,7 @@ bool BodyMorphInterface::ReadBodyMorphs(BSFixedString filePath)
 	return true;
 }
 
-UInt32 BodyGenMorphSelector::Evaluate(std::function<void(BSFixedString, float)> eval)
+UInt32 BodyGenMorphSelector::Evaluate(std::function<void(SKEEFixedString, float)> eval)
 {
 	if (size() > 0) {
 		std::random_device rd;
@@ -1675,7 +1682,7 @@ UInt32 BodyGenMorphSelector::Evaluate(std::function<void(BSFixedString, float)> 
 	return 0;
 }
 
-UInt32 BodyGenMorphs::Evaluate(std::function<void(BSFixedString, float)> eval)
+UInt32 BodyGenMorphs::Evaluate(std::function<void(SKEEFixedString, float)> eval)
 {
 	UInt32 total = 0;
 	for (auto value : *this) {
@@ -1688,7 +1695,7 @@ UInt32 BodyGenMorphs::Evaluate(std::function<void(BSFixedString, float)> eval)
 	return total;
 }
 
-UInt32 BodyGenTemplate::Evaluate(std::function<void(BSFixedString, float)> eval)
+UInt32 BodyGenTemplate::Evaluate(std::function<void(SKEEFixedString, float)> eval)
 {
 	if (size() > 0) {
 		std::random_device rd;
@@ -1702,7 +1709,7 @@ UInt32 BodyGenTemplate::Evaluate(std::function<void(BSFixedString, float)> eval)
 	return 0;
 }
 
-UInt32 BodyTemplateList::Evaluate(std::function<void(BSFixedString, float)> eval)
+UInt32 BodyTemplateList::Evaluate(std::function<void(SKEEFixedString, float)> eval)
 {
 	if (size() > 0) {
 		std::random_device rd;
@@ -1716,7 +1723,7 @@ UInt32 BodyTemplateList::Evaluate(std::function<void(BSFixedString, float)> eval
 	return 0;
 }
 
-UInt32 BodyGenDataTemplates::Evaluate(std::function<void(BSFixedString, float)> eval)
+UInt32 BodyGenDataTemplates::Evaluate(std::function<void(SKEEFixedString, float)> eval)
 {
 	UInt32 total = 0;
 	for (auto & tempList : *this)
@@ -1742,7 +1749,7 @@ UInt32 BodyMorphInterface::EvaluateBodyMorphs(TESObjectREFR * actor)
 		// Found a matching template
 		if (morphSet != bodyGenData[gender].end()) {
 			auto & templates = morphSet->second;
-			UInt32 ret = templates->Evaluate([&](const BSFixedString & morphName, float value)
+			UInt32 ret = templates->Evaluate([&](const SKEEFixedString & morphName, float value)
 			{
 				SetMorph(actor, morphName, "RSMBodyGen", value);
 			});
@@ -1755,14 +1762,14 @@ UInt32 BodyMorphInterface::EvaluateBodyMorphs(TESObjectREFR * actor)
 	return 0;
 }
 
-void BodyMorphInterface::VisitStrings(std::function<void(BSFixedString)> functor)
+void BodyMorphInterface::VisitStrings(std::function<void(SKEEFixedString)> functor)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
 	for (auto & i1 : actorMorphs.m_data) {
 		for (auto & i2 : i1.second) {
-			functor(i2.first);
+			functor(*i2.first);
 			for (auto & i3 : i2.second) {
-				functor(i3.first);
+				functor(*i3.first);
 			}
 		}
 	}
@@ -1784,18 +1791,16 @@ void BodyMorph::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 {
 	intfc->OpenRecord('MRPV', kVersion);
 
-	UInt8 morphLength = strlen(m_name.data);
-	intfc->WriteRecordData(&morphLength, sizeof(morphLength));
-	intfc->WriteRecordData(m_name.data, morphLength);
+	g_stringTable.WriteString(intfc, m_name);
+
 	intfc->WriteRecordData(&m_value, sizeof(m_value));
 }
 
-bool BodyMorph::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool BodyMorph::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
 
-	m_name = "";
 	m_value = 0.0;
 
 	if(intfc->GetNextRecordInfo(&type, &version, &length))
@@ -1804,23 +1809,30 @@ bool BodyMorph::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 		{
 		case 'MRPV':
 			{
-				char * stringName = NULL;
-				UInt8 stringLength;
-				if (!intfc->ReadRecordData(&stringLength, sizeof(stringLength)))
+				if (kVersion >= BodyMorphInterface::kSerializationVersion3)
 				{
-					_ERROR("%s - Error loading body morph name length", __FUNCTION__);
-					error = true;
-					return error;
+					m_name = StringTable::ReadString(intfc, stringTable);
 				}
+				else if (kVersion >= BodyMorphInterface::kSerializationVersion2)
+				{
+					char * stringName = NULL;
+					UInt8 stringLength;
+					if (!intfc->ReadRecordData(&stringLength, sizeof(stringLength)))
+					{
+						_ERROR("%s - Error loading body morph name length", __FUNCTION__);
+						error = true;
+						return error;
+					}
 
-				stringName = new char[stringLength + 1];
-				if(!intfc->ReadRecordData(stringName, stringLength)) {
-					_ERROR("%s - Error loading body morph name", __FUNCTION__);
-					error = true;
-					return error;
+					stringName = new char[stringLength + 1];
+					if (!intfc->ReadRecordData(stringName, stringLength)) {
+						_ERROR("%s - Error loading body morph name", __FUNCTION__);
+						error = true;
+						return error;
+					}
+					stringName[stringLength] = 0;
+					m_name = g_stringTable.GetString(stringName);
 				}
-				stringName[stringLength] = 0;
-				m_name = BSFixedString(stringName);
 
 				if (!intfc->ReadRecordData(&m_value, sizeof(m_value))) {
 					_ERROR("%s - Error loading body morph value", __FUNCTION__);
@@ -1857,7 +1869,7 @@ void BodyMorphSet::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 		const_cast<BodyMorph&>((*it)).Save(intfc, kVersion);
 }
 
-bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1880,9 +1892,9 @@ bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 				for (UInt32 i = 0; i < numMorphs; i++)
 				{
 					BodyMorph value;
-					if (!value.Load(intfc, version))
+					if (!value.Load(intfc, version, stringTable))
 					{
-						if(value.m_name == BSFixedString(""))
+						if(*value.m_name == SKEEFixedString(""))
 							continue;
 
 #ifdef _DEBUG
@@ -1947,20 +1959,20 @@ void BodyMorphData::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 
 	for (auto & morph : *this)
 	{
-		g_stringTable.WriteString<UInt16>(intfc, morph.first, kVersion);
+		g_stringTable.WriteString(intfc, morph.first);
 
 		UInt32 numKeys = morph.second.size();
 		intfc->WriteRecordData(&numKeys, sizeof(numKeys));
 
 		for (auto & keys : morph.second)
 		{
-			g_stringTable.WriteString<UInt16>(intfc, keys.first, kVersion);
+			g_stringTable.WriteString(intfc, keys.first);
 			intfc->WriteRecordData(&keys.second, sizeof(keys.second));
 		}
 	}
 }
 
-bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32 type, length, version;
 	bool error = false;
@@ -1981,7 +1993,7 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 
 				for (UInt32 i = 0; i < numMorphs; i++)
 				{
-					BSFixedString morphName = g_stringTable.ReadString<UInt16>(intfc, kVersion);
+					auto morphName = StringTable::ReadString(intfc, stringTable);
 
 					UInt32 numKeys = 0;
 					if (!intfc->ReadRecordData(&numKeys, sizeof(numKeys)))
@@ -1991,10 +2003,10 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 						return error;
 					}
 
-					std::unordered_map<BSFixedString, float> pairs;
+					std::unordered_map<StringTableItem, float> pairs;
 					for (UInt32 i = 0; i < numKeys; i++)
 					{
-						BSFixedString keyName = g_stringTable.ReadString<UInt16>(intfc, kVersion);
+						auto keyName = StringTable::ReadString(intfc, stringTable);
 
 						float value = 0;
 						if (!intfc->ReadRecordData(&value, sizeof(value))) {
@@ -2004,11 +2016,11 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 						}
 
 						// If the keys were mapped by mod name, skip them if they arent in load order
-						std::string strKey(keyName.data);
-						BSFixedString ext(strKey.substr(strKey.find_last_of(".") + 1).c_str());
-						if (ext == BSFixedString("esp") || ext == BSFixedString("esm"))
+						std::string strKey(keyName->c_str());
+						SKEEFixedString ext(strKey.substr(strKey.find_last_of(".") + 1).c_str());
+						if (ext == SKEEFixedString("esp") || ext == SKEEFixedString("esm"))
 						{
-							if (!DataHandler::GetSingleton()->LookupModByName(keyName.data))
+							if (!DataHandler::GetSingleton()->LookupModByName(keyName->c_str()))
 								continue;
 						}
 
@@ -2032,7 +2044,7 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	return error;
 }
 
-bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	bool error = false;
 
@@ -2048,20 +2060,20 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	BodyMorphSet morphSet;
 	BodyMorphData morphMap;
 
-	if (kVersion == BodyMorphInterface::kSerializationVersion1)
+	if (kVersion >= BodyMorphInterface::kSerializationVersion2)
 	{
-		if (morphSet.Load(intfc, kVersion))
+		if (morphMap.Load(intfc, kVersion, stringTable))
 		{
-			_ERROR("%s - Error loading MorphSet", __FUNCTION__);
+			_ERROR("%s - Error loading MorphMap", __FUNCTION__);
 			error = true;
 			return error;
 		}
 	}
-	else if (kVersion == BodyMorphInterface::kSerializationVersion2)
+	else if (kVersion >= BodyMorphInterface::kSerializationVersion1)
 	{
-		if (morphMap.Load(intfc, kVersion))
+		if (morphSet.Load(intfc, kVersion, stringTable))
 		{
-			_ERROR("%s - Error loading MorphMap", __FUNCTION__);
+			_ERROR("%s - Error loading MorphSet", __FUNCTION__);
 			error = true;
 			return error;
 		}
@@ -2071,7 +2083,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	{
 		for (auto & morph : morphSet)
 		{
-			morphMap[morph.m_name]["RSMLegacy"] = morph.m_value;
+			morphMap[morph.m_name][g_stringTable.GetString("RSMLegacy")] = morph.m_value;
 		}
 	}
 
@@ -2107,7 +2119,7 @@ void BodyMorphInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersio
 	actorMorphs.Save(intfc, kVersion);
 }
 
-bool BodyMorphInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
+bool BodyMorphInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const std::unordered_map<UInt32, StringTableItem> & stringTable)
 {
-	return actorMorphs.Load(intfc, kVersion);
+	return actorMorphs.Load(intfc, kVersion, stringTable);
 }

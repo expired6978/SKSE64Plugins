@@ -5,9 +5,9 @@
 CDXMaterial::CDXMaterial()
 {
 	m_diffuseTexture = NULL;
-	m_specularColor = D3DXVECTOR3(1.0f, 1.0f, 1.0f);
-	m_diffuseColor = D3DXVECTOR3(1.0f, 1.0f, 1.0f);
-	m_ambientColor = D3DXVECTOR3(1.0f, 1.0f, 1.0f);
+	m_specularColor = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
+	m_diffuseColor = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
+	m_ambientColor = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	m_alphaThreshold = 0;
 	m_shaderFlags1 = 0;
 	m_shaderFlags2 = 0;
@@ -40,28 +40,28 @@ void CDXMaterial::SetDiffuseTexture(LPDIRECT3DBASETEXTURE9 texture)
 		m_diffuseTexture->AddRef();
 }
 
-void CDXMaterial::SetDiffuseColor(D3DXVECTOR3 color)
+void CDXMaterial::SetDiffuseColor(DirectX::XMFLOAT3 color)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	m_diffuseColor = color;
 }
-void CDXMaterial::SetSpecularColor(D3DXVECTOR3 color)
+void CDXMaterial::SetSpecularColor(DirectX::XMFLOAT3 color)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	m_specularColor = color;
 }
-void CDXMaterial::SetAmbientColor(D3DXVECTOR3 color)
+void CDXMaterial::SetAmbientColor(DirectX::XMFLOAT3 color)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	m_ambientColor = color;
 }
-void CDXMaterial::SetWireframeColor(D3DXVECTOR3 color)
+void CDXMaterial::SetWireframeColor(DirectX::XMFLOAT3 color)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -69,28 +69,28 @@ void CDXMaterial::SetWireframeColor(D3DXVECTOR3 color)
 	m_wireframeColor = color;
 }
 
-D3DXVECTOR3 & CDXMaterial::GetDiffuseColor()
+DirectX::XMFLOAT3 & CDXMaterial::GetDiffuseColor()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_diffuseColor;
 }
-D3DXVECTOR3 & CDXMaterial::GetSpecularColor()
+DirectX::XMFLOAT3 & CDXMaterial::GetSpecularColor()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_specularColor;
 }
-D3DXVECTOR3 & CDXMaterial::GetAmbientColor()
+DirectX::XMFLOAT3 & CDXMaterial::GetAmbientColor()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_ambientColor;
 }
-D3DXVECTOR3 & CDXMaterial::GetWireframeColor()
+DirectX::XMFLOAT3 & CDXMaterial::GetWireframeColor()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);

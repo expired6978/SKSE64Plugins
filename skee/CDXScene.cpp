@@ -52,7 +52,7 @@ void CDXScene::Release()
 	m_meshes.clear();
 }
 
-void CDXScene::Setup(LPDIRECT3DDEVICE9 pDevice)
+void CDXScene::Setup(ID3D11Device * pDevice)
 {
 	pDevice->CreateVertexDeclaration(VertexDecl, &m_pMeshDecl);
 
@@ -66,7 +66,7 @@ void CDXScene::Setup(LPDIRECT3DDEVICE9 pDevice)
 	g_Camera.Update();
 }
 
-void CDXScene::Begin(LPDIRECT3DDEVICE9 pDevice)
+void CDXScene::Begin(ID3D11Device * pDevice)
 {
 	if(!m_pStateBlock)
 		pDevice->CreateStateBlock(D3DSBT_ALL,&m_pStateBlock);
@@ -74,12 +74,12 @@ void CDXScene::Begin(LPDIRECT3DDEVICE9 pDevice)
 	m_pStateBlock->Capture();
 }
 
-void CDXScene::End(LPDIRECT3DDEVICE9 pDevice)
+void CDXScene::End(ID3D11Device * pDevice)
 {
 	m_pStateBlock->Apply();
 }
 
-void CDXScene::Render(LPDIRECT3DDEVICE9 pDevice)
+void CDXScene::Render(ID3D11Device * pDevice)
 {
 	CDXMatrix16 mWorld;
 	CDXMatrix16 mView;
@@ -217,7 +217,7 @@ bool CDXScene::Pick(int x, int y, CDXPicker & picker)
 	const CDXMatrix matWorld = *g_Camera.GetWorldMatrix();
 	CDXMatrix mWorldView = matWorld * matView;
 	CDXMatrix m;
-	D3DXMatrixInverse( &m, NULL, &mWorldView );
+	DirectX::XMFLOAT4X4Inverse( &m, NULL, &mWorldView );
 
 	// Transform the screen space pick ray into 3D space
 	rayInfo.direction.x = v.x * m._11 + v.y * m._21 + v.z * m._31;

@@ -1149,7 +1149,8 @@ namespace papyrusNiOverride
 			return;
 
 		OverrideVariant value;
-		PackValue<BSFixedString>(&value, OverrideVariant::kParam_NodeDestination, -1, &destination);
+		SKEEFixedString str = destination;
+		PackValue(&value, OverrideVariant::kParam_NodeDestination, -1, &str);
 		g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "NodeDestination", value);
 	}
 
@@ -1160,8 +1161,9 @@ namespace papyrusNiOverride
 			return ret;
 
 		OverrideVariant value = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "NodeDestination", OverrideVariant::kParam_NodeDestination, -1);
-		UnpackValue<BSFixedString>(&ret, &value);
-		return ret;
+		SKEEFixedString str;
+		UnpackValue(&str, &value);
+		return str;
 	}
 
 	bool RemoveNodeDestination(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node)
@@ -1230,7 +1232,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString key, OverrideRegistration<BSFixedString>*value)
+		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString key, OverrideRegistration<StringTableItem>*value)
 		{
 			result.push_back(key);
 			return false;
@@ -1245,11 +1247,11 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString nodeName, OverrideRegistration<BSFixedString>*value)
+		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString nodeName, OverrideRegistration<StringTableItem>*value)
 		{
 			if (nodeName == node) {
 				for (auto key : *value)
-					result.push_back(key.first);
+					result.push_back(*key.first);
 				return true;
 			}
 
@@ -1265,7 +1267,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_bodyMorphInterface.VisitMorphs(refr, [&](BSFixedString name, std::unordered_map<BSFixedString, float> * map)
+		g_bodyMorphInterface.VisitMorphs(refr, [&](SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)
 		{
 			result.push_back(name);
 		});
@@ -1279,7 +1281,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_bodyMorphInterface.VisitKeys(refr, morphName, [&](BSFixedString name, float value)
+		g_bodyMorphInterface.VisitKeys(refr, morphName, [&](SKEEFixedString name, float value)
 		{
 			result.push_back(name);
 		});

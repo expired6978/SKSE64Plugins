@@ -56,17 +56,32 @@ template <> void PackValue <bool>(OverrideVariant * dst, UInt16 key, UInt8 index
 	dst->SetNone();
 	//dst->SetBool(key, index, *src);
 }
-template <> void PackValue <BSFixedString>(OverrideVariant * dst, UInt16 key, UInt8 index, BSFixedString * src)
+template <> void PackValue <SKEEFixedString>(OverrideVariant * dst, UInt16 key, UInt8 index, SKEEFixedString * src)
 {
 	switch (key)
 	{
 		case OverrideVariant::kParam_ShaderTexture:
-		dst->SetString(key, index, src->data);
+		dst->SetString(key, index, *src);
 		break;
 		case OverrideVariant::kParam_NodeDestination:
-		dst->SetString(key, index, src->data);
+		dst->SetString(key, index, *src);
 		break;
 		default:
+		dst->SetNone();
+		break;
+	}
+}
+template <> void PackValue <BSFixedString>(OverrideVariant * dst, UInt16 key, UInt8 index, BSFixedString * src)
+{
+	switch (key)
+	{
+	case OverrideVariant::kParam_ShaderTexture:
+		dst->SetString(key, index, *src);
+		break;
+	case OverrideVariant::kParam_NodeDestination:
+		dst->SetString(key, index, *src);
+		break;
+	default:
 		dst->SetNone();
 		break;
 	}
@@ -197,14 +212,26 @@ template <> void UnpackValue <bool>(bool * dst, OverrideVariant * src)
 	}
 }
 
-template <> void UnpackValue <BSFixedString>(BSFixedString * dst, OverrideVariant * src)
+template <> void UnpackValue <SKEEFixedString>(SKEEFixedString * dst, OverrideVariant * src)
 {
 	switch (src->type)
 	{
 		case OverrideVariant::kType_String:
-		CALL_MEMBER_FN(dst, Set)(src->data.str);
+		*dst = *src->str;
 		break;
 		default:
+		break;
+	}
+}
+
+template <> void UnpackValue <BSFixedString>(BSFixedString * dst, OverrideVariant * src)
+{
+	switch (src->type)
+	{
+	case OverrideVariant::kType_String:
+		*dst = *src->str;
+		break;
+	default:
 		break;
 	}
 }

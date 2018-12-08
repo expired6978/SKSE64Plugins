@@ -21,7 +21,7 @@
 #include "TintMaskInterface.h"
 #include "ItemDataInterface.h"
 
-#include "MorphHandler.h"
+#include "FaceMorphInterface.h"
 #include "PartHandler.h"
 
 #include "SkeletonExtender.h"
@@ -38,6 +38,7 @@
 #include <queue>
 
 extern SKSETaskInterface	* g_task;
+extern SKEETaskInterface	g_taskOverride;
 
 extern ItemDataInterface	g_itemDataInterface;
 extern TintMaskInterface	g_tintMaskInterface;
@@ -61,14 +62,12 @@ Actor						* g_weaponHookActor = NULL;
 TESObjectWEAP				* g_weaponHookWeapon = NULL;
 UInt32						g_firstPerson = 0;
 
-extern MorphHandler			g_morphHandler;
+extern FaceMorphInterface			g_morphInterface;
 extern PartSet				g_partSet;
 extern UInt32				g_customDataMax;
 extern bool					g_externalHeads;
 extern bool					g_extendedMorphs;
 extern bool					g_allowAllMorphs;
-
-extern SKSETaskInterface	g_taskOverride;
 
 RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE60);
 
@@ -97,8 +96,8 @@ RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C20);
 ICriticalSection			s_taskQueueLock;
 std::queue<TaskDelegate*>	s_tasks;
 
-typedef void(*_ProcessTaskInterface)();
-RelocAddr <_ProcessTaskInterface> ProcessTaskInterface_Hook_Original(0x002E9B40);
+typedef UInt32 (*_ProcessTaskInterface)(void * unk1);
+RelocAddr <_ProcessTaskInterface> ProcessTaskInterface_Hook_Original(0x00C03E60);
 
 static bool IsTaskQueueEmpty()
 {
@@ -106,10 +105,8 @@ static bool IsTaskQueueEmpty()
 	return s_tasks.empty();
 }
 
-void ProcessTaskInterface_Hook()
+UInt32 ProcessTaskInterface_Hook(void * unk1)
 {
-	ProcessTaskInterface_Hook_Original();
-
 	while (!IsTaskQueueEmpty())
 	{
 		s_taskQueueLock.Enter();
@@ -120,6 +117,8 @@ void ProcessTaskInterface_Hook()
 		cmd->Run();
 		cmd->Dispose();
 	}
+
+	return ProcessTaskInterface_Hook_Original(unk1);
 }
 
 void ProcessTaskInterface_AddTask(TaskDelegate * cmd)
@@ -628,13 +627,13 @@ void RaceSexMenu_Hooked::RenderMenu_Hooked(void)
 void RegenerateHead_Hooked(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc)
 {
 	RegenerateHead_Original(faceGen, headNode, headPart, npc);
-	g_morphHandler.ApplyPreset(npc, headNode, headPart);
+	g_morphInterface.ApplyPreset(npc, headNode, headPart);
 }
 
 bool UsePreprocessedHead(TESNPC * npc)
 {
 	// For some reason the NPC vanilla preset data is reset when the actor is disable/enabled
-	auto presetData = g_morphHandler.GetPreset(npc);
+	auto presetData = g_morphInterface.GetPreset(npc);
 	if (presetData) {
 		if (!npc->faceMorph)
 			npc->faceMorph = (TESNPC::FaceMorphs*)Heap_Allocate(sizeof(TESNPC::FaceMorphs));
@@ -661,7 +660,7 @@ void _cdecl ClearFaceGenCache_Hooked()
 {
 	ClearFaceGenCache();
 
-	g_morphHandler.RevertInternals();
+	g_morphInterface.RevertInternals();
 	g_partSet.Revert(); // Cleanup HeadPart List before loading new ones
 }
 
@@ -673,7 +672,7 @@ void UpdateMorphs_Hooked(TESNPC * npc, void * unk1, BSFaceGenNiNode * faceNode)
 #endif
 	try
 	{
-		g_morphHandler.ApplyMorphs(npc, faceNode);
+		g_morphInterface.ApplyMorphs(npc, faceNode);
 	}
 	catch (...)
 	{
@@ -689,7 +688,7 @@ void UpdateMorph_Hooked(TESNPC * npc, BGSHeadPart * headPart, BSFaceGenNiNode * 
 #endif
 	try
 	{
-		g_morphHandler.ApplyMorph(npc, headPart, faceNode);
+		g_morphInterface.ApplyMorph(npc, headPart, faceNode);
 	}
 	catch (...)
 	{
@@ -784,7 +783,7 @@ public:
 	}
 	bool Accept(BSFixedString morphName)
 	{
-		TRIModelData & morphData = g_morphHandler.GetExtendedModelTri(morphName, true);
+		TRIModelData & morphData = g_morphInterface.GetExtendedModelTri(morphName, true);
 		if (morphData.morphModel && morphData.triFile) {
 			BSGeometry * geometry = NULL;
 			if (m_headNode && (*m_headNode))
@@ -815,7 +814,7 @@ UInt8 ApplyRaceMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName, T
 	try
 	{
 		MorphVisitor morphVisitor(model, morphName, headNode, relative, unk1);
-		g_morphHandler.VisitMorphMap(modelMorph->GetModelName(), morphVisitor);
+		g_morphInterface.VisitMorphMap(modelMorph->GetModelName(), morphVisitor);
 	}
 	catch (...)
 	{
@@ -836,7 +835,7 @@ UInt8 ApplyChargenMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName
 	try
 	{
 		MorphVisitor morphVisitor(model, morphName, headNode, relative, unk1);
-		g_morphHandler.VisitMorphMap(BSFixedString(modelMorph->GetModelName()), morphVisitor);
+		g_morphInterface.VisitMorphMap(BSFixedString(modelMorph->GetModelName()), morphVisitor);
 	}
 	catch (...)
 	{
@@ -857,11 +856,11 @@ void SetRelativeMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, BSFixedString na
 			max = 1.0;
 		UInt32 count = (UInt32)absRel;
 		for (UInt32 i = 0; i < count; i++) {
-			g_morphHandler.SetMorph(npc, faceNode, name.data, max);
+			g_morphInterface.SetMorph(npc, faceNode, name.data, max);
 			relative -= max;
 		}
 	}
-	g_morphHandler.SetMorph(npc, faceNode, name.data, relative);
+	g_morphInterface.SetMorph(npc, faceNode, name.data, relative);
 }
 
 
@@ -887,7 +886,7 @@ void InvokeCategoryList_Hook(GFxMovieView * movie, const char * fnName, FxRespon
 SInt32 AddSlider_Hook(tArray<RaceMenuSlider> * sliders, RaceMenuSlider * slider)
 {
 	SInt32 totalSliders = AddRaceMenuSlider(sliders, slider);
-	totalSliders = g_morphHandler.LoadSliders(sliders, slider);
+	totalSliders = g_morphInterface.LoadSliders(sliders, slider);
 	return totalSliders;
 }
 
@@ -919,11 +918,11 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 #endif
 		if (slider->index >= SLIDER_OFFSET) {
 			UInt32 sliderIndex = slider->index - SLIDER_OFFSET;
-			SliderInternalPtr sliderInternal = g_morphHandler.GetSliderByIndex(player->race, sliderIndex);
+			SliderInternalPtr sliderInternal = g_morphInterface.GetSliderByIndex(player->race, sliderIndex);
 			if (!sliderInternal)
 				return;
 
-			float currentValue = g_morphHandler.GetMorphValueByName(actorBase, sliderInternal->name);
+			float currentValue = g_morphInterface.GetMorphValueByName(actorBase, sliderInternal->name);
 			if (newValue == FLT_MAX || newValue == -FLT_MAX)
 			{
 				//slider->value = 0.0f;
@@ -946,13 +945,13 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 
 				char buffer[MAX_PATH];
 				slider->value = newValue;
-				sprintf_s(buffer, MAX_PATH, "%s%d", sliderInternal->lowerBound.data, (UInt32)currentValue);
-				g_morphHandler.SetMorph(actorBase, faceNode, buffer, -1.0);
+				sprintf_s(buffer, MAX_PATH, "%s%d", sliderInternal->lowerBound.c_str(), (UInt32)currentValue);
+				g_morphInterface.SetMorph(actorBase, faceNode, buffer, -1.0);
 				memset(buffer, 0, MAX_PATH);
-				sprintf_s(buffer, MAX_PATH, "%s%d", sliderInternal->lowerBound.data, (UInt32)newValue);
-				g_morphHandler.SetMorph(actorBase, faceNode, buffer, 1.0);
+				sprintf_s(buffer, MAX_PATH, "%s%d", sliderInternal->lowerBound.c_str(), (UInt32)newValue);
+				g_morphInterface.SetMorph(actorBase, faceNode, buffer, 1.0);
 
-				g_morphHandler.SetMorphValue(actorBase, sliderInternal->name, newValue);
+				g_morphInterface.SetMorphValue(actorBase, sliderInternal->name, newValue);
 				return;
 			}
 
@@ -1038,7 +1037,7 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 #endif
 
 			SetRelativeMorph(actorBase, faceNode, bound, relative);
-			g_morphHandler.SetMorphValue(actorBase, sliderInternal->name, newValue);
+			g_morphInterface.SetMorphValue(actorBase, sliderInternal->name, newValue);
 			return;
 		}
 	}
@@ -1108,11 +1107,12 @@ bool InstallSKEEHooks()
 		return false;
 	}
 
-	// REMOVE THIS AFTER SKSE64 UPDATE
-	RelocAddr <uintptr_t> ProcessTaskInterface_Target(0x005B31E0 + 0x6A0);
-	g_branchTrampoline.Write5Call(ProcessTaskInterface_Target.GetUIntPtr(), (uintptr_t)ProcessTaskInterface_Hook);
-	g_taskOverride.AddTask = ProcessTaskInterface_AddTask;
-	// -------------------------------
+	if (g_task->interfaceVersion < 3)
+	{
+		RelocAddr <uintptr_t> ProcessTaskInterface_Target(0x005B31E0 + 0x739);
+		g_branchTrampoline.Write5Call(ProcessTaskInterface_Target.GetUIntPtr(), (uintptr_t)ProcessTaskInterface_Hook);
+		g_taskOverride.AddTask = ProcessTaskInterface_AddTask;
+	}
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5420 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);

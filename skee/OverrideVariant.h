@@ -3,6 +3,10 @@
 #include "skse64/GameTypes.h"
 #include "skse64/NiTypes.h"
 
+#include "StringTable.h"
+
+extern StringTable g_stringTable;
+
 struct SKSESerializationInterface;
 class BGSTextureSet;
 
@@ -16,7 +20,7 @@ public:
 	bool operator==(const OverrideVariant & rhs) const	{ return key == rhs.key && index == rhs.index; }
 
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	UInt16 key;
 	enum
@@ -72,15 +76,15 @@ public:
 		float			f;
 		bool			b;
 		void			* p;
-		const char		* str;	// BSFixedString
-		BSFixedString *	GetStr(void)	{ return (BSFixedString *)(&str); }
 	} data;
+	StringTableItem		str;
 
 	void	SetNone(void)
 	{
 		type = kType_None;
 		index = -1;
 		data.u = 0;
+		str = nullptr;
 	}
 
 	void	SetInt(UInt16 paramKey, SInt8 controllerIndex, SInt32 i)
@@ -89,6 +93,7 @@ public:
 		type = kType_Int;
 		index = controllerIndex;
 		data.i = i;
+		str = nullptr;
 	}
 
 	void	SetFloat(UInt16 paramKey, SInt8 controllerIndex, float f)
@@ -97,6 +102,7 @@ public:
 		type = kType_Float;
 		index = controllerIndex;
 		data.f = f;
+		str = nullptr;
 	}
 
 	void	SetBool(UInt16 paramKey, SInt8 controllerIndex, bool b)
@@ -105,14 +111,16 @@ public:
 		type = kType_Bool;
 		index = controllerIndex;
 		data.b = b;
+		str = nullptr;
 	}
 
-	void	SetString(UInt16 paramKey, SInt8 controllerIndex, BSFixedString str)
+	void	SetString(UInt16 paramKey, SInt8 controllerIndex, SKEEFixedString string)
 	{
 		key = paramKey;
 		type = kType_String;
 		index = controllerIndex;
-		data.str = str.data;
+		data.p = nullptr;
+		str = g_stringTable.GetString(string);
 	}
 
 	void	SetColor(UInt16 paramKey, SInt8 controllerIndex, NiColor color)
@@ -121,6 +129,7 @@ public:
 		type = kType_Int;
 		index = controllerIndex;
 		data.u = (UInt8)(color.r * 255) << 16 | (UInt8)(color.g * 255) << 8 | (UInt8)(color.b * 255);
+		str = nullptr;
 	}
 
 	void	SetColorA(UInt16 paramKey, SInt8 controllerIndex, NiColorA color)
@@ -129,6 +138,7 @@ public:
 		type = kType_Int;
 		index = controllerIndex;
 		data.u = (UInt8)(color.a * 255) << 24 | (UInt8)(color.r * 255) << 16 | (UInt8)(color.g * 255) << 8 | (UInt8)(color.b * 255);
+		str = nullptr;
 	}
 
 	void SetIdentifier(UInt16 paramKey, SInt8 controllerIndex, void * ptr)
@@ -137,6 +147,7 @@ public:
 		type = kType_Identifier;
 		index = controllerIndex;
 		data.p = ptr;
+		str = nullptr;
 	}
 
 	static bool IsIndexValid(UInt16 key);
@@ -149,6 +160,7 @@ template <> void UnpackValue <float>(float * dst, OverrideVariant * src);
 template <> void UnpackValue <UInt32>(UInt32 * dst, OverrideVariant * src);
 template <> void UnpackValue <SInt32>(SInt32 * dst, OverrideVariant * src);
 template <> void UnpackValue <bool>(bool * dst, OverrideVariant * src);
+template <> void UnpackValue <SKEEFixedString>(SKEEFixedString * dst, OverrideVariant * src);
 template <> void UnpackValue <BSFixedString>(BSFixedString * dst, OverrideVariant * src);
 template <> void UnpackValue <NiColor>(NiColor * dst, OverrideVariant * src);
 template <> void UnpackValue <NiColorA>(NiColorA * dst, OverrideVariant * src);
@@ -161,6 +173,7 @@ template <> void PackValue <float>(OverrideVariant * dst, UInt16 key, UInt8 inde
 template <> void PackValue <UInt32>(OverrideVariant * dst, UInt16 key, UInt8 index, UInt32 * src);
 template <> void PackValue <SInt32>(OverrideVariant * dst, UInt16 key, UInt8 index, SInt32 * src);
 template <> void PackValue <bool>(OverrideVariant * dst, UInt16 key, UInt8 index, bool * src);
+template <> void PackValue <SKEEFixedString>(OverrideVariant * dst, UInt16 key, UInt8 index, SKEEFixedString * src);
 template <> void PackValue <BSFixedString>(OverrideVariant * dst, UInt16 key, UInt8 index, BSFixedString * src);
 template <> void PackValue <NiColor>(OverrideVariant * dst, UInt16 key, UInt8 index, NiColor * src);
 template <> void PackValue <NiColorA>(OverrideVariant * dst, UInt16 key, UInt8 index, NiColorA * src);

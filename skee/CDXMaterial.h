@@ -70,15 +70,15 @@ public:
 	void SetDiffuseTexture(LPDIRECT3DBASETEXTURE9 texture);
 	LPDIRECT3DBASETEXTURE9 GetDiffuseTexture() const { return m_diffuseTexture; }
 
-	void SetDiffuseColor(D3DXVECTOR3 color);
-	void SetSpecularColor(D3DXVECTOR3 color);
-	void SetAmbientColor(D3DXVECTOR3 color);
-	void SetWireframeColor(D3DXVECTOR3 color);
+	void SetDiffuseColor(DirectX::XMFLOAT3 color);
+	void SetSpecularColor(DirectX::XMFLOAT3 color);
+	void SetAmbientColor(DirectX::XMFLOAT3 color);
+	void SetWireframeColor(DirectX::XMFLOAT3 color);
 
-	D3DXVECTOR3 & GetDiffuseColor();
-	D3DXVECTOR3 & GetSpecularColor();
-	D3DXVECTOR3 & GetAmbientColor();
-	D3DXVECTOR3 & GetWireframeColor();
+	DirectX::XMFLOAT3 & GetDiffuseColor();
+	DirectX::XMFLOAT3 & GetSpecularColor();
+	DirectX::XMFLOAT3 & GetAmbientColor();
+	DirectX::XMFLOAT3 & GetWireframeColor();
 
 	UInt32 GetShaderFlags1() const { return m_shaderFlags1; }
 	UInt32 GetShaderFlags2() const { return m_shaderFlags2; }
@@ -154,10 +154,10 @@ public:
 protected:
 	LPDIRECT3DBASETEXTURE9 m_diffuseTexture;
 
-	D3DXVECTOR3	m_specularColor;
-	D3DXVECTOR3	m_diffuseColor;
-	D3DXVECTOR3	m_ambientColor;
-	D3DXVECTOR3 m_wireframeColor;
+	DirectX::XMFLOAT3	m_specularColor;
+	DirectX::XMFLOAT3	m_diffuseColor;
+	DirectX::XMFLOAT3	m_ambientColor;
+	DirectX::XMFLOAT3 m_wireframeColor;
 	DeclareFlags(UInt16);
 	UInt32	m_shaderFlags1;
 	UInt32	m_shaderFlags2;

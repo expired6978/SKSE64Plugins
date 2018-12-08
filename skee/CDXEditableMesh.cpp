@@ -65,32 +65,32 @@ void CDXEditableMesh::VisitAdjacencies(CDXMeshIndex i, std::function<bool(CDXMes
 	}
 }
 
-void CDXEditableMesh::Render(LPDIRECT3DDEVICE9 pDevice, CDXShader * shader)
+void CDXEditableMesh::Render(ID3D11Device * pDevice, CDXShader * shader)
 {
-	pDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
+	//pDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 
 	CDXMesh::Render(pDevice, shader);
 
 	// Render again but in wireframe
 	if (m_wireframe) {
-		pDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_WIREFRAME);
+		//pDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_WIREFRAME);
 
-		if (m_material) {
+		/*if (m_material) {
 			m_material->SetWireframe(true);
 			CDXMesh::Render(pDevice, shader);
 			m_material->SetWireframe(false);
-		}
+		}*/
 	}
 }
 
-CDXVec3 CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
+CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 {
 	CDXMeshVert* pVertices = NULL;
 	CDXMeshIndex* pIndices = NULL;
 
-	D3DXVECTOR3 vNormal(0, 0, 0);
-	LPDIRECT3DVERTEXBUFFER9 pVB = GetVertexBuffer();
-	pVB->Lock(0, 0, (void**)&pVertices, 0);
+	CDXVec vNormal = DirectX::XMVectorZero();
+	ID3D11Buffer * pVB = GetVertexBuffer();
+	//pVB->Lock(0, 0, (void**)&pVertices, 0);
 	if (!pVertices)
 		return vNormal;
 
@@ -101,15 +101,17 @@ CDXVec3 CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 			CDXMeshVert * v2 = &pVertices[tri.v2];
 			CDXMeshVert * v3 = &pVertices[tri.v3];
 
-			D3DXVECTOR3 e1 = *(D3DXVECTOR3*)v2 - *(D3DXVECTOR3*)v1;
-			D3DXVECTOR3 e2 = *(D3DXVECTOR3*)v3 - *(D3DXVECTOR3*)v2;
-			D3DXVec3Cross(&vNormal, &e1, &e2);
-			D3DXVec3Normalize(&vNormal, &vNormal);
+			auto e1 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v2->Position), DirectX::XMLoadFloat3(&v1->Position));
+			auto e2 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v3->Position), DirectX::XMLoadFloat3(&v2->Position));
+
+			auto faceNormal = DirectX::XMVector3Cross(e1, e2);
+			faceNormal = DirectX::XMVector3Normalize(faceNormal);
+			DirectX::XMVectorAdd(vNormal, faceNormal);
 		}
-		D3DXVec3Normalize(&vNormal, &vNormal);
+		DirectX::XMVector3Normalize(vNormal);
 	}
 
-	pVB->Unlock();
+	//pVB->Unlock();
 	return vNormal;
 }
 
@@ -121,5 +123,4 @@ bool CDXEditableMesh::IsEdgeVertex(CDXMeshIndex i) const
 
 	return false;
 }
-
 #endif

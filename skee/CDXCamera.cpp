@@ -5,26 +5,28 @@
 CDXArcBall::CDXArcBall()
 {
 	Reset();
-	m_vDownPt = D3DXVECTOR3( 0, 0, 0 );
-	m_vCurrentPt = D3DXVECTOR3( 0, 0, 0 );
+	m_vDownPt = DirectX::XMVectorZero();
+	m_vCurrentPt = DirectX::XMVectorZero();
 	m_Offset.x = m_Offset.y = 0;
 }
 
 //--------------------------------------------------------------------------------------
 void CDXArcBall::Reset()
 {
-	D3DXQuaternionIdentity( &m_qDown );
-	D3DXQuaternionIdentity( &m_qNow );
-	D3DXMatrixIdentity( &m_mRotation );
-	D3DXMatrixIdentity( &m_mTranslation );
-	D3DXMatrixIdentity( &m_mTranslationDelta );
+	m_qDown = DirectX::XMQuaternionIdentity();
+	m_qNow = DirectX::XMQuaternionIdentity();
+
+	m_mRotation = DirectX::XMMatrixIdentity();
+	m_mTranslation = DirectX::XMMatrixIdentity();
+	m_mTranslationDelta = DirectX::XMMatrixIdentity();
+
 	m_bDrag = FALSE;
 	m_fRadiusTranslation = 1.0f;
 	m_fRadius = 1.0f;
 }
 
 //--------------------------------------------------------------------------------------
-D3DXVECTOR3 CDXArcBall::ScreenToVector( float fScreenPtX, float fScreenPtY )
+CDXVec CDXArcBall::ScreenToVector( float fScreenPtX, float fScreenPtY )
 {
 	// Scale to screen
 	FLOAT x = -( fScreenPtX - m_Offset.x - m_nWidth / 2 ) / ( m_fRadius * m_nWidth / 2 );
@@ -43,17 +45,15 @@ D3DXVECTOR3 CDXArcBall::ScreenToVector( float fScreenPtX, float fScreenPtY )
 		z = sqrtf( 1.0f - mag );
 
 	// Return vector
-	return D3DXVECTOR3( x, y, z );
+	return DirectX::XMVectorSet(x, y, z, 1);
 }
 
 //--------------------------------------------------------------------------------------
-D3DXQUATERNION CDXArcBall::QuatFromBallPoints( const D3DXVECTOR3& vFrom, const D3DXVECTOR3& vTo )
+CDXVec CDXArcBall::QuatFromBallPoints( const CDXVec& vFrom, const CDXVec& vTo )
 {
-	D3DXVECTOR3 vPart;
-	float fDot = D3DXVec3Dot( &vFrom, &vTo );
-	D3DXVec3Cross( &vPart, &vFrom, &vTo );
-
-	return D3DXQUATERNION( vPart.x, vPart.y, vPart.z, fDot );
+	float fDot = DirectX::XMVectorGetX(DirectX::XMVector3Dot(vFrom, vTo));
+	CDXVec vPart = DirectX::XMVector3Cross(vFrom, vTo);
+	return DirectX::XMVectorSet(DirectX::XMVectorGetX(vPart), DirectX::XMVectorGetY(vPart), DirectX::XMVectorGetZ(vPart), fDot );
 }
 
 //--------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ void CDXArcBall::OnRotate( int nX, int nY )
 	if( m_bDrag )
 	{
 		m_vCurrentPt = ScreenToVector( ( float )nX, ( float )nY );
-		m_qNow = m_qDown * QuatFromBallPoints( m_vDownPt, m_vCurrentPt );
+		m_qNow = DirectX::XMVectorMultiply(m_qDown, QuatFromBallPoints( m_vDownPt, m_vCurrentPt ));
 	}
 }
 
@@ -101,7 +101,7 @@ VOID CDXModelViewerCamera::SetProjParams( FLOAT fFOV, FLOAT fAspect, FLOAT fNear
 	m_fNearPlane = fNearPlane;
 	m_fFarPlane = fFarPlane;
 
-	D3DXMatrixPerspectiveFovLH( &m_mProj, fFOV, fAspect, fNearPlane, fFarPlane );
+	m_mProj = DirectX::XMMatrixPerspectiveFovLH(fFOV, fAspect, fNearPlane, fFarPlane );
 }
 /*
 void CDXModelViewerCamera::UpdateMouseDelta(int currentX, int currentY)
@@ -131,16 +131,10 @@ void CDXModelViewerCamera::UpdateMouseDelta(int currentX, int currentY)
 //--------------------------------------------------------------------------------------
 // Clamps pV to lie inside m_vMinBoundary & m_vMaxBoundary
 //--------------------------------------------------------------------------------------
-void CDXModelViewerCamera::ConstrainToBoundary( D3DXVECTOR3* pV )
+void CDXModelViewerCamera::ConstrainToBoundary( CDXVec* pV )
 {
 	// Constrain vector to a bounding box 
-	pV->x = __max( pV->x, m_vMinBoundary.x );
-	pV->y = __max( pV->y, m_vMinBoundary.y );
-	pV->z = __max( pV->z, m_vMinBoundary.z );
-
-	pV->x = __min( pV->x, m_vMaxBoundary.x );
-	pV->y = __min( pV->y, m_vMaxBoundary.y );
-	pV->z = __min( pV->z, m_vMaxBoundary.z );
+	*pV = DirectX::XMVectorClamp(*pV, m_vMinBoundary, m_vMaxBoundary);
 }
 
 //--------------------------------------------------------------------------------------
@@ -148,14 +142,14 @@ void CDXModelViewerCamera::ConstrainToBoundary( D3DXVECTOR3* pV )
 //--------------------------------------------------------------------------------------
 CDXModelViewerCamera::CDXModelViewerCamera()
 {
-	D3DXVECTOR3 vEyePt = D3DXVECTOR3( 0.0f, 0.0f, 0.0f );
-	D3DXVECTOR3 vLookatPt = D3DXVECTOR3( 0.0f, 0.0f, 1.0f );
+	CDXVec vEyePt = DirectX::XMVectorZero();
+	CDXVec vLookatPt = DirectX::XMVectorSet(0, 0, 1.0f, 0);
 
 	// Setup the view matrix
 	SetViewParams( &vEyePt, &vLookatPt );
 
 	// Setup the projection matrix
-	SetProjParams( D3DX_PI / 4, 1.0f, 1.0f, 1000.0f );
+	SetProjParams( DirectX::XM_PI / 4, 1.0f, 1.0f, 1000.0f );
 
 	//m_ptLastMousePosition.x = 0;
 	//m_ptLastMousePosition.y = 0;
@@ -164,9 +158,9 @@ CDXModelViewerCamera::CDXModelViewerCamera()
 	m_fCameraPitchAngle = 0.0f;
 
 	//SetRect( &m_rcDrag, LONG_MIN, LONG_MIN, LONG_MAX, LONG_MAX );
-	m_vVelocity = D3DXVECTOR3( 0, 0, 0 );
+	m_vVelocity = DirectX::XMVectorZero();
 	//m_bMovementDrag = false;
-	//m_vVelocityDrag = D3DXVECTOR3( 0, 0, 0 );
+	//m_vVelocityDrag = CDXVec( 0, 0, 0 );
 	//m_fDragTimer = 0.0f;
 	//m_fTotalDragTimeToZero = 0.25;
 	//m_vRotVelocity = D3DXVECTOR2( 0, 0 );
@@ -178,14 +172,14 @@ CDXModelViewerCamera::CDXModelViewerCamera()
 	//m_fFramesToSmoothMouseData = 2.0f;
 
 	m_bClipToBoundary = false;
-	m_vMinBoundary = D3DXVECTOR3( -1, -1, -1 );
-	m_vMaxBoundary = D3DXVECTOR3( 1, 1, 1 );
+	m_vMinBoundary = DirectX::XMVectorSet(-1, -1, -1, 0);
+	m_vMaxBoundary = DirectX::XMVectorSet(1, 1, 1, 0);
 
-	D3DXMatrixIdentity( &m_mWorld );
-	D3DXMatrixIdentity( &m_mModelRot );
-	D3DXMatrixIdentity( &m_mModelLastRot );
-	D3DXMatrixIdentity( &m_mCameraRotLast );
-	m_vModelCenter = D3DXVECTOR3( 0, 0, 0 );
+	m_mWorld = DirectX::XMMatrixIdentity();
+	m_mModelRot = DirectX::XMMatrixIdentity();
+	m_mModelLastRot = DirectX::XMMatrixIdentity();
+	m_mCameraRotLast = DirectX::XMMatrixIdentity();
+	m_vModelCenter = DirectX::XMVectorZero();
 	m_fRadius = 5.0f;
 	m_fDefaultRadius = 5.0f;
 	m_fMinRadius = 1.0f;
@@ -205,20 +199,21 @@ void CDXModelViewerCamera::OnRotate(int currentX, int currentY)
 void CDXModelViewerCamera::OnMoveBegin(int currentX, int currentY)
 {
 	m_vDragLook = m_vLookAt;
-	m_vDragStart = D3DXVECTOR2(currentX, currentY);
+	m_vDragStart = DirectX::XMVectorSet(currentX, currentY, 0, 0);
 	m_vDragPos = m_vDragStart;
 }
 
 void CDXModelViewerCamera::OnMove(int x, int y)
 {
-	m_vDragPos = D3DXVECTOR2(x, y);
+	m_vDragPos = DirectX::XMVectorSet(x, y, 0, 0);
 
 	m_vLookAt = m_vDragLook;
-	
-	D3DXVECTOR2 panDelta = (m_vDragPos - m_vDragStart) * m_fPanMultiplier;
 
-	m_vLookAt.x += -panDelta.x;
-	m_vLookAt.z += panDelta.y;
+	auto multiplier = DirectX::XMVectorMultiply(DirectX::XMVectorReplicate(m_fPanMultiplier), DirectX::XMVectorSet(-1, 1, 1, 1));
+
+	auto panDelta = DirectX::XMVectorMultiply(DirectX::XMVectorSubtract(m_vDragPos, m_vDragStart), multiplier);
+
+	m_vLookAt = DirectX::XMVectorAdd(m_vLookAt, panDelta);
 
 	m_bDragSinceLastUpdate = true;
 	Update();
@@ -227,8 +222,8 @@ void CDXModelViewerCamera::OnMove(int x, int y)
 void CDXModelViewerCamera::OnMoveEnd()
 {
 	m_vDragLook = m_vLookAt;
-	m_vDragStart = D3DXVECTOR2(0, 0);
-	m_vDragPos = D3DXVECTOR2(0, 0);
+	m_vDragStart = DirectX::XMVectorZero();
+	m_vDragPos = DirectX::XMVectorZero();
 }
 
 void CDXModelViewerCamera::Update()
@@ -240,28 +235,29 @@ void CDXModelViewerCamera::Update()
 	m_bDragSinceLastUpdate = false;
 
 	// Simple euler method to calculate position delta
-	//D3DXVECTOR3 vPosDelta = m_vVelocity;
+	//CDXVec vPosDelta = m_vVelocity;
 
 	// Change the radius from the camera to the model based on wheel scrolling
 	m_fRadius = __min( m_fMaxRadius, m_fRadius );
 	m_fRadius = __max( m_fMinRadius, m_fRadius );
 
 	// Get the inverse of the arcball's rotation matrix
-	D3DXMATRIX mCameraRot;
-	D3DXMatrixInverse( &mCameraRot, NULL, m_ViewArcBall.GetRotationMatrix() );
+
+	auto det = DirectX::XMMatrixDeterminant(m_ViewArcBall.GetRotationMatrix());
+	auto mCameraRot = DirectX::XMMatrixInverse(&det, m_ViewArcBall.GetRotationMatrix());
 
 	//D3DXMATRIX mCameraRot;
 	//D3DXMatrixRotationYawPitchRoll(&mCameraRot, m_fCameraYawAngle, m_fCameraPitchAngle, 0);
 
 	// Transform vectors based on camera's rotation matrix
-	D3DXVECTOR3 vWorldUp, vWorldAhead;
-	D3DXVECTOR3 vLocalUp = D3DXVECTOR3( 0, 1, 0 );
-	D3DXVECTOR3 vLocalAhead = D3DXVECTOR3( 0, 0, 1 );
-	D3DXVec3TransformCoord( &vWorldUp, &vLocalUp, &mCameraRot );
-	D3DXVec3TransformCoord( &vWorldAhead, &vLocalAhead, &mCameraRot );
+	CDXVec vWorldUp, vWorldAhead;
+	CDXVec vLocalUp = DirectX::XMVectorSet( 0, 1, 0, 0 );
+	CDXVec vLocalAhead = DirectX::XMVectorSet(0, 0, 1, 0 );
+	vWorldUp = XMVector3TransformCoord(vLocalUp, mCameraRot );
+	vWorldAhead = XMVector3TransformCoord(vLocalAhead, mCameraRot );
 
 	// Transform the position delta by the camera's rotation 
-	/*D3DXVECTOR3 vPosDeltaWorld;
+	/*CDXVec vPosDeltaWorld;
 	D3DXVec3TransformCoord( &vPosDeltaWorld, &vPosDelta, &mCameraRot );
 
 	// Move the lookAt position 
@@ -274,23 +270,23 @@ void CDXModelViewerCamera::Update()
 		ConstrainToBoundary(&m_vEye);*/
 
 	// Update the eye point based on a radius away from the lookAt position
-	m_vEye = m_vLookAt - vWorldAhead * m_fRadius;
+	m_vEye = DirectX::XMVectorScale(DirectX::XMVectorSubtract(m_vLookAt, vWorldAhead), m_fRadius);
 	//m_vLookAt = m_vEye + vWorldAhead * m_fRadius;
 
 	// Update the view matrix
-	D3DXMatrixLookAtLH( &m_mView, &m_vEye, &m_vLookAt, &vWorldUp );
+	m_mView = DirectX::XMMatrixLookAtLH( m_vEye, m_vLookAt, vWorldUp );
 
-	D3DXMATRIX mInvView;
-	D3DXMatrixInverse( &mInvView, NULL, &m_mView );
-	mInvView._41 = mInvView._42 = mInvView._43 = 0;
+	auto mInvViewDet = DirectX::XMMatrixDeterminant(m_mView);
+	auto mInvView = DirectX::XMMatrixInverse(&mInvViewDet, m_mView);
 
-	D3DXMATRIX mModelLastRotInv;
-	D3DXMatrixInverse( &mModelLastRotInv, NULL, &m_mModelLastRot );
+	mInvView.r[3] = DirectX::XMVectorZero();
+
+	auto mModelLastRotInvDet = DirectX::XMMatrixDeterminant(m_mModelLastRot);
+	auto mModelLastRotInv = DirectX::XMMatrixInverse(&mModelLastRotInvDet, m_mModelLastRot);
 
 	// Accumulate the delta of the arcball's rotation in view space.
 	// Note that per-frame delta rotations could be problematic over long periods of time.
-	D3DXMATRIX mModelRot;
-	mModelRot = *m_WorldArcBall.GetRotationMatrix();
+	auto mModelRot = m_WorldArcBall.GetRotationMatrix();
 	m_mModelRot *= m_mView * mModelLastRotInv * mModelRot * mInvView;
 
 	m_mCameraRotLast = mCameraRot;
@@ -298,28 +294,16 @@ void CDXModelViewerCamera::Update()
 
 	// Since we're accumulating delta rotations, we need to orthonormalize 
 	// the matrix to prevent eventual matrix skew
-	D3DXVECTOR3* pXBasis = ( D3DXVECTOR3* )&m_mModelRot._11;
-	D3DXVECTOR3* pYBasis = ( D3DXVECTOR3* )&m_mModelRot._21;
-	D3DXVECTOR3* pZBasis = ( D3DXVECTOR3* )&m_mModelRot._31;
-	D3DXVec3Normalize( pXBasis, pXBasis );
-	D3DXVec3Cross( pYBasis, pZBasis, pXBasis );
-	D3DXVec3Normalize( pYBasis, pYBasis );
-	D3DXVec3Cross( pZBasis, pXBasis, pYBasis );
+	m_mModelRot.r[0] = DirectX::XMVector3Normalize(m_mModelRot.r[0]);
+	m_mModelRot.r[1] = DirectX::XMVector3Cross(m_mModelRot.r[2], m_mModelRot.r[0]);
+	m_mModelRot.r[1] = DirectX::XMVector3Normalize(m_mModelRot.r[1]);
+	m_mModelRot.r[2] = DirectX::XMVector3Cross(m_mModelRot.r[0], m_mModelRot.r[1]);
 
-	// Translate the rotation matrix to the same position as the lookAt position
-	//m_mModelRot._41 = m_vLookAt.x;
-	//m_mModelRot._42 = m_vLookAt.y;
-	//m_mModelRot._43 = m_vLookAt.z;
-
-	m_mModelRot._41 = m_vModelCenter.x;
-	m_mModelRot._42 = m_vModelCenter.y;
-	m_mModelRot._43 = m_vModelCenter.z;
+	m_mModelRot.r[3] = m_vModelCenter;
 
 	// Translate world matrix so its at the center of the model
-	D3DXMATRIX mTrans;
 	//D3DXMatrixTranslation( &mTrans, -m_vModelCenter.x, -m_vModelCenter.y, -m_vModelCenter.z );
-	D3DXMatrixScaling(&mTrans, -1.0, 1.0, 1.0);
-	m_mWorld = mTrans * m_mModelRot;
+	m_mWorld = DirectX::XMMatrixScaling(-1.0, 1.0, 1.0) * m_mModelRot;
 }
 
 //--------------------------------------------------------------------------------------
@@ -329,10 +313,10 @@ VOID CDXModelViewerCamera::Reset()
 {
 	SetViewParams( &m_vDefaultEye, &m_vDefaultLookAt );
 
-	D3DXMatrixIdentity( &m_mWorld );
-	D3DXMatrixIdentity( &m_mModelRot );
-	D3DXMatrixIdentity( &m_mModelLastRot );
-	D3DXMatrixIdentity( &m_mCameraRotLast );
+	m_mWorld = DirectX::XMMatrixIdentity();
+	m_mModelRot = DirectX::XMMatrixIdentity();
+	m_mModelLastRot = DirectX::XMMatrixIdentity();
+	m_mCameraRotLast = DirectX::XMMatrixIdentity();
 
 	m_fRadius = m_fDefaultRadius;
 	m_WorldArcBall.Reset();
@@ -343,7 +327,7 @@ VOID CDXModelViewerCamera::Reset()
 //--------------------------------------------------------------------------------------
 // Override for setting the view parameters
 //--------------------------------------------------------------------------------------
-void CDXModelViewerCamera::SetViewParams( D3DXVECTOR3* pvEyePt, D3DXVECTOR3* pvLookatPt )
+void CDXModelViewerCamera::SetViewParams( CDXVec* pvEyePt, CDXVec* pvLookatPt )
 {
 	if( NULL == pvEyePt || NULL == pvLookatPt )
 		return;
@@ -352,36 +336,33 @@ void CDXModelViewerCamera::SetViewParams( D3DXVECTOR3* pvEyePt, D3DXVECTOR3* pvL
 	m_vDefaultLookAt = m_vLookAt = *pvLookatPt;
 
 	// Calc the view matrix
-	D3DXVECTOR3 vUp( 0,1,0 );
-	D3DXMatrixLookAtLH( &m_mView, pvEyePt, pvLookatPt, &vUp );
+	CDXVec vUp = DirectX::XMVectorSet( 0,1,0,1 );
+	m_mView = DirectX::XMMatrixLookAtLH( *pvEyePt, *pvLookatPt, vUp );
 
-	D3DXMATRIX mInvView;
-	D3DXMatrixInverse( &mInvView, NULL, &m_mView );
+	auto m_mViewDet = DirectX::XMMatrixDeterminant(m_mView);
+	auto mInvView = DirectX::XMMatrixInverse(&m_mViewDet, m_mView);
 
 	// The axis basis vectors and camera position are stored inside the 
 	// position matrix in the 4 rows of the camera's world matrix.
 	// To figure out the yaw/pitch of the camera, we just need the Z basis vector
-	D3DXVECTOR3* pZBasis = ( D3DXVECTOR3* )&mInvView._31;
+	CDXVec* pZBasis = ( CDXVec* )&mInvView.r[3];
 
-	m_fCameraYawAngle = atan2f( pZBasis->x, pZBasis->z );
-	float fLen = sqrtf( pZBasis->z * pZBasis->z + pZBasis->x * pZBasis->x );
-	m_fCameraPitchAngle = -atan2f( pZBasis->y, fLen );
+	m_fCameraYawAngle = atan2f(DirectX::XMVectorGetX(*pZBasis), DirectX::XMVectorGetZ(*pZBasis));
+	float fLen = sqrtf(DirectX::XMVectorGetZ(*pZBasis) * DirectX::XMVectorGetZ(*pZBasis) + DirectX::XMVectorGetX(*pZBasis) * DirectX::XMVectorGetX(*pZBasis));
+	m_fCameraPitchAngle = -atan2f(DirectX::XMVectorGetY(*pZBasis), fLen );
 
 	// Propogate changes to the member arcball
-	D3DXQUATERNION quat;
-	D3DXMATRIXA16 mRotation;
-	D3DXMatrixLookAtLH( &mRotation, pvEyePt, pvLookatPt, &vUp );
-	D3DXMatrixRotationYawPitchRoll(&mRotation, 0, -D3DX_PI/2, 0);
-	D3DXQuaternionRotationMatrix( &quat, &mRotation );
+	auto mRotation = DirectX::XMMatrixLookAtLH(*pvEyePt, *pvLookatPt, vUp);
+	mRotation = DirectX::XMMatrixRotationRollPitchYaw(-DirectX::XM_PI / 2, 0, 0);
+
+	auto quat = DirectX::XMQuaternionRotationMatrix(mRotation);
 	m_ViewArcBall.SetQuatNow( quat );
 
 	// Set the radius according to the distance
-	D3DXVECTOR3 vEyeToPoint;
-	D3DXVec3Subtract( &vEyeToPoint, pvLookatPt, pvEyePt );
-	SetRadius( D3DXVec3Length( &vEyeToPoint ) );
+	CDXVec vEyeToPoint = DirectX::XMVectorSubtract(*pvLookatPt, *pvEyePt);
+	SetRadius( DirectX::XMVectorGetX(DirectX::XMVector3Length(vEyeToPoint)));
 
 	// View information changed. FrameMove should be called.
 	m_bDragSinceLastUpdate = true;
 }
-
 #endif

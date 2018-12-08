@@ -29,7 +29,7 @@ void CDXEditableScene::ReleaseBrushes()
 	m_brushes.clear();
 }
 
-void CDXEditableScene::Setup(LPDIRECT3DDEVICE9 pDevice)
+void CDXEditableScene::Setup(ID3D11Device * pDevice)
 {
 	CreateBrushes();
 	CDXScene::Setup(pDevice);
