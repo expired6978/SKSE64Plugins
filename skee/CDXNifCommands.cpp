@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #include "CDXNifCommands.h"
 #include "CDXNifMesh.h"
 #include "CDXNifScene.h"
@@ -12,25 +10,28 @@
 #include "skse64/NiGeometry.h"
 #include "skse64/NiExtraData.h"
 
-#include "MorphHandler.h"
+#include "FaceMorphInterface.h"
 #include "FileUtils.h"
 #include "NifUtils.h"
+#include "SKEEHooks.h"
 
 #include "skse64/ScaleformCallbacks.h"
 
 #include "skse64/PluginAPI.h"
 
-extern MorphHandler			g_morphHandler;
+extern FaceMorphInterface	g_morphInterface;
 extern SKSETaskInterface	* g_task;
 extern CDXNifScene			g_World;
 
-void ApplyMorphData(NiGeometry * geometry, CDXVectorMap & vectorMap, float multiplier)
+using namespace DirectX;
+
+void ApplyMorphData(BSTriShape * geometry, CDXVectorMap & vectorMap, float multiplier)
 {
 	Actor * actor = g_World.GetWorkingActor();
 	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
 
 	// Create mapped extra vertex data for NPC
-	auto sculptTarget = g_morphHandler.GetSculptTarget(npc, true);
+	auto sculptTarget = g_morphInterface.GetSculptTarget(npc, true);
 	if (sculptTarget) {
 		std::string headPartName = geometry->m_name;
 		BGSHeadPart * headPart = GetHeadPartByName(headPartName);
@@ -59,7 +60,7 @@ void ApplyMorphData(NiGeometry * geometry, CDXVectorMap & vectorMap, float multi
 	}
 }
 
-void AddStrokeCommand(CDXStroke * stroke, NiGeometry * geometry, SInt32 id)
+void AddStrokeCommand(CDXStroke * stroke, BSTriShape * geometry, SInt32 id)
 {
 	if (g_task)
 		g_task->AddUITask(new CRGNUITaskAddStroke(stroke, geometry, id));
@@ -69,7 +70,7 @@ void CDXNifInflateStroke::Undo()
 {
 	CDXInflateStroke::Undo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -78,8 +79,8 @@ void CDXNifInflateStroke::Undo()
 void CDXNifInflateStroke::Redo()
 {
 	CDXInflateStroke::Redo();
-	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	CDXLegacyNifMesh * nifMesh = static_cast<CDXLegacyNifMesh*>(m_mesh);
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -89,7 +90,7 @@ void CDXNifDeflateStroke::Undo()
 {
 	CDXDeflateStroke::Undo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -99,7 +100,7 @@ void CDXNifDeflateStroke::Redo()
 {
 	CDXDeflateStroke::Redo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -109,7 +110,7 @@ void CDXNifSmoothStroke::Undo()
 {
 	CDXSmoothStroke::Undo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -118,7 +119,7 @@ void CDXNifSmoothStroke::Redo()
 {
 	CDXSmoothStroke::Redo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -128,7 +129,7 @@ void CDXNifMoveStroke::Undo()
 {
 	CDXMoveStroke::Undo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -138,7 +139,7 @@ void CDXNifMoveStroke::Redo()
 {
 	CDXMoveStroke::Redo();
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -147,7 +148,7 @@ void CDXNifMoveStroke::Redo()
 void CDXNifInflateStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		AddStrokeCommand(this, geometry, i);
@@ -157,7 +158,7 @@ void CDXNifInflateStroke::Apply(SInt32 i)
 void CDXNifDeflateStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		AddStrokeCommand(this, geometry, i);
@@ -167,7 +168,7 @@ void CDXNifDeflateStroke::Apply(SInt32 i)
 void CDXNifSmoothStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		AddStrokeCommand(this, geometry, i);
@@ -177,7 +178,7 @@ void CDXNifSmoothStroke::Apply(SInt32 i)
 void CDXNifMoveStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		AddStrokeCommand(this, geometry, i);
@@ -187,7 +188,7 @@ void CDXNifMoveStroke::Apply(SInt32 i)
 void CDXNifMaskAddStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		AddStrokeCommand(this, geometry, i);
 	}
@@ -196,7 +197,7 @@ void CDXNifMaskAddStroke::Apply(SInt32 i)
 void CDXNifMaskSubtractStroke::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		AddStrokeCommand(this, geometry, i);
 	}
@@ -206,14 +207,14 @@ void CDXNifMaskSubtractStroke::Apply(SInt32 i)
 void CDXNifResetMask::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		if (g_task)
 			g_task->AddUITask(new CRGNUITaskStandardCommand(this, geometry, i));
 	}
 }
 
-CRGNTaskUpdateModel::CRGNTaskUpdateModel(NiGeometry * geometry)
+CRGNTaskUpdateModel::CRGNTaskUpdateModel(BSTriShape * geometry)
 {
 	m_geometry = geometry;
 	if (m_geometry)
@@ -233,7 +234,7 @@ void CRGNTaskUpdateModel::Dispose()
 	delete this;
 }
 
-CRGNUITaskAddStroke::CRGNUITaskAddStroke(CDXStroke * stroke, NiGeometry * geometry, SInt32 id)
+CRGNUITaskAddStroke::CRGNUITaskAddStroke(CDXStroke * stroke, BSTriShape * geometry, SInt32 id)
 {
 	m_id = id;
 	m_stroke = stroke;
@@ -253,8 +254,9 @@ void CRGNUITaskAddStroke::Run()
 {
 	IMenu * menu = MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu);
 	if (menu && menu->view) {
-		GFxValue obj;
-		menu->view->CreateObject(&obj);
+		FxResponseArgs<1> args;
+		menu->view->CreateObject(&args.args[1]);
+		GFxValue & obj = args.args[1];
 		GFxValue commandId;
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", &commandId);
@@ -273,14 +275,11 @@ void CRGNUITaskAddStroke::Run()
 		GFxValue partName;
 		partName.SetString(m_geometry->m_name);
 		obj.SetMember("part", &partName);
-
-		FxResponseArgsList args;
-		args.Add(&obj);
 		InvokeFunction(menu->view, "AddAction", &args);
 	}
 }
 
-CRGNUITaskStandardCommand::CRGNUITaskStandardCommand(CDXUndoCommand * cmd, NiGeometry * geometry, SInt32 id)
+CRGNUITaskStandardCommand::CRGNUITaskStandardCommand(CDXUndoCommand * cmd, BSTriShape * geometry, SInt32 id)
 {
 	m_id = id;
 	m_cmd = cmd;
@@ -300,8 +299,9 @@ void CRGNUITaskStandardCommand::Run()
 {
 	IMenu * menu = MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu);
 	if (menu && menu->view) {
-		GFxValue obj;
-		menu->view->CreateObject(&obj);
+		FxResponseArgs<1> args;
+		menu->view->CreateObject(&args.args[1]);
+		GFxValue & obj = args.args[1];
 		GFxValue commandId;
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", &commandId);
@@ -311,9 +311,6 @@ void CRGNUITaskStandardCommand::Run()
 		GFxValue partName;
 		partName.SetString(m_geometry->m_name);
 		obj.SetMember("part", &partName);
-
-		FxResponseArgsList args;
-		args.Add(&obj);
 		InvokeFunction(menu->view, "AddAction", &args);
 	}
 }
@@ -324,29 +321,31 @@ CDXNifResetSculpt::CDXNifResetSculpt(CDXNifMesh * mesh) : CDXUndoCommand()
 
 	Actor * actor = g_World.GetWorkingActor();
 	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
-	NiGeometry * geometry = m_mesh->GetNifGeometry();
-
+	BSTriShape * geometry = m_mesh->GetGeometry();
 	if (geometry) {
 		// Create mapped extra vertex data for NPC
-		auto sculptTarget = g_morphHandler.GetSculptTarget(npc, false);
+		auto sculptTarget = g_morphInterface.GetSculptTarget(npc, false);
 		if (sculptTarget) {
 			std::string headPartName = geometry->m_name;
 			BGSHeadPart * headPart = GetHeadPartByName(headPartName);
 			if (headPart) {
 				auto sculptHost = sculptTarget->GetSculptHost(SculptData::GetHostByPart(headPart), false);
 				if (sculptHost) {
-					CDXMeshVert* pVertices = m_mesh->LockVertices();
+					CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 					for (auto it : *sculptHost) {
 						// Skip masked vertices
-						if (pVertices[it.first].Color != COLOR_UNSELECTED)
+						CDXColor color;
+						XMStoreFloat3(&color, COLOR_SELECTED);
+
+						if (XMVector3Equal(XMLoadFloat3(&pVertices[it.first].Color), XMLoadFloat3(&color)))
 							continue;
 						// Store it in the NPC mapped data
-						CDXVec3 temp = *(CDXVec3*)&it.second;
-						pVertices[it.first].Position -= temp;
-						m_current.emplace(it.first, -temp);
+						auto delta = XMLoadFloat3((XMFLOAT3*)&it.second);
+						XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), delta));
+						m_current.emplace(it.first, XMVectorNegate(delta));
 					}
 
-					m_mesh->UnlockVertices();
+					m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 				}
 			}
 		}
@@ -365,18 +364,18 @@ CDXUndoCommand::UndoType CDXNifResetSculpt::GetUndoType()
 
 void CDXNifResetSculpt::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices();
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	if (!pVertices)
 		return;
 
 	// Do what we have now
 	for (auto it : m_current)
-		pVertices[it.first].Position += it.second;
+		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -384,18 +383,18 @@ void CDXNifResetSculpt::Redo()
 
 void CDXNifResetSculpt::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices();
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	if (!pVertices)
 		return;
 
 	// Undo what we did
 	for (auto it : m_current)
-		pVertices[it.first].Position -= it.second;
+		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -404,7 +403,7 @@ void CDXNifResetSculpt::Undo()
 void CDXNifResetSculpt::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		if (g_task)
@@ -412,49 +411,91 @@ void CDXNifResetSculpt::Apply(SInt32 i)
 	}
 }
 
-CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiGeometry * source) : CDXUndoCommand()
+CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * source) : CDXUndoCommand()
 {
 	m_mesh = mesh;
 
 	Actor * actor = g_World.GetWorkingActor();
 	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
-	NiGeometry * geometry = m_mesh->GetNifGeometry();
-
-	if (geometry) {
+	BSTriShape * target = m_mesh->GetGeometry();
+	if (target) {
 		// Create mapped extra vertex data for NPC
-		auto sculptTarget = g_morphHandler.GetSculptTarget(npc, true);
+		auto sculptTarget = g_morphInterface.GetSculptTarget(npc, true);
 		if (sculptTarget) {
-			std::string headPartName = geometry->m_name;
+			std::string headPartName = target->m_name;
 			BGSHeadPart * headPart = GetHeadPartByName(headPartName);
 			if (headPart) {
 				auto sculptHost = sculptTarget->GetSculptHost(SculptData::GetHostByPart(headPart), true);
 				if (sculptHost) {
-					// Create differences from source and destination geometry
-					NiGeometryData * dstData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
-					NiGeometryData * srcData = niptr_cast<NiGeometryData>(source->m_spModelData);
+					UInt32 srcNumVertices = 0;
+					UInt32 dstNumVertices = target->numVertices;
 
-					NiTransform dstTransform = GetGeometryTransform(geometry);
-					NiTransform srcTransform = GetGeometryTransform(source);
+					NiPoint3 * srcGeometry = nullptr;
+					NiPoint3 * dstGeometry = nullptr;
 
-					if (dstData && srcData && dstData->m_usVertices == srcData->m_usVertices) {
+					UInt32 srcStride = 0;
+					UInt32 dstStride = 0;
 
-						CDXMeshVert* pVertices = m_mesh->LockVertices();
+					NiTransform srcTransform;
+					NiTransform dstTransform;
 
-						for (UInt32 i = 0; i < srcData->m_usVertices; i++) {
+					BSDynamicTriShape * dstDynamicShape = ni_cast(target, BSDynamicTriShape);
+					if (dstDynamicShape) {
+						dstGeometry = reinterpret_cast<NiPoint3*>(dstDynamicShape->diffBlock);
+						dstStride = sizeof(XMFLOAT4);
+						dstTransform = GetGeometryTransform(dstDynamicShape);
+					}
 
-							if (pVertices[i].Color != COLOR_UNSELECTED)
+					NiGeometry * legacyGeometry = source->GetAsNiGeometry();
+					if (legacyGeometry) {
+						NiTriShapeData * srcData = niptr_cast<NiTriShapeData>(legacyGeometry->m_spModelData);
+						srcNumVertices = srcData->m_usVertices;
+						srcGeometry = reinterpret_cast<NiPoint3*>(srcData->m_pkVertex);
+						srcStride = sizeof(NiPoint3);
+						srcTransform = GetLegacyGeometryTransform(legacyGeometry);
+					}
+					BSTriShape * sourceGeometry = source->GetAsBSTriShape();
+					if (sourceGeometry) {
+						srcTransform = GetGeometryTransform(sourceGeometry);
+						srcNumVertices = sourceGeometry->numVertices;
+
+						BSDynamicTriShape * srcDynamicShape = ni_cast(sourceGeometry, BSDynamicTriShape);
+						if (srcDynamicShape) {
+							srcGeometry = reinterpret_cast<NiPoint3*>(srcDynamicShape->diffBlock);
+							srcStride = sizeof(XMFLOAT4);
+						}
+						else {
+							const NiSkinInstance * skinInstance = sourceGeometry->m_spSkinInstance.m_pObject;
+							const NiSkinPartition * skinPartition = skinInstance ? skinInstance->m_spSkinPartition.m_pObject : nullptr;
+							srcGeometry = skinPartition ? reinterpret_cast<NiPoint3*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData) : nullptr;
+							srcStride = NiSkinPartition::GetVertexSize(sourceGeometry->vertexDesc);
+						}
+					}
+
+					if (srcNumVertices == dstNumVertices && srcGeometry && dstGeometry) {
+						CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+
+						for (UInt32 i = 0; i < srcNumVertices; i++) {
+
+							CDXColor color;
+							XMStoreFloat3(&color, COLOR_SELECTED);
+
+							// Skip masked vertices
+							if (XMVector3Equal(XMLoadFloat3(&pVertices[i].Color), XMLoadFloat3(&color)))
 								continue;
 
-							NiPoint3 diff = (srcTransform * srcData->m_pkVertex[i]) - (dstTransform * dstData->m_pkVertex[i]);
-							CDXVec3 temp = *(CDXVec3*)&diff;
+							NiPoint3 * srcVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(srcGeometry) + (srcStride * i));
+							NiPoint3 * dstVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(dstGeometry) + (dstStride * i));
 
-							pVertices[i].Position += temp;
+							NiPoint3 diff = (srcTransform * (*srcVertex)) - (dstTransform * (*dstVertex));
+							XMVECTOR diffVector = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&diff));
 
-							// Store it in the action
-							m_current.emplace(i, temp);
+							XMStoreFloat3(&pVertices[i].Position, XMVectorAdd(XMLoadFloat3(&pVertices[i].Position), diffVector));
+							
+							m_current.emplace(i, diffVector);
 						}
 
-						m_mesh->UnlockVertices();
+						m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 					}
 				}
 			}
@@ -474,18 +515,18 @@ CDXUndoCommand::UndoType CDXNifImportGeometry::GetUndoType()
 
 void CDXNifImportGeometry::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices();
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	if (!pVertices)
 		return;
 
 	// Do what we have now
 	for (auto it : m_current)
-		pVertices[it.first].Position += it.second;
+		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 	}
@@ -493,18 +534,18 @@ void CDXNifImportGeometry::Redo()
 
 void CDXNifImportGeometry::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices();
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	if (!pVertices)
 		return;
 
 	// Undo what we did
 	for (auto it : m_current)
-		pVertices[it.first].Position -= it.second;
+		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, -1.0);
 	}
@@ -513,12 +554,10 @@ void CDXNifImportGeometry::Undo()
 void CDXNifImportGeometry::Apply(SInt32 i)
 {
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
-	NiGeometry * geometry = nifMesh->GetNifGeometry();
+	BSTriShape * geometry = nifMesh->GetGeometry();
 	if (geometry) {
 		ApplyMorphData(geometry, m_current, 1.0);
 		if (g_task)
 			g_task->AddUITask(new CRGNUITaskStandardCommand(this, geometry, i));
 	}
 }
-
-#endif

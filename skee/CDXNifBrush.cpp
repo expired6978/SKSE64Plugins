@@ -1,8 +1,6 @@
 #include "CDXNifBrush.h"
 #include "CDXNifCommands.h"
 
-#ifdef FIXME
-
 CDXStrokePtr CDXNifMaskAddBrush::CreateStroke(CDXBrush * brush, CDXEditableMesh * mesh)
 {
 	return std::make_shared<CDXNifMaskAddStroke>(brush, mesh);
@@ -32,5 +30,3 @@ CDXStrokePtr CDXNifMoveBrush::CreateStroke(CDXBrush * brush, CDXEditableMesh * m
 {
 	return std::make_shared<CDXNifMoveStroke>(brush, mesh);
 }
-
-#endif

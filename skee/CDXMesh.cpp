@@ -1,22 +1,22 @@
+#include "CDXD3DDevice.h"
 #include "CDXMesh.h"
 #include "CDXShader.h"
 #include "CDXCamera.h"
 #include "CDXMaterial.h"
 #include "CDXPicker.h"
 
-#ifdef FIXME
+using namespace DirectX;
 
 CDXMesh::CDXMesh()
 {
-	m_vertexBuffer = NULL;
+	m_vertexBuffer = nullptr;
 	m_vertCount = 0;
-	m_indexBuffer = NULL;
-	m_primitiveCount = 0;
+	m_indexBuffer = nullptr;
+	m_indexCount = 0;
 	m_visible = true;
-	//m_material = NULL;
-	//m_primitiveType = D3DPT_TRIANGLELIST;
-
-	m_transform = DirectX::XMMatrixIdentity();
+	m_material = nullptr;
+	m_transform = XMMatrixIdentity();
+	m_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 }
 
 CDXMesh::~CDXMesh()
@@ -27,21 +27,28 @@ CDXMesh::~CDXMesh()
 void CDXMesh::Release()
 {
 	m_vertCount = 0;
-	m_primitiveCount = 0;
+	m_indexCount = 0;
 	m_visible = false;
 	if(m_vertexBuffer) {
 		m_vertexBuffer->Release();
-		m_vertexBuffer = NULL;
+		m_vertexBuffer = nullptr;
 	}
 	if(m_indexBuffer) {
 		m_indexBuffer->Release();
-		m_indexBuffer = NULL;
+		m_indexBuffer = nullptr;
 	}
-	/*if(m_material) {
+	if(m_material) {
 		m_material->Release();
 		delete m_material;
-		m_material = NULL;
-	}*/
+		m_material = nullptr;
+	}
+
+	// Release the arrays now that the vertex and index buffers have been created and loaded.
+	delete[] m_vertices;
+	m_vertices = 0;
+
+	delete[] m_indices;
+	m_indices = 0;
 }
 
 void CDXMesh::SetMaterial(CDXMaterial * material)
@@ -49,7 +56,7 @@ void CDXMesh::SetMaterial(CDXMaterial * material)
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	//m_material = material;
+	m_material = material;
 }
 
 CDXMaterial * CDXMesh::GetMaterial()
@@ -57,7 +64,7 @@ CDXMaterial * CDXMesh::GetMaterial()
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	return nullptr;//m_material;
+	return m_material;
 }
 
 void CDXMesh::SetVisible(bool visible)
@@ -90,27 +97,33 @@ ID3D11Buffer * CDXMesh::GetIndexBuffer()
 	return m_indexBuffer;
 }
 
-UInt32 CDXMesh::GetPrimitiveCount()
+UInt32 CDXMesh::GetIndexCount()
 {
-	return m_primitiveCount;
+	return m_indexCount;
 }
+
+UInt32 CDXMesh::GetFaceCount()
+{
+	return m_indexCount / 3;
+}
+
 UInt32 CDXMesh::GetVertexCount()
 {
 	return m_vertCount;
 }
 
-DirectX::XMVECTOR CalculateFaceNormal(UInt32 f, CDXMeshIndex * faces, CDXMeshVert * vertices)
+XMVECTOR CalculateFaceNormal(UInt32 f, CDXMeshIndex * faces, CDXMeshVert * vertices)
 {
-	DirectX::XMVECTOR vNormal;
+	XMVECTOR vNormal;
 	CDXMeshVert * v1 = &vertices[faces[f]];
 	CDXMeshVert * v2 = &vertices[faces[f + 1]];
 	CDXMeshVert * v3 = &vertices[faces[f + 2]];
 
-	auto e1 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v2->Position), DirectX::XMLoadFloat3(&v1->Position));
-	auto e2 = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&v3->Position), DirectX::XMLoadFloat3(&v2->Position));
+	auto e1 = XMVectorSubtract(XMLoadFloat3(&v2->Position), XMLoadFloat3(&v1->Position));
+	auto e2 = XMVectorSubtract(XMLoadFloat3(&v3->Position), XMLoadFloat3(&v2->Position));
 
-	vNormal = DirectX::XMVector3Cross(e1, e2);
-	vNormal = DirectX::XMVector3Normalize(vNormal);
+	vNormal = XMVector3Cross(e1, e2);
+	vNormal = XMVector3Normalize(vNormal);
 	return vNormal;
 }
 
@@ -118,10 +131,10 @@ bool IntersectSphere(float radius, float & dist, CDXVec & center, CDXVec & rayOr
 {
 	//FLOAT t0 = -1, t1 = -1; // solutions for t if the ray intersects
 
-	CDXVec L = DirectX::XMVectorSubtract(center, rayOrigin);
-	float tca = DirectX::XMVector3Dot(L, rayDir).m128_f32[0];
+	CDXVec L = XMVectorSubtract(center, rayOrigin);
+	float tca = XMVectorGetX(XMVector3Dot(L, rayDir));
 	if (tca < 0) return false;
-	float d2 = DirectX::XMVector3Dot(L, L).m128_f32[0] - tca * tca;
+	float d2 = XMVector3Dot(L, L).m128_f32[0] - tca * tca;
 	if (d2 > radius) return false;
 	float thc = sqrt(radius - d2);
 	//t0 = tca - thc;
@@ -133,20 +146,20 @@ bool IntersectSphere(float radius, float & dist, CDXVec & center, CDXVec & rayOr
 bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVec& v1, CDXVec& v2, float* t, float* u, float* v )
 {
 	// Find vectors for two edges sharing vert0
-	CDXVec edge1 = DirectX::XMVectorSubtract(v1, v0);
-	CDXVec edge2 = DirectX::XMVectorSubtract(v2, v0);
+	CDXVec edge1 = XMVectorSubtract(v1, v0);
+	CDXVec edge2 = XMVectorSubtract(v2, v0);
 
 	// Begin calculating determinant - also used to calculate U parameter
-	CDXVec pvec = DirectX::XMVector3Cross(dir, edge2);
+	CDXVec pvec = XMVector3Cross(dir, edge2);
 
 	// If determinant is near zero, ray lies in plane of triangle
-	float det = DirectX::XMVector3Dot(edge1, pvec).m128_f32[0];
+	float det = XMVectorGetX(XMVector3Dot(edge1, pvec));
 
 	CDXVec tvec;
 	if(det > 0) {
-		tvec = DirectX::XMVectorSubtract(orig, v0);
+		tvec = XMVectorSubtract(orig, v0);
 	} else {
-		tvec = DirectX::XMVectorSubtract(v0, orig);
+		tvec = XMVectorSubtract(v0, orig);
 		det = -det;
 	}
 
@@ -154,20 +167,20 @@ bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVe
 		return false;
 
 	// Calculate U parameter and test bounds
-	*u = DirectX::XMVector3Dot(tvec, pvec).m128_f32[0];
+	*u = XMVectorGetX(XMVector3Dot(tvec, pvec));
 	if(*u < 0.0f || *u > det)
 		return false;
 
 	// Prepare to test V parameter
-	CDXVec qvec = DirectX::XMVector3Cross(tvec, edge1);
+	CDXVec qvec = XMVector3Cross(tvec, edge1);
 
 	// Calculate V parameter and test bounds
-	*v = DirectX::XMVector3Dot(dir, qvec).m128_f32[0];
+	*v = XMVectorGetX(XMVector3Dot(dir, qvec));
 	if(*v < 0.0f || *u + *v > det)
 		return false;
 
 	// Calculate t, scale parameters, ray intersects triangle
-	*t = DirectX::XMVector3Dot(edge2, qvec).m128_f32[0];
+	*t = XMVectorGetX(XMVector3Dot(edge2, qvec));
 	float fInvDet = 1.0f / det;
 	*t *= fInvDet;
 	*u *= fInvDet;
@@ -176,39 +189,74 @@ bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVe
 	return true;
 }
 
+CDXMeshVert * CDXMesh::LockVertices(const LockMode type)
+{
+	if (type == LockMode::WRITE)
+	{
+		D3D11_MAPPED_SUBRESOURCE vertResource;
+		CDXMeshVert* pVertices = nullptr;
+		HRESULT res = m_pDevice->GetDeviceContext()->Map(m_vertexBuffer, 0, (D3D11_MAP)type, 0, &vertResource);
+		if (res == S_OK)
+		{
+			return static_cast<CDXMeshVert*>(vertResource.pData);
+		}
+	}
+
+	return m_vertices;
+}
+
+CDXMeshIndex * CDXMesh::LockIndices()
+{
+	return m_indices;
+}
+
+void CDXMesh::UnlockVertices(const LockMode type)
+{
+	if (type == LockMode::WRITE)
+	{
+		m_pDevice->GetDeviceContext()->Unmap(m_vertexBuffer, 0);
+	}
+}
+
+void CDXMesh::UnlockIndices(bool write)
+{
+	if(write)
+		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer, 0, nullptr, m_indices, 0, 0);
+}
+
 bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	CDXMeshVert* pVertices = LockVertices();
+	CDXMeshVert* pVertices = LockVertices(LockMode::READ);
 	CDXMeshIndex* pIndices = LockIndices();
 
 	if (!pVertices || !pIndices)
 		return false;
 
 	float hitDist = FLT_MAX;
-	CDXVec hitNormal = DirectX::XMVectorZero();
+	CDXVec hitNormal = XMVectorZero();
 
 	// Edges = Face * 3
-	for(UInt32 e = 0; e < m_primitiveCount * 3; e += 3)
+	for(UInt32 e = 0; e < m_indexCount; e += 3)
 	{
-		CDXVec v0 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 0]].Position);
-		CDXVec v1 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 1]].Position);
-		CDXVec v2 = DirectX::XMLoadFloat3(&pVertices[pIndices[e + 2]].Position);
+		CDXVec v0 = XMLoadFloat3(&pVertices[pIndices[e + 0]].Position);
+		CDXVec v1 = XMLoadFloat3(&pVertices[pIndices[e + 1]].Position);
+		CDXVec v2 = XMLoadFloat3(&pVertices[pIndices[e + 2]].Position);
 
 		// Calculate the norm of the face
-		CDXVec fNormal = DirectX::XMVectorZero();
-		CDXVec f1 = DirectX::XMVectorSubtract(v1, v0);
-		CDXVec f2 = DirectX::XMVectorSubtract(v2, v1);
-		fNormal = DirectX::XMVector3Cross(f1, f2);
-		fNormal = DirectX::XMVector3Normalize(fNormal);
+		CDXVec fNormal = XMVectorZero();
+		CDXVec f1 = XMVectorSubtract(v1, v0);
+		CDXVec f2 = XMVectorSubtract(v2, v1);
+		fNormal = XMVector3Cross(f1, f2);
+		fNormal = XMVector3Normalize(fNormal);
 
 		// Normalize the direction, just in case
-		CDXVec vDir = DirectX::XMVector3Normalize(rayInfo.direction);
+		CDXVec vDir = XMVector3Normalize(rayInfo.direction);
 
 		// Skip faces that are in the same direction as the ray
-		if(DirectX::XMVector3Dot(vDir, fNormal).m128_f32[0] >= 0)
+		if(XMVectorGetX(XMVector3Dot(vDir, fNormal)) >= 0)
 			continue;
 
 		// Skip face that doesn't intersect with the ray
@@ -224,100 +272,126 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 		}
 	}
 
+	UnlockVertices(LockMode::READ);
+	UnlockIndices();
+
 	pickInfo.ray = rayInfo;
 	pickInfo.dist = hitDist;
 
 	if (hitDist != FLT_MAX) {
-		CDXVec hitVec = DirectX::XMVectorReplicate(hitDist);
-		CDXVec vHit = DirectX::XMVectorMultiplyAdd(rayInfo.direction, hitVec, rayInfo.origin);
-		pickInfo.origin = vHit;
+		CDXVec hitVec = XMVectorReplicate(hitDist);
+		CDXVec vHit = XMVectorMultiplyAdd(rayInfo.direction, hitVec, rayInfo.origin);
+		pickInfo.origin = XMVectorSetW(vHit, 0.0f);
 		pickInfo.normal = hitNormal;
 		pickInfo.isHit = true;
 	}
 	else {
-		pickInfo.origin = DirectX::XMVectorZero();
-		pickInfo.normal = DirectX::XMVectorZero();
+		pickInfo.origin = XMVectorZero();
+		pickInfo.normal = XMVectorZero();
 		pickInfo.isHit = false;
 	}
 
-	UnlockVertices();
-	UnlockIndices();
 	return pickInfo.isHit;
 }
 
-CDXMeshVert* CDXMesh::LockVertices()
+bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt32 indexCount, std::function<void(CDXMeshVert*, CDXMeshIndex*)> fillFunction)
 {
-	CDXMeshVert* pVertices = NULL;
-	if (!m_vertexBuffer)
-		return NULL;
+	D3D11_BUFFER_DESC vertexBufferDesc, indexBufferDesc;
+	D3D11_SUBRESOURCE_DATA vertexData, indexData;
+	HRESULT result;
 
-	/*if (FAILED(m_vertexBuffer->Lock(0, 0, (void**)&pVertices, D3DLOCK_DISCARD)))
-		return NULL;*/
+	m_pDevice = device;
+	m_vertCount = vertexCount;
+	m_indexCount = indexCount;
 
-	return pVertices;
+	auto pDevice = device->GetDevice();
+	auto pDeviceContext = device->GetDeviceContext();
+
+	// Create the vertex array.
+	m_vertices = new CDXMeshVert[m_vertCount];
+	if (!m_vertices)
+	{
+		return false;
+	}
+
+	// Create the index array.
+	m_indices = new CDXMeshIndex[m_indexCount];
+	if (!m_indices)
+	{
+		return false;
+	}
+
+	// Load the vertex array and index array with data.
+	fillFunction(m_vertices, m_indices);
+	
+	// Set up the description of the static vertex buffer.
+	vertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	vertexBufferDesc.ByteWidth = sizeof(CDXMeshVert) * m_vertCount;
+	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vertexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	vertexBufferDesc.MiscFlags = 0;
+	vertexBufferDesc.StructureByteStride = 0;
+
+	// Give the subresource structure a pointer to the vertex data.
+	vertexData.pSysMem = m_vertices;
+	vertexData.SysMemPitch = 0;
+	vertexData.SysMemSlicePitch = 0;
+
+	// Now create the vertex buffer.
+	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, &m_vertexBuffer);
+	if (FAILED(result))
+	{
+		return false;
+	}
+
+	// Set up the description of the static index buffer.
+	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	indexBufferDesc.ByteWidth = sizeof(CDXMeshIndex) * m_indexCount;
+	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	indexBufferDesc.CPUAccessFlags = 0;
+	indexBufferDesc.MiscFlags = 0;
+	indexBufferDesc.StructureByteStride = 0;
+
+	// Give the subresource structure a pointer to the index data.
+	indexData.pSysMem = m_indices;
+	indexData.SysMemPitch = 0;
+	indexData.SysMemSlicePitch = 0;
+
+	// Create the index buffer.
+	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, &m_indexBuffer);
+	if (FAILED(result))
+	{
+		return false;
+	}
+
+	return true;
 }
 
-CDXMeshIndex* CDXMesh::LockIndices()
-{
-	CDXMeshIndex* pIndices = NULL;
-	if (!m_indexBuffer)
-		return NULL;
-
-	/*if (FAILED(m_indexBuffer->Lock(0, 0, (void**)&pIndices, D3DLOCK_DISCARD)))
-		return NULL;*/
-
-	return pIndices;
-}
-
-void CDXMesh::UnlockVertices()
-{
-	//m_vertexBuffer->Unlock();
-}
-void CDXMesh::UnlockIndices()
-{
-	//m_indexBuffer->Unlock();
-}
-
-void CDXMesh::Render(ID3D11Device * pDevice, CDXShader * shader)
+void CDXMesh::Render(CDXD3DDevice * device, CDXShader * shader)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	/*ID3DXEffect * effect = shader->GetEffect();
-	effect->SetMatrix(shader->m_hTransform, &m_transform);
+	unsigned int stride;
+	unsigned int offset;
 
-	if (m_material && m_material->IsWireframe()) {
-		effect->SetTechnique(effect->GetTechniqueByName("Wireframe"));
-		effect->SetTexture(shader->m_hTexture, NULL);
-	} else if (m_material && m_material->GetDiffuseTexture()) {
-		effect->SetTechnique(effect->GetTechniqueByName("TexturedSpecular"));
-		effect->SetTexture(shader->m_hTexture, m_material->GetDiffuseTexture());
-	} else {
-		effect->SetTechnique(effect->GetTechniqueByName("Specular"));
-		effect->SetTexture(shader->m_hTexture, NULL);
-	}
+	// Set vertex buffer stride and offset.
+	stride = sizeof(CDXMeshVert);
+	offset = 0;
 
-	effect->CommitChanges();
+	auto pDeviceContext = device->GetDeviceContext();
 
-	UINT iPass, cPasses;
-	effect->Begin(&cPasses, 0);
-	for (iPass = 0; iPass < cPasses; iPass++)
-	{
-		effect->BeginPass(iPass);
-		Pass(pDevice, iPass, shader);
-		effect->EndPass();
-	}
+	// Set the vertex buffer to active in the input assembler so it can be rendered.
+	pDeviceContext->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
 
-	effect->End();*/
+	// Set the index buffer to active in the input assembler so it can be rendered.
+	pDeviceContext->IASetIndexBuffer(m_indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
+	pDeviceContext->IASetPrimitiveTopology(m_topology);
+
+	shader->RenderShader(device, m_material);
+
+	// Render the triangle.
+	pDeviceContext->DrawIndexed(m_indexCount, 0, 0);
 }
-
-void CDXMesh::Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader)
-{
-	if (!m_vertexBuffer || !m_indexBuffer)
-		return;
-
-	//pDevice->SetStreamSource(0, m_vertexBuffer, 0, sizeof(CDXMeshVert));
-	//pDevice->SetIndices(m_indexBuffer);
-	//pDevice->DrawIndexedPrimitive((D3DPRIMITIVETYPE)m_primitiveType, 0, 0, m_vertCount, 0, m_primitiveCount);
-}
-#endif

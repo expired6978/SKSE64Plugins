@@ -1,8 +1,6 @@
 #ifndef __CDXPICKER__
 #define __CDXPICKER__
 
-#ifdef FIXME
-
 #pragma once
 
 #include "CDXMesh.h"
@@ -57,5 +55,4 @@ public:
 	virtual bool Mirror() const = 0;
 };
 
-#endif
 #endif

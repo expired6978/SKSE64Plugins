@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #ifndef __CDXRESETSELECTION__
 #define __CDXRESETSELECTION__
 
@@ -23,7 +21,5 @@ protected:
 	CDXMaskMap	m_previous;
 	CDXMaskMap	m_current;
 };
-
-#endif
 
 #endif

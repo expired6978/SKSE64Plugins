@@ -120,11 +120,11 @@ public:
 	class Visitor
 	{
 	public:
-		virtual bool Accept(SKEEFixedString morphName) { return false; };
+		virtual bool Accept(const SKEEFixedString & morphName) { return false; };
 	};
 	
-	void AddMorph(SKEEFixedString key, SKEEFixedString value);
-	bool Visit(SKEEFixedString key, Visitor & visitor);
+	void AddMorph(const SKEEFixedString & key, const SKEEFixedString & value);
+	bool Visit(const SKEEFixedString & key, Visitor & visitor);
 	void Revert();
 
 #ifdef _DEBUG_DATADUMP
@@ -146,7 +146,7 @@ class SliderMap : public std::unordered_map<SKEEFixedString, SliderGenderPtr>
 public:
 	SliderMap::SliderMap() : std::unordered_map<SKEEFixedString, SliderGenderPtr>(){ }
 
-	void AddSlider(SKEEFixedString key, UInt8 gender, SliderInternal & slider);
+	void AddSlider(const SKEEFixedString & key, UInt8 gender, SliderInternal & slider);
 
 #ifdef _DEBUG_DATADUMP
 	void DumpMap();
@@ -181,9 +181,9 @@ public:
 class ValueSet : public std::unordered_map<StringTableItem, float>
 {
 public:
-	void SetValue(SKEEFixedString name, float value);
-	void ClearValue(SKEEFixedString name);
-	float GetValue(SKEEFixedString name);
+	void SetValue(const SKEEFixedString & name, float value);
+	void ClearValue(const SKEEFixedString & name);
+	float GetValue(const SKEEFixedString & name);
 };
 
 class ValueMap : public std::unordered_map<TESNPC*, ValueSet>
@@ -192,8 +192,8 @@ public:
 	ValueSet * GetValueSet(TESNPC* npc);
 	void EraseNPC(TESNPC * npc);
 
-	float GetMorphValueByName(TESNPC* npc, SKEEFixedString name);
-	void SetMorphValue(TESNPC* npc, SKEEFixedString name, float value);
+	float GetMorphValueByName(TESNPC* npc, const SKEEFixedString & name);
+	void SetMorphValue(TESNPC* npc, const SKEEFixedString & name, float value);
 };
 
 #define VERTEX_THRESHOLD 0.00001
@@ -354,10 +354,10 @@ public:
 
 	void LoadMods();
 
-	virtual float GetMorphValueByName(TESNPC* npc, SKEEFixedString name);
-	virtual void SetMorphValue(TESNPC* npc, SKEEFixedString name, float value);
+	virtual float GetMorphValueByName(TESNPC* npc, const SKEEFixedString & name);
+	virtual void SetMorphValue(TESNPC* npc, const SKEEFixedString & name, float value);
 
-	void SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const char * name, float relative);
+	void SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const SKEEFixedString & name, float relative);
 
 	void ApplyMorph(TESNPC * npc, BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
 	void ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode);
@@ -374,11 +374,11 @@ public:
 	SliderList * CreateSliderList(TESRace * race, UInt8 gender);
 	void AddSlider(TESRace * race, SliderInternalPtr & slider);
 
-	bool VisitMorphMap(SKEEFixedString key, MorphMap::Visitor & visitor);
+	bool VisitMorphMap(const SKEEFixedString & key, MorphMap::Visitor & visitor);
 
 	bool CacheHeadPartModel(BGSHeadPart * headPart, bool cacheTRI = false);
-	bool GetModelTri(SKEEFixedString filePath, TRIModelData & modelData);
-	TRIModelData & GetExtendedModelTri(SKEEFixedString morphName, bool cacheTRI = false);
+	bool GetModelTri(const SKEEFixedString & filePath, TRIModelData & modelData);
+	TRIModelData & GetExtendedModelTri(const SKEEFixedString & morphName, bool cacheTRI = false);
 
 	inline SculptDataPtr GetSculptTarget(TESNPC * npc, bool create = true)
 	{

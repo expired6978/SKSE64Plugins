@@ -184,6 +184,13 @@ public:
 	virtual void	Invoke(Args * args);
 };
 
+
+class SKSEScaleform_DoHoverMesh : public GFxFunctionHandler
+{
+public:
+	virtual void	Invoke(Args * args);
+};
+
 class SKSEScaleform_GetCurrentBrush : public GFxFunctionHandler
 {
 public:

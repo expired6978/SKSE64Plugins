@@ -1,0 +1,72 @@
+Texture2D diffuse;
+Texture2D normal;
+Texture2D specular;
+Texture2D detail;
+Texture2D tintMask;
+
+SamplerState Sampler;
+
+cbuffer MaterialBuffer
+{
+	float4	wireColor;
+	float4	tintColor;
+	bool	hasNormal;
+	bool	hasSpecular;
+	bool	hasDetail;
+	bool	hasTintMask;
+	float	alphaThreshold;
+	float	padding1;
+	float	padding2;
+	float	padding3;
+};
+
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+	float3 normal : NORMAL;
+	float3 color : COLOR;
+};
+
+float overlay( float base, float blend )
+{
+    float result;
+    if ( base < 0.5 ) {
+        result = 2.0 * base * blend;
+    } else {
+        result = 1.0 - 2.0 * (1.0 - blend) * (1.0 - base);
+    }
+    return result;
+}
+
+float4 tint(float4 base, float4 blend)
+{
+	return float4(overlay(base.r, blend.r), overlay(base.g, blend.g), overlay(base.b, blend.b), overlay(base.a, blend.a));
+}
+
+float4 LightPixelShader(PixelInputType input) : SV_TARGET
+{
+	float4 color = diffuse.Sample(Sampler, input.tex);
+	if(color.a < alphaThreshold)
+		discard;
+
+	if(hasTintMask)
+	{
+		float4 tintMaskColor = tintMask.Sample(Sampler, input.tex);
+		color = tint(color, tintMaskColor);
+	}
+	
+	if(tintColor.a > 0)
+	{
+		color = tint(color, tintColor);
+	}
+
+	color.rgb *= input.color;
+
+	return color;
+}
+
+float4 WireframePixelShader(PixelInputType input) : SV_TARGET
+{
+	return wireColor;
+}

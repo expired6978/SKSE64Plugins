@@ -1,11 +1,11 @@
-#ifdef FIXME
-
 #ifndef __CDXEDITABLESCENE__
 #define __CDXEDITABLESCENE__
 
 #pragma once
 
 #include "CDXScene.h"
+#include "CDXBrush.h"
+#include "CDXTypes.h"
 
 typedef std::vector<CDXBrush*> CDXBrushList;
 
@@ -14,8 +14,8 @@ class CDXEditableScene : public CDXScene
 public:
 	CDXEditableScene();
 
-	virtual void Setup(ID3D11Device * pDevice);
-	virtual void Release();
+	virtual bool Setup(const CDXInitParams & initParams) override;
+	virtual void Release() override;
 
 	virtual void CreateBrushes();
 	virtual void ReleaseBrushes();
@@ -29,7 +29,5 @@ protected:
 	CDXBrush::BrushType		m_currentBrush;
 	CDXBrushList			m_brushes;
 };
-
-#endif
 
 #endif

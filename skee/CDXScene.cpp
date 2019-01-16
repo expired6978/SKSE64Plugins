@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #include "CDXScene.h"
 #include "CDXCamera.h"
 #include "CDXMesh.h"
@@ -8,18 +6,12 @@
 #include "CDXPicker.h"
 #include "CDXBrush.h"
 
-#include <d3dx9mesh.h>
-
-CDXModelViewerCamera		g_Camera;
+using namespace DirectX;
 
 CDXScene::CDXScene()
 {
 	m_shader = new CDXShader;
-	m_pStateBlock = NULL;
-	m_pMeshDecl = NULL;
 	m_visible = true;
-	m_width = 1024;
-	m_height = 1024;
 }
 
 CDXScene::~CDXScene()
@@ -32,14 +24,6 @@ CDXScene::~CDXScene()
 
 void CDXScene::Release()
 {
-	if(m_pStateBlock) {
-		m_pStateBlock->Release();
-		m_pStateBlock = NULL;
-	}
-	if(m_pMeshDecl) {
-		m_pMeshDecl->Release();
-		m_pMeshDecl = NULL;
-	}
 	if(m_shader) {
 		m_shader->Release();
 	}
@@ -52,139 +36,76 @@ void CDXScene::Release()
 	m_meshes.clear();
 }
 
-void CDXScene::Setup(ID3D11Device * pDevice)
+bool CDXScene::Setup(const CDXInitParams & initParams)
 {
-	pDevice->CreateVertexDeclaration(VertexDecl, &m_pMeshDecl);
+	if (!m_shader->Initialize(initParams))
+	{
+		return false;
+	}
 
-	m_shader->CreateEffect(pDevice);
-
-	// Setup the camera's view parameters
-	CDXVec3 vecEye(30.0f, 0.0f, 0.0f);
-	CDXVec3 vecAt (0.0f, 0.0f, 0.0f);
-	g_Camera.SetWindow(m_width, m_height);
-	g_Camera.SetViewParams(&vecEye, &vecAt);
-	g_Camera.Update();
+	return true;
 }
 
-void CDXScene::Begin(ID3D11Device * pDevice)
+void CDXScene::Render(CDXCamera * camera, CDXD3DDevice * device)
 {
-	if(!m_pStateBlock)
-		pDevice->CreateStateBlock(D3DSBT_ALL,&m_pStateBlock);
+	CDXMatrix mWorld;
+	CDXMatrix mView;
+	CDXMatrix mProj;
 
-	m_pStateBlock->Capture();
-}
+	mWorld = *camera->GetWorldMatrix();
+	mView = camera->GetViewMatrix();
+	mProj = camera->GetProjMatrix();
 
-void CDXScene::End(ID3D11Device * pDevice)
-{
-	m_pStateBlock->Apply();
-}
+	// Setup the vector that points upwards.
+	/*XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	float posX = 0.0f, posY = 32.0f, posZ = -8.0f;
 
-void CDXScene::Render(ID3D11Device * pDevice)
-{
-	CDXMatrix16 mWorld;
-	CDXMatrix16 mView;
-	CDXMatrix16 mProj;
-	CDXMatrix16 mWorldViewProjection;
+	// Setup the position of the camera in the world.
+	XMVECTOR position = XMVectorSet(posX, posY, posZ, 0.0f);
 
-	pDevice->Clear(0,NULL,D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,0,1.0f,0);
+	// Calculate the rotation in radians.
+	float radians = 0.0f * 0.0174532925f;
 
-	ID3DXEffect	* pEffect = m_shader->GetEffect();
-	if(!pEffect)
-		return;
+	// Setup where the camera is looking.
+	XMVECTOR lookAt = XMVectorSet(0, 0, 0, 0.0f);
 
-	mWorld = *g_Camera.GetWorldMatrix();
-	mView = *g_Camera.GetViewMatrix();
-	mProj = *g_Camera.GetProjMatrix();
-	mWorldViewProjection = mWorld * mView * mProj;
+	// Create the view matrix from the three vectors.
+	mView = XMMatrixLookAtLH(position, lookAt, up);
 
-	CDXVec3 vAmbient = CDXVec3(0.0f, 0.0f, 0.0f);
-	CDXVec3 vDiffuse = CDXVec3(1.0f, 1.0f, 1.0f);
-	CDXVec3 vSpecular = CDXVec3(1.0f, 1.0f, 1.0f);
-	int nShininess = 0;
-	float fAlpha = 1.0f;
+	float fieldOfView = (float)XM_PI / 4.0f;
+	float screenAspect = (float)1280 / (float)720;
 
-	pEffect->SetMatrix(m_shader->m_hWorldViewProjection, &mWorldViewProjection);
-	pEffect->SetMatrix(m_shader->m_hWorld, &mWorld);
-	pEffect->SetValue(m_shader->m_hCameraPosition, g_Camera.GetEyePt(), sizeof(CDXVec3));
-	pEffect->SetValue(m_shader->m_hAmbient, vAmbient, sizeof(CDXVec3));
-	pEffect->SetValue(m_shader->m_hDiffuse, vDiffuse, sizeof(CDXVec3));
-	pEffect->SetValue(m_shader->m_hSpecular, vSpecular, sizeof(CDXVec3));
-	pEffect->SetFloat(m_shader->m_hOpacity, fAlpha);
-	pEffect->SetInt(m_shader->m_hSpecularPower, nShininess);
+	const float SCREEN_DEPTH = 1000.0f;
+	const float SCREEN_NEAR = 0.1f;
 
-	pDevice->SetRenderState(D3DRS_ZENABLE,					D3DZB_TRUE);
-	//pDevice->SetRenderState(D3DRS_FILLMODE,					D3DFILL_WIREFRAME);
-	pDevice->SetRenderState(D3DRS_FILLMODE,					D3DFILL_SOLID);
-	pDevice->SetRenderState(D3DRS_SHADEMODE,				D3DSHADE_GOURAUD);
-	pDevice->SetRenderState(D3DRS_ZWRITEENABLE,				TRUE);
-	pDevice->SetRenderState(D3DRS_ALPHATESTENABLE,			FALSE);
-	pDevice->SetRenderState(D3DRS_LASTPIXEL,				TRUE);
-	pDevice->SetRenderState(D3DRS_SRCBLEND,					D3DBLEND_ONE);
-	pDevice->SetRenderState(D3DRS_DESTBLEND,				D3DBLEND_ZERO);
-	pDevice->SetRenderState(D3DRS_CULLMODE,					D3DCULL_CCW);
-	pDevice->SetRenderState(D3DRS_ZFUNC,					D3DCMP_LESSEQUAL);
-	pDevice->SetRenderState(D3DRS_ALPHAREF,					0);
-	pDevice->SetRenderState(D3DRS_ALPHAFUNC,				D3DCMP_ALWAYS);
-	pDevice->SetRenderState(D3DRS_DITHERENABLE,				FALSE);
-	pDevice->SetRenderState(D3DRS_ALPHABLENDENABLE,			FALSE);
-	pDevice->SetRenderState(D3DRS_FOGENABLE,				FALSE);
-	pDevice->SetRenderState(D3DRS_SPECULARENABLE,			FALSE);
-	//pDevice->SetRenderState(D3DRS_FOGCOLOR,				0);
-	//pDevice->SetRenderState(D3DRS_FOGTABLEMODE,			D3DFOG_NONE);
-	//pDevice->SetRenderState(D3DRS_FOGSTART,				*((DWORD*) (&fFogStart)));
-	//pDevice->SetRenderState(D3DRS_FOGEND,					*((DWORD*) (&fFogEnd));
-	//pDevice->SetRenderState(D3DRS_FOGDENSITY,				*((DWORD*) (&fFogDensity));
-	pDevice->SetRenderState(D3DRS_RANGEFOGENABLE,			FALSE);
-	pDevice->SetRenderState(D3DRS_STENCILENABLE,			FALSE);
-	pDevice->SetRenderState(D3DRS_STENCILFAIL,				D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_STENCILZFAIL,				D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_STENCILPASS,				D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_STENCILFUNC,				D3DCMP_ALWAYS);
-	pDevice->SetRenderState(D3DRS_STENCILREF,				0);
-	pDevice->SetRenderState(D3DRS_STENCILMASK,				0xFFFFFFFF);
-	pDevice->SetRenderState(D3DRS_STENCILWRITEMASK,			0xFFFFFFFF);
-	pDevice->SetRenderState(D3DRS_TEXTUREFACTOR,			0xFFFFFFFF);
-	pDevice->SetRenderState(D3DRS_CLIPPING,					TRUE);
-	pDevice->SetRenderState(D3DRS_LIGHTING,					TRUE);
-	pDevice->SetRenderState(D3DRS_AMBIENT,					0);
-	pDevice->SetRenderState(D3DRS_COLORVERTEX,				TRUE);
-	pDevice->SetRenderState(D3DRS_LOCALVIEWER,				TRUE);
-	pDevice->SetRenderState(D3DRS_NORMALIZENORMALS,			FALSE);
-	pDevice->SetRenderState(D3DRS_DIFFUSEMATERIALSOURCE,	D3DMCS_COLOR1);
-	pDevice->SetRenderState(D3DRS_SPECULARMATERIALSOURCE,	D3DMCS_COLOR2);
-	pDevice->SetRenderState(D3DRS_AMBIENTMATERIALSOURCE,	D3DMCS_MATERIAL);
-	pDevice->SetRenderState(D3DRS_EMISSIVEMATERIALSOURCE,	D3DMCS_MATERIAL);
-	pDevice->SetRenderState(D3DRS_VERTEXBLEND,				D3DVBF_DISABLE);
-	pDevice->SetRenderState(D3DRS_CLIPPLANEENABLE,			0);
-	pDevice->SetRenderState(D3DRS_MULTISAMPLEANTIALIAS,		TRUE);
-	pDevice->SetRenderState(D3DRS_MULTISAMPLEMASK,			0xFFFFFFFF);
-	pDevice->SetRenderState(D3DRS_PATCHEDGESTYLE,			D3DPATCHEDGE_DISCRETE);
-	pDevice->SetRenderState(D3DRS_INDEXEDVERTEXBLENDENABLE,	FALSE);
-	pDevice->SetRenderState(D3DRS_COLORWRITEENABLE,			0x0000000F);
-	pDevice->SetRenderState(D3DRS_BLENDOP,					D3DBLENDOP_ADD);
-	pDevice->SetRenderState(D3DRS_SCISSORTESTENABLE,		FALSE);
-	pDevice->SetRenderState(D3DRS_SLOPESCALEDEPTHBIAS,		0);
-	pDevice->SetRenderState(D3DRS_ANTIALIASEDLINEENABLE,	FALSE);
-	pDevice->SetRenderState(D3DRS_CCW_STENCILFAIL,			D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_CCW_STENCILZFAIL,			D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_CCW_STENCILPASS,			D3DSTENCILOP_KEEP);
-	pDevice->SetRenderState(D3DRS_CCW_STENCILFUNC,			D3DCMP_ALWAYS);
-	pDevice->SetRenderState(D3DRS_COLORWRITEENABLE1,		0x0000000f);
-	pDevice->SetRenderState(D3DRS_COLORWRITEENABLE2,		0x0000000f);
-	pDevice->SetRenderState(D3DRS_COLORWRITEENABLE3,		0x0000000f);
-	pDevice->SetRenderState(D3DRS_BLENDFACTOR,				0xffffffff);
-	pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE,			0);
-	pDevice->SetRenderState(D3DRS_DEPTHBIAS,				0);
-	pDevice->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE,	FALSE);
-	pDevice->SetRenderState(D3DRS_SRCBLENDALPHA,			D3DBLEND_ONE);
-	pDevice->SetRenderState(D3DRS_DESTBLENDALPHA,			D3DBLEND_ZERO);
-	pDevice->SetRenderState(D3DRS_BLENDOPALPHA,				D3DBLENDOP_ADD);
+	// Create the projection matrix for 3D rendering.
+	mProj = XMMatrixPerspectiveFovLH(fieldOfView, screenAspect, SCREEN_NEAR, SCREEN_DEPTH);
 
-	pDevice->SetVertexDeclaration( m_pMeshDecl );
+	// Initialize the world matrix to the identity matrix.
+	mWorld = XMMatrixIdentity();*/
+
+	// Create an orthographic projection matrix for 2D rendering.
+	//m_orthoMatrix = XMMatrixOrthographicLH((float)screenWidth, (float)screenHeight, screenNear, screenDepth);
+	
+
+	CDXShader::VertexBuffer params;
+	params.world = mWorld;
+	params.view = mView;
+	params.projection = mProj;
+	params.viewport = XMVectorSet((float)camera->GetWidth(), (float)camera->GetHeight(), 0, 0);
+
+	m_shader->VSSetShaderBuffer(device, params);
+
+	CDXShader::TransformBuffer xform;
+	xform.transform = XMMatrixIdentity();
 
 	for(auto mesh : m_meshes) {
+		xform.transform = mesh->GetTransform();
+
+		m_shader->VSSetTransformBuffer(device, xform);
+
 		if(mesh->IsVisible()) {
-			mesh->Render(pDevice, m_shader);
+			mesh->Render(device, m_shader);
 		}
 	}
 }
@@ -195,45 +116,47 @@ void CDXScene::AddMesh(CDXMesh * mesh)
 		m_meshes.push_back(mesh);
 }
 
-bool CDXScene::Pick(int x, int y, CDXPicker & picker)
+bool CDXScene::Pick(CDXCamera * camera, int x, int y, CDXPicker & picker)
 {
 	CDXRayInfo rayInfo;
 	CDXRayInfo mRayInfo;
-	CDXVec3 mousePoint;
-	mousePoint.x = x;
-	mousePoint.y = -y;
-	mousePoint.z = 1.0f;
+	CDXVec mousePoint = XMVectorSet((float)x, (float)-y, 1.0f, 0.0f);
 
-	const CDXMatrix* pmatProj = g_Camera.GetProjMatrix();
+	CDXMatrix pmatProj = camera->GetProjMatrix();
 
 	// Compute the vector of the pick ray in screen space
-	CDXVec3 v;
-	v.x = (((2.0f * x) / g_Camera.GetWidth()) - 1) / pmatProj->_11;
-	v.y = -(((2.0f * y) / g_Camera.GetHeight()) - 1) / pmatProj->_22;
-	v.z = 1.0f;
+	CDXVec v = XMVectorSet(
+		(((2.0f * x) / camera->GetWidth()) - 1) / XMVectorGetX(pmatProj.r[0]),
+		-(((2.0f * y) / camera->GetHeight()) - 1) / XMVectorGetY(pmatProj.r[1]),
+		1.0f, 
+		1.0f
+	);
+
+	CDXVec v2 = XMVectorSet((float)x, (float)y,1.0f,0.0f);
+	auto vRes = XMVector3Unproject(v2, 0, 0, camera->GetWidth(), camera->GetHeight(), 0.0f, 1.0f, camera->GetProjMatrix(), camera->GetViewMatrix(), *camera->GetWorldMatrix());
+	auto dir = XMVector3Normalize(vRes);
 
 	// Get the inverse view matrix
-	const CDXMatrix matView = *g_Camera.GetViewMatrix();
-	const CDXMatrix matWorld = *g_Camera.GetWorldMatrix();
-	CDXMatrix mWorldView = matWorld * matView;
-	CDXMatrix m;
-	DirectX::XMFLOAT4X4Inverse( &m, NULL, &mWorldView );
+	CDXMatrix matView = camera->GetViewMatrix();
+	const CDXMatrix * matWorld = camera->GetWorldMatrix();
+	CDXMatrix mWorldView = XMMatrixMultiply(*matWorld, matView);
+
+	CDXMatrix m = XMMatrixInverse(nullptr, mWorldView);
+
+	CDXMatrix mRot = m;
+	mRot.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+
+	//auto rot = XMQuaternionRotationMatrix(m);
 
 	// Transform the screen space pick ray into 3D space
-	rayInfo.direction.x = v.x * m._11 + v.y * m._21 + v.z * m._31;
-	rayInfo.direction.y = v.x * m._12 + v.y * m._22 + v.z * m._32;
-	rayInfo.direction.z = v.x * m._13 + v.y * m._23 + v.z * m._33;
-	rayInfo.origin.x = m._41;
-	rayInfo.origin.y = m._42;
-	rayInfo.origin.z = m._43;
-	rayInfo.point.x = mousePoint.x * m._11 + mousePoint.y * m._21 + mousePoint.z * m._31;
-	rayInfo.point.y = mousePoint.x * m._12 + mousePoint.y * m._22 + mousePoint.z * m._32;
-	rayInfo.point.z = mousePoint.x * m._13 + mousePoint.y * m._23 + mousePoint.z * m._33;
+	rayInfo.direction = XMVector3Transform(v, mRot);
+	rayInfo.origin = XMVectorSetW(m.r[3], 0.0f);
+	rayInfo.point = XMVector3Transform(mousePoint, mRot);
 
 	// Create mirror raycast
 	mRayInfo = rayInfo;
-	mRayInfo.direction.x = -mRayInfo.direction.x;
-	mRayInfo.origin.x = -mRayInfo.origin.x;
+	mRayInfo.direction = XMVectorSetX(mRayInfo.direction, -XMVectorGetX(mRayInfo.direction));
+	mRayInfo.origin = XMVectorSetX(mRayInfo.origin, -XMVectorGetX(mRayInfo.origin));
 
 	// Find closest collision points
 	bool hitMesh = false;
@@ -282,5 +205,3 @@ bool CDXScene::Pick(int x, int y, CDXPicker & picker)
 
 	return hitVertices;
 }
-
-#endif

@@ -1,25 +1,23 @@
-#ifdef FIXME
-
 #include "CDXResetMask.h"
+#include <DirectXMath.h>
+
+using namespace DirectX;
 
 CDXResetMask::CDXResetMask(CDXMesh * mesh)
 {
 	m_mesh = mesh;
 
-	CDXMeshVert* pVertices = NULL;
-	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 
-	pVB->Lock(0, 0, (void**)&pVertices, 0);
-	for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {
-		CDXColor unselected = COLOR_UNSELECTED;
-		if (pVertices[i].Color != unselected) {
+	for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {		
+		if (XMVector3NotEqual(XMLoadFloat3(&pVertices[i].Color), COLOR_UNSELECTED)) {
 			m_previous[i] = pVertices[i].Color;
-			pVertices[i].Color = unselected;
-			m_current[i] = unselected;
+			XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
+			XMStoreFloat3(&m_current[i], COLOR_UNSELECTED);
 		}
 	}
 
-	pVB->Unlock();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 }
 
 CDXResetMask::~CDXResetMask()
@@ -35,34 +33,22 @@ CDXUndoCommand::UndoType CDXResetMask::GetUndoType()
 
 void CDXResetMask::Redo()
 {
-	CDXMeshVert* pVertices = NULL;
-	CDXMeshIndex* pIndices = NULL;
-
-	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
-
-	pVB->Lock(0, 0, (void**)&pVertices, 0);
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 
 	// Do what we have now
 	for (auto it : m_current)
 		pVertices[it.first].Color = it.second;
 
-	pVB->Unlock();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 }
 
 void CDXResetMask::Undo()
 {
-	CDXMeshVert* pVertices = NULL;
-	CDXMeshIndex* pIndices = NULL;
-
-	ID3D11Buffer * pVB = m_mesh->GetVertexBuffer();
-
-	pVB->Lock(0, 0, (void**)&pVertices, 0);
+	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 
 	// Undo what we did
 	for (auto it : m_previous)
 		pVertices[it.first].Color = it.second;
 
-	pVB->Unlock();
+	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 }
-
-#endif

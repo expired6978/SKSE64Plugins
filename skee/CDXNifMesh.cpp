@@ -1,69 +1,255 @@
-#ifdef FIXME
-
 #include "CDXNifMesh.h"
+#include "CDXNifMaterial.h"
 #include "CDXScene.h"
 #include "CDXShader.h"
 
 #include "skse64/NiGeometry.h"
 #include "skse64/NiRTTI.h"
 #include "skse64/NiExtraData.h"
+#include "skse64/NiRenderer.h"
 
 #include "NifUtils.h"
 
 #include <thread>
 #include <mutex>
-#include <future>
 #include <vector>
-#include <time.h>
+
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#include "half.hpp"
+
+#include <d3d11_3.h>
+
+using namespace DirectX;
 
 CDXNifMesh::CDXNifMesh() : CDXEditableMesh()
 {
-	m_material = NULL;
-	m_geometry = NULL;
+	m_material = nullptr;
 	m_morphable = false;
 }
 
 CDXNifMesh::~CDXNifMesh()
 {
-	if (m_geometry) {
-		m_geometry->DecRef();
-	}
+	
 }
 
-NiGeometry * CDXNifMesh::GetNifGeometry()
+CDXMeshVert * CDXNifMesh::LockVertices(const LockMode type)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
-	return m_geometry;
+	EnterCriticalSection(&g_renderManager->lock);
+	return CDXMesh::LockVertices(type);
 }
 
-bool CDXNifMesh::IsMorphable()
+CDXMeshIndex * CDXNifMesh::LockIndices()
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
-	return m_morphable;
+	EnterCriticalSection(&g_renderManager->lock);
+	return CDXMesh::LockIndices();
 }
 
-CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
+void CDXNifMesh::UnlockVertices(const LockMode type)
+{
+	CDXMesh::UnlockVertices(type);
+	LeaveCriticalSection(&g_renderManager->lock);
+}
+void CDXNifMesh::UnlockIndices(bool write)
+{
+	CDXMesh::UnlockIndices(write);
+	LeaveCriticalSection(&g_renderManager->lock);
+}
+
+CDXBSTriShapeMesh::CDXBSTriShapeMesh()
+{
+	m_geometry = nullptr;
+}
+
+CDXBSTriShapeMesh::~CDXBSTriShapeMesh()
+{
+	
+}
+
+CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape * geometry)
 {
 	UInt32 vertCount = 0;
 	UInt32 triangleCount = 0;
-	ID3D11Buffer * vertexBuffer = NULL;
-	ID3D11Buffer * indexBuffer = NULL;
-	LPDIRECT3DBASETEXTURE9 diffuseTexture = NULL;
+
 	UInt16 alphaFlags = 0;
 	UInt8 alphaThreshold = 0;
 	UInt32 shaderFlags1 = 0;
 	UInt32 shaderFlags2 = 0;
 
-	CDXNifMesh * nifMesh = new CDXNifMesh;
+	CDXBSTriShapeMesh * nifMesh = new CDXBSTriShapeMesh;
+	nifMesh->m_geometry = geometry;
+	BSShaderMaterial * material = nullptr;
 
-	if (geometry) {
-		geometry->IncRef();
-		nifMesh->m_geometry = geometry;
+	if (geometry)
+	{
+		// Pre-transform
+		NiTransform localTransform = GetGeometryTransform(geometry);
+		const BSLightingShaderProperty * shaderProperty = ni_cast(geometry->m_spEffectState, BSLightingShaderProperty);
+		if (shaderProperty) {
+			material = shaderProperty->material;
+			shaderFlags1 = shaderProperty->shaderFlags1;
+			shaderFlags2 = shaderProperty->shaderFlags2;
+		}
+
+		const NiAlphaProperty * alphaProperty = ni_cast(geometry->m_spPropertyState, NiAlphaProperty);
+		if (alphaProperty) {
+			alphaFlags = alphaProperty->alphaFlags;
+			alphaThreshold = alphaProperty->alphaThreshold;
+		}
+
+		const NiSkinInstance * skinInstance = geometry->m_spSkinInstance.m_pObject;
+		if (!skinInstance) {
+			delete nifMesh;
+			return nullptr;
+		}
+
+		const NiSkinPartition * skinPartition = skinInstance->m_spSkinPartition.m_pObject;
+		if (!skinPartition) {
+			delete nifMesh;
+			return nullptr;
+		}
+
+		std::vector<CDXMeshIndex> indices;
+		for (UInt32 p = 0; p < skinPartition->m_uiPartitions; ++p)
+		{
+			for (UInt32 t = 0; t < skinPartition->m_pkPartitions[p].m_usTriangles * 3; ++t)
+			{
+				indices.push_back(skinPartition->m_pkPartitions[p].m_pusTriList[t]);
+			}
+		}
+
+		vertCount = geometry->numVertices;
+		triangleCount = indices.size();
+
+		nifMesh->m_vertCount = vertCount;
+		nifMesh->m_indexCount = triangleCount;
+
+		BSFaceGenBaseMorphExtraData * morphData = (BSFaceGenBaseMorphExtraData *)geometry->GetExtraData("FOD");
+		if (morphData) {
+			nifMesh->m_morphable = true;
+		}
+
+		nifMesh->InitializeBuffers(pDevice, nifMesh->m_vertCount, nifMesh->m_indexCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
+		{
+			nifMesh->m_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+			memcpy(pIndices, &indices.at(0), indices.size() * sizeof(CDXMeshIndex));
+
+			BSDynamicTriShape * dynamicTriShape = ni_cast(geometry, BSDynamicTriShape);
+			UInt32 vertexSize = NiSkinPartition::GetVertexSize(geometry->vertexDesc);
+			UInt32 uvOffset = NiSkinPartition::GetVertexAttributeOffset(geometry->vertexDesc, VertexAttribute::VA_TEXCOORD0);
+
+			for (UInt32 i = 0; i < vertCount; i++) {
+				NiPoint3 * vertex = dynamicTriShape ? reinterpret_cast<NiPoint3*>(&reinterpret_cast<DirectX::XMFLOAT4*>(dynamicTriShape->diffBlock)[i]) : reinterpret_cast<NiPoint3*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData[i * vertexSize]);
+				NiPoint3 xformed = localTransform * (*vertex);
+				struct UVCoord
+				{
+					half_float::half u;
+					half_float::half v;
+				};
+				UVCoord * texCoord = reinterpret_cast<UVCoord*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData[i * vertexSize + uvOffset]);
+				DirectX::XMFLOAT2 uv{ texCoord->u, texCoord->v };
+				pVertices[i].Position = *(DirectX::XMFLOAT3*)&xformed;
+				pVertices[i].Normal = DirectX::XMFLOAT3(0,0,0);
+				pVertices[i].Tex = uv;
+				XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
+			}
+		});
+
+		nifMesh->BuildAdjacency();
+		if (nifMesh->IsMorphable()) {
+			nifMesh->BuildFacemap();
+			nifMesh->BuildNormals();
+		}
+
+		CDXNifMaterial * meshMaterial = new CDXNifMaterial;
+		meshMaterial->SetWireframeColor(XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
+		meshMaterial->SetShaderFlags1(shaderFlags1);
+		meshMaterial->SetShaderFlags2(shaderFlags2);
+		if (alphaFlags != 0) {
+			meshMaterial->SetFlags(alphaFlags);
+			meshMaterial->SetAlphaThreshold(alphaThreshold);
+		}
+
+		const BSLightingShaderProperty * lightingShaderProperty = ni_cast(geometry->m_spEffectState, BSLightingShaderProperty);
+		if (lightingShaderProperty) {
+			BSLightingShaderMaterial * lightingMaterial = static_cast<BSLightingShaderMaterial*>(material);
+			NiTexture * textures[] = { lightingMaterial->texture1, lightingMaterial->texture2, lightingMaterial->texture3 };
+			for (UInt32 i = 0; i < sizeof(textures) / sizeof(NiTexture*); ++i)
+			{
+				if (textures[i]) {
+					meshMaterial->SetNiTexture(i, textures[i]);
+				}
+			}
+		}
+
+		if (material) {
+			switch(material->GetShaderType())
+			{
+				case BSShaderMaterial::kShaderType_FaceGen:
+				{
+					const BSLightingShaderMaterialFacegen * tintMaterial = static_cast<BSLightingShaderMaterialFacegen*>(material);
+					if (tintMaterial->renderedTexture) {
+						meshMaterial->SetNiTexture(4, tintMaterial->renderedTexture);
+					}
+					break;
+				}
+				case BSShaderMaterial::kShaderType_FaceGenRGBTint:
+				{
+					const BSLightingShaderMaterialFacegenTint * tintMaterial = static_cast<BSLightingShaderMaterialFacegenTint*>(material);
+					meshMaterial->SetTintColor(DirectX::XMFLOAT4(tintMaterial->tintColor.r, tintMaterial->tintColor.g, tintMaterial->tintColor.b, 1.0f));
+					break;
+				}
+				case BSShaderMaterial::kShaderType_HairTint:
+				{
+					const BSLightingShaderMaterialHairTint * tintMaterial = static_cast<BSLightingShaderMaterialHairTint*>(material);
+					meshMaterial->SetTintColor(DirectX::XMFLOAT4(tintMaterial->tintColor.r, tintMaterial->tintColor.g, tintMaterial->tintColor.b, 1.0f));
+					break;
+				}
+			}
+		}
+
+		nifMesh->SetMaterial(meshMaterial);
 	}
+
+	if (!nifMesh->IsMorphable())
+		nifMesh->SetLocked(true);
+
+	return nifMesh;
+}
+
+const char * CDXBSTriShapeMesh::GetName() const
+{
+	return m_geometry ? m_geometry->m_name : "";
+}
+
+CDXLegacyNifMesh::CDXLegacyNifMesh()
+{
+	m_geometry = nullptr;
+}
+
+CDXLegacyNifMesh::~CDXLegacyNifMesh()
+{
+	
+}
+
+CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, NiGeometry * geometry)
+{
+	UInt32 vertCount = 0;
+	UInt32 triangleCount = 0;
+
+	ID3D11ShaderResourceView * diffuseTexture = nullptr;
+
+	UInt16 alphaFlags = 0;
+	UInt8 alphaThreshold = 0;
+	UInt32 shaderFlags1 = 0;
+	UInt32 shaderFlags2 = 0;
+
+	CDXLegacyNifMesh * nifMesh = new CDXLegacyNifMesh;
+	nifMesh->m_geometry = geometry;
 
 	if (geometry)
 	{
@@ -75,17 +261,16 @@ CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
 			if (triShapeData || triStripsData)
 			{
 				// Pre-transform
-				NiTransform localTransform = GetGeometryTransform(geometry);
-				BSLightingShaderProperty * shaderProperty = niptr_cast<BSLightingShaderProperty>(geometry->m_spEffectState);
+				NiTransform localTransform = GetLegacyGeometryTransform(geometry);
+				BSLightingShaderProperty * shaderProperty = ni_cast(geometry->m_spEffectState, BSLightingShaderProperty);
 				if (shaderProperty) {
 					BSLightingShaderMaterial * material = shaderProperty->material;
 					if (material) {
-						NiTexture * diffuse = niptr_cast<NiTexture>(material->diffuse);
+						NiTexture * diffuse = material->texture1;
 						if (diffuse) {
 							NiTexture::RendererData * rendererData = diffuse->rendererData;
 							if (rendererData) {
-								NiTexture::NiDX9TextureData * dx9RendererData = (NiTexture::NiDX9TextureData *)rendererData;
-								diffuseTexture = dx9RendererData->texture;
+								diffuseTexture = rendererData->resourceView;
 							}
 						}
 					}
@@ -94,7 +279,7 @@ CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
 					shaderFlags2 = shaderProperty->shaderFlags2;
 				}
 
-				NiAlphaProperty * alphaProperty = niptr_cast<NiAlphaProperty>(geometry->m_spPropertyState);
+				NiAlphaProperty * alphaProperty = ni_cast(geometry->m_spPropertyState, NiAlphaProperty);
 				if (alphaProperty) {
 					alphaFlags = alphaProperty->alphaFlags;
 					alphaThreshold = alphaProperty->alphaThreshold;
@@ -104,129 +289,109 @@ CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
 				triangleCount = geometryData->m_usTriangles;
 
 				nifMesh->m_vertCount = vertCount;
-				nifMesh->m_primitiveCount = triangleCount;
+				nifMesh->m_indexCount = triangleCount;
 
 				BSFaceGenBaseMorphExtraData * morphData = (BSFaceGenBaseMorphExtraData *)geometry->GetExtraData("FOD");
 				if (morphData) {
 					nifMesh->m_morphable = true;
 				}
 
-				pDevice->CreateVertexBuffer(geometryData->m_usVertices*sizeof(CDXMeshVert), 0, 0, D3DPOOL_MANAGED, &vertexBuffer, NULL);
+				nifMesh->InitializeBuffers(pDevice, nifMesh->m_vertCount, nifMesh->m_indexCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
+				{
+					if (triShapeData)
+					{
+						nifMesh->m_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+						memcpy(pIndices, triShapeData->m_pusTriList, triShapeData->m_uiTriListLength * sizeof(CDXMeshIndex));
+					}
+					else if (triStripsData)
+					{
+						nifMesh->m_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+						memcpy(pIndices, triStripsData->m_pusStripLists, GetStripLengthSum(triStripsData) * sizeof(CDXMeshIndex));
+					}
 
-				CDXMeshVert* pVertices = NULL;
-				CDXMeshIndex* pIndices = NULL;
+					for (UInt32 i = 0; i < vertCount; i++) {
+						NiPoint3 xformed = localTransform * geometryData->m_pkVertex[i];
+						NiPoint2 uv = geometryData->m_pkTexture[i];
+						pVertices[i].Position = *(DirectX::XMFLOAT3*)&xformed;
+						DirectX::XMFLOAT3 vNormal(0, 0, 0);
+						pVertices[i].Normal = vNormal;
+						pVertices[i].Tex = *(DirectX::XMFLOAT2*)&uv;
+						XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
 
-				if (triShapeData)
-					pDevice->CreateIndexBuffer(triangleCount*sizeof(CDXMeshFace), 0, D3DFMT_INDEX16, D3DPOOL_MANAGED, &indexBuffer, NULL);
-				else if (triStripsData)
-					pDevice->CreateIndexBuffer(GetStripLengthSum(triStripsData)*sizeof(CDXMeshIndex), 0, D3DFMT_INDEX16, D3DPOOL_MANAGED, &indexBuffer, NULL);
+						// Build adjacency table
+						if (nifMesh->m_morphable) {
+							for (UInt32 f = 0; f < triangleCount; f++) {
+								if (triShapeData) {
+									CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
+									if (i == face->v1 || i == face->v2 || i == face->v3)
+										nifMesh->m_adjacency[i].push_back(*face);
+								}
+								else if (triStripsData) {
+									UInt16 v1 = 0, v2 = 0, v3 = 0;
+									GetTriangleIndices(triStripsData, f, v1, v2, v3);
+									if (i == v1 || i == v2 || i == v3)
+										nifMesh->m_adjacency[i].push_back(CDXMeshFace(v1, v2, v3));
+								}
+							}
+						}
+					}
 
-				// lock i_buffer and load the indices into it
-				indexBuffer->Lock(0, 0, (void**)&pIndices, 0);
-				if (triShapeData) {
-					memcpy(pIndices, triShapeData->m_pusTriList, triShapeData->m_uiTriListLength*sizeof(CDXMeshIndex));
-					nifMesh->m_primitiveType = D3DPT_TRIANGLELIST;
-				}
-				else if (triStripsData) {
-					memcpy(pIndices, triStripsData->m_pusStripLists, GetStripLengthSum(triStripsData)*sizeof(CDXMeshIndex));
-					nifMesh->m_primitiveCount = GetStripLengthSum(triStripsData);
-					nifMesh->m_primitiveType = D3DPT_TRIANGLESTRIP;
-				}
-				nifMesh->m_indexBuffer = indexBuffer;
-				indexBuffer->Unlock();
-
-				vertexBuffer->Lock(0, 0, (void**)&pVertices, 0);
-				for (UInt32 i = 0; i < vertCount; i++) {
-					NiPoint3 xformed = localTransform * geometryData->m_pkVertex[i];
-					NiPoint2 uv = geometryData->m_pkTexture[i];
-					pVertices[i].Position = *(DirectX::XMFLOAT3*)&xformed;
-					DirectX::XMFLOAT3 vNormal(0, 0, 0);
-					pVertices[i].Normal = vNormal;
-					pVertices[i].Tex = *(DirectX::XMFLOAT2*)&uv;
-					pVertices[i].Color = COLOR_UNSELECTED;
-
-					// Build adjacency table
+					// Don't need edge table if not editable
 					if (nifMesh->m_morphable) {
+						CDXEdgeMap edges;
 						for (UInt32 f = 0; f < triangleCount; f++) {
+
 							if (triShapeData) {
 								CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
-								if (i == face->v1 || i == face->v2 || i == face->v3)
-									nifMesh->m_adjacency[i].push_back(*face);
+								auto it = edges.emplace(CDXMeshEdge(std::min(face->v1, face->v2), std::max(face->v1, face->v2)), 1);
+								if (it.second == false)
+									it.first->second++;
+								it = edges.emplace(CDXMeshEdge(std::min(face->v2, face->v3), std::max(face->v2, face->v3)), 1);
+								if (it.second == false)
+									it.first->second++;
+								it = edges.emplace(CDXMeshEdge(std::min(face->v3, face->v1), std::max(face->v3, face->v1)), 1);
+								if (it.second == false)
+									it.first->second++;
 							}
 							else if (triStripsData) {
 								UInt16 v1 = 0, v2 = 0, v3 = 0;
 								GetTriangleIndices(triStripsData, f, v1, v2, v3);
-								if (i == v1 || i == v2 || i == v3)
-									nifMesh->m_adjacency[i].push_back(CDXMeshFace(v1, v2, v3));
+								auto it = edges.emplace(CDXMeshEdge(std::min(v1, v2), std::max(v1, v2)), 1);
+								if (it.second == false)
+									it.first->second++;
+								it = edges.emplace(CDXMeshEdge(std::min(v2, v3), std::max(v2, v3)), 1);
+								if (it.second == false)
+									it.first->second++;
+								it = edges.emplace(CDXMeshEdge(std::min(v3, v1), std::max(v3, v1)), 1);
+								if (it.second == false)
+									it.first->second++;
+							}
+						}
+
+						for (auto e : edges) {
+							if (e.second == 1) {
+								nifMesh->m_vertexEdges.insert(e.first.p1);
+								nifMesh->m_vertexEdges.insert(e.first.p2);
 							}
 						}
 					}
-				}
 
-				nifMesh->m_vertexBuffer = vertexBuffer;
-
-				// Don't need edge table if not editable
-				if (nifMesh->m_morphable) {
-					CDXEdgeMap edges;
-					for (UInt32 f = 0; f < triangleCount; f++) {
-
-						if (triShapeData) {
-							CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
-							auto it = edges.emplace(CDXMeshEdge(min(face->v1, face->v2), max(face->v1, face->v2)), 1);
-							if (it.second == false)
-								it.first->second++;
-							it = edges.emplace(CDXMeshEdge(min(face->v2, face->v3), max(face->v2, face->v3)), 1);
-							if (it.second == false)
-								it.first->second++;
-							it = edges.emplace(CDXMeshEdge(min(face->v3, face->v1), max(face->v3, face->v1)), 1);
-							if (it.second == false)
-								it.first->second++;
-						}
-						else if (triStripsData) {
-							UInt16 v1 = 0, v2 = 0, v3 = 0;
-							GetTriangleIndices(triStripsData, f, v1, v2, v3);
-							auto it = edges.emplace(CDXMeshEdge(min(v1, v2), max(v1, v2)), 1);
-							if (it.second == false)
-								it.first->second++;
-							it = edges.emplace(CDXMeshEdge(min(v2, v3), max(v2, v3)), 1);
-							if (it.second == false)
-								it.first->second++;
-							it = edges.emplace(CDXMeshEdge(min(v3, v1), max(v3, v1)), 1);
-							if (it.second == false)
-								it.first->second++;
+					// Only need vertex normals when it's editable
+					if (nifMesh->m_morphable) {
+						for (UInt32 i = 0; i < vertCount; i++) {
+							// Setup normals
+							CDXVec vNormal = XMVectorSet(0, 0, 0, 0);
+							if (!geometryData->m_pkNormal)
+								XMStoreFloat3(&pVertices[i].Normal, nifMesh->CalculateVertexNormal(i));
+							else
+								XMStoreFloat3(&pVertices[i].Normal, XMLoadFloat3((XMFLOAT3*)&geometryData->m_pkNormal[i]));
 						}
 					}
-
-					for (auto e : edges) {
-						if (e.second == 1) {
-							nifMesh->m_vertexEdges.insert(e.first.p1);
-							nifMesh->m_vertexEdges.insert(e.first.p2);
-						}
-					}
-				}
-
-				// Only need vertex normals when it's editable
-				if (nifMesh->m_morphable) {
-					for (UInt32 i = 0; i < vertCount; i++) {
-						// Setup normals
-						DirectX::XMFLOAT3 vNormal(0, 0, 0);
-						if (!geometryData->m_pkNormal)
-							vNormal = nifMesh->CalculateVertexNormal(i);
-						else
-							vNormal = *(DirectX::XMFLOAT3*)&geometryData->m_pkNormal[i];
-
-						pVertices[i].Normal = vNormal;
-					}
-				}
-
-				vertexBuffer->Unlock();
-
+				});
+				
 				CDXMaterial * material = new CDXMaterial;
-				material->SetDiffuseTexture(diffuseTexture);
-				material->SetSpecularColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
-				material->SetAmbientColor(DirectX::XMFLOAT3(0.2f, 0.2f, 0.2f));
-				material->SetDiffuseColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
-				material->SetWireframeColor(DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f));
+				material->SetTexture(0, diffuseTexture);
+				material->SetWireframeColor(XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
 				material->SetShaderFlags1(shaderFlags1);
 				material->SetShaderFlags2(shaderFlags2);
 				if (alphaFlags != 0) {
@@ -245,37 +410,7 @@ CDXNifMesh * CDXNifMesh::Create(ID3D11Device * pDevice, NiGeometry * geometry)
 	return nifMesh;
 }
 
-void CDXNifMesh::Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader)
+const char * CDXLegacyNifMesh::GetName() const
 {
-	ID3DXEffect * effect = shader->GetEffect();
-	if (m_material) {
-		effect->SetValue(shader->m_hSpecular, m_material->GetSpecularColor(), sizeof(CDXVec3));
-		effect->SetValue(shader->m_hAmbient, m_material->GetAmbientColor(), sizeof(CDXVec3));
-		effect->SetValue(shader->m_hDiffuse, m_material->GetDiffuseColor(), sizeof(CDXVec3));
-		effect->SetValue(shader->m_hWireframeColor, m_material->GetWireframeColor(), sizeof(CDXVec3));
-
-		UInt32 alphaFunc = mappedTestFunctions[m_material->GetTestMode()];
-		UInt32 srcBlend = mappedAlphaFunctions[m_material->GetSrcBlendMode()];
-		UInt32 destBlend = mappedAlphaFunctions[m_material->GetDestBlendMode()];
-
-		bool isDoubleSided = (m_material->GetShaderFlags2() & BSShaderProperty::kSLSF2_Double_Sided) == BSShaderProperty::kSLSF2_Double_Sided;
-		bool zBufferTest = (m_material->GetShaderFlags1() & BSShaderProperty::kSLSF1_ZBuffer_Test) == BSShaderProperty::kSLSF1_ZBuffer_Test;
-		bool zBufferWrite = (m_material->GetShaderFlags2() & BSShaderProperty::kSLSF2_ZBuffer_Write) == BSShaderProperty::kSLSF2_ZBuffer_Write;
-
-		pDevice->SetRenderState(D3DRS_ZENABLE, zBufferTest ? TRUE : FALSE);
-		pDevice->SetRenderState(D3DRS_ZWRITEENABLE, zBufferWrite ? TRUE : FALSE);
-		pDevice->SetRenderState(D3DRS_CULLMODE, isDoubleSided ? D3DCULL_NONE : D3DCULL_CW);
-		pDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
-		pDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, m_material->GetAlphaBlending() ? TRUE : FALSE);
-		pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, m_material->GetAlphaTesting() ? TRUE : FALSE);
-		pDevice->SetRenderState(D3DRS_ALPHAREF, m_material->GetAlphaThreshold());
-		pDevice->SetRenderState(D3DRS_ALPHAFUNC, alphaFunc);
-		pDevice->SetRenderState(D3DRS_SRCBLEND, srcBlend);
-		pDevice->SetRenderState(D3DRS_DESTBLEND, destBlend);
-	}
-	effect->CommitChanges();
-
-	CDXMesh::Pass(pDevice, iPass, shader);
+	return m_geometry ? m_geometry->m_name : "";
 }
-
-#endif

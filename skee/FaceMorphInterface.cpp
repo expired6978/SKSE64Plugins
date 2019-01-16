@@ -427,7 +427,7 @@ SliderInternalPtr FaceMorphInterface::GetSliderByIndex(TESRace * race, UInt32 in
 	return NULL;
 }
 
-float ValueMap::GetMorphValueByName(TESNPC* npc, SKEEFixedString name)
+float ValueMap::GetMorphValueByName(TESNPC* npc, const SKEEFixedString & name)
 {
 	ValueMap::iterator it = find(npc);
 	if(it != end()) {
@@ -437,7 +437,7 @@ float ValueMap::GetMorphValueByName(TESNPC* npc, SKEEFixedString name)
 	return 0.0;
 }
 
-void ValueMap::SetMorphValue(TESNPC* npc, SKEEFixedString name, float value)
+void ValueMap::SetMorphValue(TESNPC* npc, const SKEEFixedString & name, float value)
 {
 	ValueMap::iterator it = find(npc);
 	if(it != end()) {
@@ -449,7 +449,7 @@ void ValueMap::SetMorphValue(TESNPC* npc, SKEEFixedString name, float value)
 	}
 }
 
-void ValueSet::SetValue(SKEEFixedString name, float value)
+void ValueSet::SetValue(const SKEEFixedString & name, float value)
 {
 	ValueSet::iterator val = find(g_stringTable.GetString(name));
 	if (val != end())
@@ -458,14 +458,14 @@ void ValueSet::SetValue(SKEEFixedString name, float value)
 		emplace(g_stringTable.GetString(name), value);
 }
 
-void ValueSet::ClearValue(SKEEFixedString name)
+void ValueSet::ClearValue(const SKEEFixedString & name)
 {
 	ValueSet::iterator val = find(g_stringTable.GetString(name));
 	if(val != end())
 		erase(val);
 }
 
-float ValueSet::GetValue(SKEEFixedString name)
+float ValueSet::GetValue(const SKEEFixedString & name)
 {
 	ValueSet::iterator val = find(g_stringTable.GetString(name));
 	if(val != end())
@@ -491,12 +491,12 @@ void ValueMap::EraseNPC(TESNPC * npc)
 		erase(it);
 }
 
-float FaceMorphInterface::GetMorphValueByName(TESNPC* npc, SKEEFixedString name)
+float FaceMorphInterface::GetMorphValueByName(TESNPC* npc, const SKEEFixedString & name)
 {
 	return m_valueMap.GetMorphValueByName(npc, name);
 }
 
-void FaceMorphInterface::SetMorphValue(TESNPC* npc, SKEEFixedString name, float value)
+void FaceMorphInterface::SetMorphValue(TESNPC* npc, const SKEEFixedString & name, float value)
 {
 	return m_valueMap.SetMorphValue(npc, name, value);
 }
@@ -609,7 +609,7 @@ bool FaceMorphInterface::CacheHeadPartModel(BGSHeadPart * headPart, bool cacheTR
 	return true;
 }
 
-bool FaceMorphInterface::GetModelTri(SKEEFixedString filePath, TRIModelData & modelData)
+bool FaceMorphInterface::GetModelTri(const SKEEFixedString & filePath, TRIModelData & modelData)
 {
 	ModelMap::iterator it = m_modelMap.find(filePath);
 	if (it != m_modelMap.end()) {
@@ -620,11 +620,11 @@ bool FaceMorphInterface::GetModelTri(SKEEFixedString filePath, TRIModelData & mo
 	return false;
 }
 
-TRIModelData & FaceMorphInterface::GetExtendedModelTri(SKEEFixedString morphName, bool cacheTRI)
+TRIModelData & FaceMorphInterface::GetExtendedModelTri(const SKEEFixedString & morphName, bool cacheTRI)
 {
 	std::string filePath(SLIDER_DIRECTORY);
 	filePath.append(morphName.c_str());
-	SKEEFixedString morphFile(filePath.c_str());
+	BSFixedString morphFile(filePath.c_str());
 	ModelMap::iterator it = m_modelMap.find(morphFile);
 	if(it == m_modelMap.end()) {
 		void* memory = Heap_Allocate(sizeof(TESModelTri));
@@ -877,7 +877,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 	g_bodyMorphInterface.UpdateModelWeight(actor);
 }
 
-bool MorphMap::Visit(SKEEFixedString key, Visitor & visitor)
+bool MorphMap::Visit(const SKEEFixedString & key, Visitor & visitor)
 {
 	MorphMap::iterator it = find(key);
 	if(it != end())
@@ -910,13 +910,13 @@ bool MorphMap::Visit(SKEEFixedString key, Visitor & visitor)
 
 
 
-bool FaceMorphInterface::VisitMorphMap(SKEEFixedString key, MorphMap::Visitor & visitor)
+bool FaceMorphInterface::VisitMorphMap(const SKEEFixedString & key, MorphMap::Visitor & visitor)
 {
 	//key = toLower(key);
 	return m_morphMap.Visit(key, visitor);
 }
 
-void MorphMap::AddMorph(SKEEFixedString key, SKEEFixedString value)
+void MorphMap::AddMorph(const SKEEFixedString & key, const SKEEFixedString & value)
 {
 	//key = toLower(key);
 	MorphMap::iterator it = find(key);
@@ -940,7 +940,7 @@ void FaceMorphInterface::ReadMorphs(std::string fixedPath, std::string modName, 
 
 	UInt32 lineCount = 0;
 	std::string str = "";
-	while(BSReadLine(&file, &str))
+	while(BSFileUtil::ReadLine(&file, &str))
 	{
 		lineCount++;
 		str = std::trim(str);
@@ -978,7 +978,7 @@ void FaceMorphInterface::ReadMorphs(std::string fixedPath, std::string modName, 
 #ifdef _DEBUG_DATAREADER
 			_DMESSAGE("ReadMorphs Info - Line (%d) added %s morph to %s from %s.", lineCount, params[i].c_str(), key.c_str(), fullPath.c_str());
 #endif
-			m_morphMap.AddMorph(SKEEFixedString(key.c_str()), SKEEFixedString(params[i].c_str()));
+			m_morphMap.AddMorph(key, params[i]);
 		}
 	}
 }
@@ -995,7 +995,7 @@ void FaceMorphInterface::ReadRaces(std::string fixedPath, std::string modPath, s
 
 	UInt32 lineCount = 0;
 	std::string str = "";
-	while(BSReadLine(&file, &str))
+	while(BSFileUtil::ReadLine(&file, &str))
 	{
 		lineCount++;
 		str = std::trim(str);
@@ -1051,7 +1051,7 @@ void FaceMorphInterface::ReadRaces(std::string fixedPath, std::string modPath, s
 	}
 }
 
-void SliderMap::AddSlider(SKEEFixedString key, UInt8 gender, SliderInternal & sliderInternal)
+void SliderMap::AddSlider(const SKEEFixedString & key, UInt8 gender, SliderInternal & sliderInternal)
 {
 	SliderMap::iterator it = find(key);
 	if(it != end()) {
@@ -1079,7 +1079,7 @@ SliderMapPtr FaceMorphInterface::ReadSliders(std::string fixedPath, std::string 
 	UInt8 gender = 0;
 	UInt32 lineCount = 0;
 	std::string str = "";
-	while(BSReadLine(&file, &str))
+	while(BSFileUtil::ReadLine(&file, &str))
 	{
 		lineCount++;
 		str = std::trim(str);
@@ -1471,12 +1471,12 @@ void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 	}
 }
 
-void FaceMorphInterface::SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const char * name, float relative)
+void FaceMorphInterface::SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const SKEEFixedString & name, float relative)
 {
 #ifdef _DEBUG_MORPH
 	_DMESSAGE("Applying Morph %s", name);
 #endif
-	BSFixedString morphName(name);
+	BSFixedString morphName(name.c_str());
 	FaceGenApplyMorph(FaceGen::GetSingleton(), faceNode, npc, &morphName, relative);
 }
 
@@ -1588,6 +1588,9 @@ void FaceMorphInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersio
 			}
 
 			intfc->WriteRecordData(&numValidParts, sizeof(numValidParts));
+#ifdef _DEBUG
+			_DMESSAGE("%s - Saving %d sculpts", __FUNCTION__, numValidParts);
+#endif
 			if (numValidParts > 0) {
 				for (auto part : *sculptData) {
 					UInt16 diffCount = part.second->size();
@@ -1595,6 +1598,10 @@ void FaceMorphInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersio
 						intfc->OpenRecord('SCPT', kVersion);
 						g_stringTable.WriteString(intfc, part.first);
 						intfc->WriteRecordData(&diffCount, sizeof(diffCount));
+
+#ifdef _DEBUG
+						_DMESSAGE("%s - Saving sculpt to %s with %d diffs", __FUNCTION__, part.first->c_str(), diffCount);
+#endif
 
 						for (auto diff : *part.second) {
 							intfc->WriteRecordData(&diff.first, sizeof(diff.first));
@@ -1618,18 +1625,24 @@ void FaceMorphInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersio
 		if (numMorphs > 0) {
 			intfc->OpenRecord('MRST', kVersion);
 			intfc->WriteRecordData(&numMorphs, sizeof(numMorphs));
+#ifdef _DEBUG
+			_DMESSAGE("%s - Saving %d morphs", __FUNCTION__, numMorphs);
+#endif
 			for (auto it = valueSet->begin(); it != valueSet->end(); ++it) {
 				if (it->second != 0.0) {
 					intfc->OpenRecord('MRPH', kVersion);
 					g_stringTable.WriteString(intfc, it->first);
 					intfc->WriteRecordData(&it->second, sizeof(it->second));
+#ifdef _DEBUG
+					_DMESSAGE("%s - Saving %s with %f", __FUNCTION__, it->first->c_str(), it->second);
+#endif
 				}
 			}
 		}
 	}
 }
 
-bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt32 kVersion, const std::unordered_map<UInt32, StringTableItem> & stringTable)
+bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32	type;
 	UInt32	length;
@@ -1647,20 +1660,24 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 		return true;
 	}
 
+#ifdef _DEBUG
+	_DMESSAGE("%s - Loading %d morphs", __FUNCTION__, numMorphs);
+#endif
+
 	for (UInt32 i = 0; i < numMorphs; i++)
 	{
 		StringTableItem sculptName;
 		UInt32 index = 0;
 		float value = 0.0;
+		UInt32 subVersion = 0;
 
-		if (intfc->GetNextRecordInfo(&type, &kVersion, &length))
+		if (intfc->GetNextRecordInfo(&type, &subVersion, &length))
 		{
 			switch (type)
 			{
 			case 'MRPH':
 			{
-				
-				if (kVersion >= BodyMorphInterface::kSerializationVersion3)
+				if (kVersion >= FaceMorphInterface::kSerializationVersion2)
 				{
 					sculptName = StringTable::ReadString(intfc, stringTable);
 					if (!sculptName)
@@ -1670,7 +1687,7 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 						return true;
 					}
 				}
-				else if (kVersion >= BodyMorphInterface::kSerializationVersion2)
+				else if (kVersion >= FaceMorphInterface::kSerializationVersion1)
 				{
 					char * name = NULL;
 					UInt16 nameLength = 0;
@@ -1698,7 +1715,7 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 			}
 			break;
 			default:
-				_MESSAGE("unhandled type %08X", type);
+				_MESSAGE("%s - unhandled type %08X", __FUNCTION__, type);
 				error = true;
 				break;
 			}
@@ -1713,7 +1730,7 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 	return error;
 }
 
-bool FaceMorphInterface::LoadSculptData(SKSESerializationInterface * intfc, UInt32 kVersion, const std::unordered_map<UInt32, StringTableItem> & stringTable)
+bool FaceMorphInterface::LoadSculptData(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
 	UInt32	type;
 	UInt32	length;
@@ -1732,14 +1749,15 @@ bool FaceMorphInterface::LoadSculptData(SKSESerializationInterface * intfc, UInt
 
 	for (UInt32 i = 0; i < numParts; i++)
 	{
-		if (intfc->GetNextRecordInfo(&type, &kVersion, &length))
+		UInt32 subVersion = 0;
+		if (intfc->GetNextRecordInfo(&type, &subVersion, &length))
 		{
 			switch (type)
 			{
 			case 'SCPT':
 			{
 				StringTableItem sculptName;
-				if (kVersion >= BodyMorphInterface::kSerializationVersion3)
+				if (kVersion >= FaceMorphInterface::kSerializationVersion2)
 				{
 					sculptName = StringTable::ReadString(intfc, stringTable);
 					if (!sculptName)
@@ -1749,7 +1767,7 @@ bool FaceMorphInterface::LoadSculptData(SKSESerializationInterface * intfc, UInt
 						return true;
 					}
 				}
-				else if (kVersion >= BodyMorphInterface::kSerializationVersion2)
+				else if (kVersion >= FaceMorphInterface::kSerializationVersion1)
 				{
 					UInt16 nameLength = 0;
 					if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
@@ -1882,7 +1900,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 		if (headPart && !headPart->IsExtraPart()) {			
 			ModInfo * modInfo = GetModInfoByFormID(headPart->formID, false);
 			if (modInfo) {
-				modListLegacy.emplace(modInfo->modIndex, modInfo->name);
+				modListLegacy.emplace(modInfo->GetPartialIndex(), modInfo->name);
 			}
 
 			partList.emplace(i, headPart);
@@ -2415,7 +2433,7 @@ bool FaceMorphInterface::LoadJsonPreset(const char * filePath, PresetDataPtr pre
 	}
 
 	std::string in;
-	BSReadAll(&file, &in);
+	BSFileUtil::ReadAll(&file, in);
 
 	Json::Features features;
 	features.all();
@@ -2499,11 +2517,11 @@ bool FaceMorphInterface::LoadJsonPreset(const char * filePath, PresetDataPtr pre
 				UInt32 formId = part["formId"].asUInt();
 
 				UInt32 modIndex = formId >> 24;
-				auto it = modList.find(modIndex);
+				auto it = modList.find(modIndex != 0xFE ? modIndex : (formId >> 12));
 				if (it != modList.end()) {
-					UInt8 gameIndex = dataHandler->GetLoadedModIndex(it->second.c_str());
-					if (gameIndex != 255) {
-						formId = (formId & 0x00FFFFFF) | (gameIndex << 24);
+					const ModInfo * modInfo = dataHandler->LookupModByName(it->second.c_str());
+					if (modInfo && modInfo->IsActive()) {
+						formId = modInfo->GetFormID(formId);
 						TESForm * headPartForm = LookupFormByID(formId);
 						if (headPartForm) {
 							BGSHeadPart * headPart = DYNAMIC_CAST(headPartForm, TESForm, BGSHeadPart);
@@ -2737,14 +2755,10 @@ bool FaceMorphInterface::LoadJsonPreset(const char * filePath, PresetDataPtr pre
 					// If the keys were mapped by mod name, skip them if they arent in load order
 					std::string strKey(key);
 					SKEEFixedString ext(strKey.substr(strKey.find_last_of(".") + 1).c_str());
-					if (ext == SKEEFixedString("esp") || ext == SKEEFixedString("esm"))
+					if (ext == SKEEFixedString("esp") || ext == SKEEFixedString("esm") || ext == SKEEFixedString("esl"))
 					{
-						if (!dataHandler->LookupLoadedModByName(key.c_str()))
-							continue;
-					}
-					else if (ext == SKEEFixedString("esl"))
-					{
-						if (!dataHandler->LookupLoadedLightModByName(key.c_str()))
+						const ModInfo * modInfo = dataHandler->LookupModByName(key.c_str());
+						if (!modInfo || !modInfo->IsActive())
 							continue;
 					}
 
@@ -2830,12 +2844,12 @@ bool FaceMorphInterface::LoadBinaryPreset(const char * filePath, PresetDataPtr p
 			UInt32 formId = 0;
 			file.Read(&formId, sizeof(formId));
 
-			UInt8 modIndex = formId >> 24;
-			auto it = modList.find(modIndex);
-			if(it != modList.end()) {
-				UInt8 gameIndex = dataHandler->GetLoadedModIndex(it->second.c_str());
-				if(gameIndex != 255) {
-					formId = (formId & 0x00FFFFFF) | (gameIndex << 24);
+			UInt32 modIndex = formId >> 24;
+			auto it = modList.find(modIndex != 0xFE ? modIndex : (formId >> 12));
+			if (it != modList.end()) {
+				const ModInfo * modInfo = dataHandler->LookupModByName(it->second.c_str());
+				if (modInfo && modInfo->IsActive()) {
+					formId = modInfo->GetFormID(formId);
 					TESForm * headPartForm = LookupFormByID(formId);
 					if(headPartForm) {
 						BGSHeadPart * headPart = DYNAMIC_CAST(headPartForm, TESForm, BGSHeadPart);

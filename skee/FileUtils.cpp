@@ -49,7 +49,9 @@ namespace std
 	}
 }
 
-bool BSReadLine(BSResourceNiBinaryStream* fin, std::string* str)
+namespace BSFileUtil
+{
+bool ReadLine(BSResourceNiBinaryStream* fin, std::string* str)
 {
 	char buf[1024];
 	UInt32 ret = 0;
@@ -62,15 +64,6 @@ bool BSReadLine(BSResourceNiBinaryStream* fin, std::string* str)
 	}
 	return false;
 }
-
-void BSReadAll(BSResourceNiBinaryStream* fin, std::string* str)
-{
-	char ch;
-	UInt32 ret = fin->Read(&ch, 1);
-	while (ret > 0) {
-		str->push_back(ch);
-		ret = fin->Read(&ch, 1);
-	}
 }
 
 TESRace * GetRaceByName(std::string & raceName)
@@ -170,19 +163,12 @@ TESForm * GetFormFromIdentifier(const std::string & formIdentifier)
 	UInt32 formId = 0;
 	sscanf_s(modForm.c_str(), "%X", &formId);
 
-	UInt8 modIndex = (*g_dataHandler)->GetLoadedModIndex(modName.c_str());
-	if (modIndex != 0xFF) {
-		formId |= ((UInt32)modIndex) << 24;
-	}
-	else
-	{
-		UInt16 lightModIndex = (*g_dataHandler)->GetLoadedLightModIndex(modName.c_str());
-		if (lightModIndex != 0xFFFF) {
-			formId |= 0xFE000000 | (UInt32(lightModIndex) << 12);
-		}
+	const ModInfo * modInfo = (*g_dataHandler)->LookupModByName(modName.c_str());
+	if (!modInfo || !modInfo->IsActive()) {
+		return nullptr;
 	}
 
-	return LookupFormByID(formId);
+	return LookupFormByID(modInfo->GetFormID(formId));
 }
 
 void VisitLeveledCharacter(TESLevCharacter * character, std::function<void(TESNPC*)> functor)

@@ -15,7 +15,6 @@ void DeleteStringEntry(const SKEEFixedString* string)
 StringTableItem StringTable::GetString(const SKEEFixedString & str)
 {
 	IScopedCriticalSection locker(&m_lock);
-
 	auto it = m_table.find(str);
 	if (it != m_table.end()) {
 		return it->second.lock();
@@ -33,14 +32,15 @@ StringTableItem StringTable::GetString(const SKEEFixedString & str)
 void StringTable::RemoveString(const SKEEFixedString & str)
 {
 	IScopedCriticalSection locker(&m_lock);
-
 	auto it = m_table.find(str);
 	if (it != m_table.end())
 	{
-		for (long int i = m_tableVector.size() - 1; i >= 0; --i)
+		for (auto i = m_tableVector.begin(); i != m_tableVector.end(); ++i)
 		{
-			if (m_tableVector[i].lock() == it->second.lock())
-				m_tableVector.erase(m_tableVector.begin() + i);
+			if (i->lock() == it->second.lock()) {
+				i = m_tableVector.erase(i);
+				break;
+			}
 		}
 
 		m_table.erase(it);
@@ -49,9 +49,11 @@ void StringTable::RemoveString(const SKEEFixedString & str)
 
 UInt32 StringTable::GetStringID(const StringTableItem & str)
 {
-	for (long int i = m_tableVector.size() - 1; i >= 0; --i)
+	IScopedCriticalSection locker(&m_lock);
+	UInt32 i = 0;
+	for (auto it = m_tableVector.begin(); it != m_tableVector.end(); ++it, ++i)
 	{
-		auto item = m_tableVector[i].lock();
+		auto item = it->lock();
 		if (item == str)
 			return i;
 	}
@@ -63,6 +65,7 @@ void StringTable::Save(const SKSESerializationInterface * intfc, UInt32 kVersion
 {
 	intfc->OpenRecord('STTB', kVersion);
 
+	IScopedCriticalSection locker(&m_lock);
 	UInt32 totalStrings = m_tableVector.size();
 	WriteData<UInt32>(intfc, &totalStrings);
 
@@ -106,7 +109,7 @@ bool StringTable::Load(const SKSESerializationInterface * intfc, UInt32 kVersion
 			stringTable.emplace(i, item);
 		}
 	}
-	else if (kVersion >= kSerializationVersion2)
+	else if (kVersion >= kSerializationVersion1)
 	{
 		if (!intfc->ReadRecordData(&totalStrings, sizeof(totalStrings)))
 		{

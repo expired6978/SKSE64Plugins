@@ -1,10 +1,10 @@
-#ifdef FIXME
-
 #include "CDXBrush.h"
 #include "CDXMesh.h"
 #include "CDXUndo.h"
 #include "CDXShader.h"
 #include "CDXMaterial.h"
+
+using namespace DirectX;
 
 double g_brushProperties[CDXBrush::kBrushTypes][CDXBrush::kBrushProperties][CDXBrush::kBrushPropertyValues];
 
@@ -143,7 +143,7 @@ float CDXBrush::CalculateFalloff(float & dist)
 	double y = -(1.0 - (1.0 - falloff)) * ((dist / radius) - 1.0) + (1.0 - falloff);
 	y = y*y*(3 - 2 * y);
 
-	return y;
+	return (float)y;
 	
 	/*double p = 1.0f;
 
@@ -175,25 +175,26 @@ float CDXBrush::CalculateFalloff(float & dist)
 
 CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditableMesh * mesh)
 {
-	CDXMeshVert * pVertices = mesh->LockVertices();
+	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::READ);
 	CDXHitIndexMap hitVertex;
-	for (UInt32 i = 0; i < mesh->GetVertexCount(); i++) {
+	for (UInt16 i = 0; i < mesh->GetVertexCount(); i++) {
 		if (FilterVertex(mesh, pVertices, i))
 			continue;
-		CDXVec3 vTest = pVertices[i].Position;
-		CDXVec3 vDiff = pickInfo.origin - vTest;
-		float testRadius = D3DXVec3Length(&vDiff); // Spherical radius
+
+		CDXVec vTest = XMLoadFloat3(&pVertices[i].Position);
+		CDXVec vDiff = XMVectorSubtract(pickInfo.origin, vTest);
+		float testRadius = XMVectorGetX(XMVector3Length(vDiff)); // Spherical radius
 		if (testRadius <= m_property[kBrushProperty_Radius][kBrushPropertyValue_Value]) {
 			hitVertex.emplace(i, CalculateFalloff(testRadius));
 		}
 	}
-	mesh->UnlockVertices();
+	mesh->UnlockVertices(CDXMesh::LockMode::READ);
 	return hitVertex;
 }
 
 bool CDXBasicHitBrush::FilterVertex(CDXEditableMesh * mesh, CDXMeshVert * pVertices, CDXMeshIndex i)
 {
-	if (pVertices[i].Color != COLOR_UNSELECTED)
+	if (XMVector3NotEqual(XMLoadFloat3(&pVertices[i].Color), COLOR_UNSELECTED))
 		return true;
 
 	return false;
@@ -303,11 +304,11 @@ bool CDXInflateBrush::UpdateStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mes
 
 		auto hitVertex = GetHitIndices(pickInfo, stroke->GetMesh());
 
-		CDXVec3 normal(0, 0, 0);
+		CDXVec normal = XMVectorZero();
 		for (auto i : hitVertex) {
-			normal += mesh->CalculateVertexNormal(i.first);
+			normal = XMVectorAdd(normal, mesh->CalculateVertexNormal(i.first));
 		}
-		XMVector3Normalize(&normal, &normal);
+		normal = XMVector3Normalize(normal);
 
 		for (auto i : hitVertex) {
 			CDXInflateStroke::InflateInfo strokeInfo;
@@ -472,9 +473,9 @@ bool CDXMoveBrush::UpdateStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mesh, 
 			DebugOut("%d - %f", strokeInfo.index, strokeInfo.falloff);
 #endif*/
 			CDXRayInfo rayStart = moveStroke->GetRayInfo();
-			CDXVec3 d = pickInfo.ray.point - rayStart.point;
+			CDXVec d = pickInfo.ray.point - rayStart.point;
 			if (isMirror)
-				d.x = -d.x;
+				d = XMVectorSetX(d, -XMVectorGetX(d));
 			strokeInfo.offset = d;
 			stroke->Update(&strokeInfo);
 		}
@@ -482,5 +483,3 @@ bool CDXMoveBrush::UpdateStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mesh, 
 
 	return true;
 }
-
-#endif

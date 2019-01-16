@@ -206,7 +206,7 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 							height = mask.resolutionWData;
 
 						newTarget = CreateSourceTexture("TintMask");
-						newTarget->rendererData = CALL_MEMBER_FN(g_renderManager, CreateRenderTexture)(width, height);
+						newTarget->rendererData = g_renderManager->CreateRenderTexture(width, height);
 
 						if (newTarget && m_maskMap.IsCaching()) {
 							m_maskMap.AddRenderTargetGroup(lightingShader, newTarget);
@@ -420,7 +420,7 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 
 	BSResourceNiBinaryStream bStream(path.c_str());
 	std::string data;
-	BSReadAll(&bStream, &data);
+	BSFileUtil::ReadAll(&bStream, data);
 
 	tinyxml2::XMLDocument tintDoc;
 	tintDoc.Parse(data.c_str(), data.size());

@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #ifndef __CDXSTROKE__
 #define __CDXSTROKE__
 
@@ -41,15 +39,15 @@ public:
 	virtual void Update(Info * pickInfo) = 0;
 	virtual void End() = 0;
 	virtual void Apply(SInt32 i) = 0;
-	virtual UInt32 Length() = 0;
+	virtual size_t Length() = 0;
 
-	CDXVec3 GetOrigin() { return m_origin; }
+	CDXVec GetOrigin() { return m_origin; }
 	void SetMirror(bool m) { m_mirror = m; }
 	bool IsMirror() const { return m_mirror; }
 	CDXEditableMesh	* GetMesh() { return m_mesh; }
 
 protected:
-	CDXVec3				m_origin;
+	CDXVec				m_origin;
 	CDXEditableMesh		* m_mesh;
 	CDXBrush			* m_brush;
 	bool				m_mirror;
@@ -76,7 +74,7 @@ public:
 
 	virtual void Undo();
 	virtual void Redo();
-	virtual UInt32 Length() { return m_current.size(); }
+	virtual size_t Length() { return m_current.size(); }
 
 protected:
 	CDXVectorMap m_current;
@@ -92,7 +90,7 @@ public:
 	virtual void Update(Info * strokeInfo);
 	virtual void Undo();
 	virtual void Redo();
-	virtual UInt32 Length() { return m_current.size(); }
+	virtual size_t Length() { return m_current.size(); }
 
 protected:
 	CDXMaskMap m_previous;
@@ -117,7 +115,7 @@ public:
 	class InflateInfo : public CDXStroke::Info
 	{
 	public:
-		CDXVec3 normal;
+		CDXVec normal;
 	};
 
 	virtual StrokeType GetStrokeType();
@@ -153,7 +151,7 @@ public:
 	class MoveInfo : public CDXStroke::Info
 	{
 	public:
-		CDXVec3 offset;
+		CDXVec offset;
 	};
 
 	virtual void Begin(CDXPickInfo & pickInfo);
@@ -162,7 +160,7 @@ public:
 	virtual void End();
 	virtual void Undo();
 	virtual void Redo();
-	virtual UInt32 Length() { return m_current.size(); }
+	virtual size_t Length() { return m_current.size(); }
 
 	CDXRayInfo & GetRayInfo() { return m_rayInfo; }
 
@@ -175,7 +173,5 @@ protected:
 	CDXVectorMap	m_previous;
 	CDXVectorMap	m_current;
 };
-
-#endif
 
 #endif

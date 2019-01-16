@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #ifndef __CDXNIFBRUSH__
 #define __CDXNIFBRUSH__
 
@@ -48,7 +46,5 @@ public:
 	CDXNifMoveBrush() : CDXMoveBrush() { }
 	virtual CDXStrokePtr CreateStroke(CDXBrush * brush, CDXEditableMesh * mesh);
 };
-
-#endif
 
 #endif

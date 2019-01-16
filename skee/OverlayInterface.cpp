@@ -127,7 +127,7 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	BSGeometry * targetShape = newShape->GetAsBSGeometry();
 	if(targetShape)
 	{
-		targetShape->unk148 = source->unk148;
+		targetShape->vertexDesc = source->vertexDesc;
 
 		if (shaderProperty)
 			targetShape->m_spEffectState = shaderProperty;
@@ -293,9 +293,8 @@ void OverlayInterface::RelinkOverlay(const char * nodeName, TESObjectREFR * refr
 
 	if (source && foundGeometry)
 	{
-		foundGeometry->unk148 = source->unk148;
+		foundGeometry->vertexDesc = source->vertexDesc;
 		NiSkinInstance * sourceSkin = niptr_cast<NiSkinInstance>(source->m_spSkinInstance);
-
 		if (sourceSkin) {
 			foundGeometry->m_spSkinInstance = sourceSkin->Clone();
 		}

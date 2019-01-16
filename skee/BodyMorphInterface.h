@@ -40,6 +40,7 @@ class NiExtraData;
 class TESNPC;
 class TESRace;
 class NiSkinPartition;
+struct ModInfo;
 
 #define MORPH_MOD_DIRECTORY "actors\\character\\BodyGenData\\"
 
@@ -108,7 +109,14 @@ class TriShapeVertexData
 {
 public:
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor) = 0;
-	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor) = 0;
+
+	struct Layout
+	{
+		UInt64	vertexDesc;
+		UInt8	* vertexData;
+	};
+
+	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor) = 0;
 };
 typedef std::shared_ptr<TriShapeVertexData> TriShapeVertexDataPtr;
 
@@ -118,7 +126,7 @@ public:
 	TriShapeFullVertexData() : m_maxIndex(0) { }
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
-	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
 
 	UInt32								m_maxIndex;
 	std::vector<TriShapeVertexDelta>	m_vertexDeltas;
@@ -131,7 +139,7 @@ public:
 	TriShapePackedVertexData() : m_maxIndex(0) { }
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
-	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
 
 	float									m_multiplier;
 	UInt32									m_maxIndex;
@@ -151,7 +159,7 @@ public:
 	};
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
-	virtual void ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
 
 	float								m_multiplier;
 	UInt32								m_maxIndex;
@@ -243,10 +251,11 @@ public:
 	virtual void Run();
 	virtual void Dispose();
 
-	NIOVTaskUpdateSkinPartition(NiSkinPartition * partition);
+	NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition);
 
 private:
-	NiPointer<NiSkinPartition> m_partition;
+	NiPointer<NiSkinPartition>	m_partition;
+	NiPointer<NiSkinInstance>	m_skinInstance;
 };
 
 class BodyGenMorphData
@@ -346,7 +355,7 @@ public:
 	virtual void VisitActors(std::function<void(TESObjectREFR*)> functor);
 
 protected:
-	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], UInt8 modIndex, UInt16 lightIndex, UInt32 gender, TESRace * raceFilter);
+	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter);
 
 private:
 	ActorMorphs	actorMorphs;

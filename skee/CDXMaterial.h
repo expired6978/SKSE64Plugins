@@ -1,11 +1,13 @@
-#ifdef FIXME
-
 #ifndef __CDXMATERIAL__
 #define __CDXMATERIAL__
 
 #pragma once
 
+#include "CDXTypes.h"
+
 #include <mutex>
+#include <d3d11_3.h>
+#include <DirectXMath.h>
 
 #define DeclareFlags(type) \
 	private: \
@@ -35,29 +37,32 @@
 		}
 
 static UInt32 mappedAlphaFunctions[] = {
-	D3DBLEND_ONE,
-	D3DBLEND_ZERO,
-	D3DBLEND_SRCCOLOR,
-	D3DBLEND_INVSRCCOLOR,
-	D3DBLEND_DESTCOLOR,
-	D3DBLEND_INVDESTCOLOR,
-	D3DBLEND_SRCALPHA,
-	D3DBLEND_INVSRCALPHA,
-	D3DBLEND_DESTALPHA,
-	D3DBLEND_INVDESTALPHA,
-	D3DBLEND_SRCALPHASAT
+	D3D11_BLEND_ONE,
+	D3D11_BLEND_ZERO,
+	D3D11_BLEND_SRC_COLOR,
+	D3D11_BLEND_INV_SRC_COLOR,
+	D3D11_BLEND_DEST_COLOR,
+	D3D11_BLEND_INV_DEST_COLOR,
+	D3D11_BLEND_SRC_ALPHA,
+	D3D11_BLEND_INV_SRC_ALPHA,
+	D3D11_BLEND_DEST_ALPHA,
+	D3D11_BLEND_INV_DEST_ALPHA,
+	D3D11_BLEND_SRC_ALPHA_SAT
 };
 
 static UInt32 mappedTestFunctions[] = {
-	D3DCMP_ALWAYS,
-	D3DCMP_LESS,
-	D3DCMP_EQUAL,
-	D3DCMP_LESSEQUAL,
-	D3DCMP_GREATER,
-	D3DCMP_NOTEQUAL,
-	D3DCMP_GREATEREQUAL,
-	D3DCMP_NEVER,
+	D3D11_COMPARISON_ALWAYS,
+	D3D11_COMPARISON_LESS,
+	D3D11_COMPARISON_EQUAL,
+	D3D11_COMPARISON_LESS_EQUAL,
+	D3D11_COMPARISON_GREATER,
+	D3D11_COMPARISON_NOT_EQUAL,
+	D3D11_COMPARISON_GREATER_EQUAL,
+	D3D11_COMPARISON_NEVER,
 };
+
+class CDXD3DDevice;
+class CDXShader;
 
 class CDXMaterial
 {
@@ -67,18 +72,16 @@ public:
 
 	void Release();
 
-	void SetDiffuseTexture(LPDIRECT3DBASETEXTURE9 texture);
-	LPDIRECT3DBASETEXTURE9 GetDiffuseTexture() const { return m_diffuseTexture; }
+	void SetTexture(int index, ID3D11ShaderResourceView* texture);
+	ID3D11ShaderResourceView** GetTextures() { return m_pTextures; }
 
-	void SetDiffuseColor(DirectX::XMFLOAT3 color);
-	void SetSpecularColor(DirectX::XMFLOAT3 color);
-	void SetAmbientColor(DirectX::XMFLOAT3 color);
-	void SetWireframeColor(DirectX::XMFLOAT3 color);
+	ID3D11BlendState1* GetBlendingState(CDXD3DDevice * device);
 
-	DirectX::XMFLOAT3 & GetDiffuseColor();
-	DirectX::XMFLOAT3 & GetSpecularColor();
-	DirectX::XMFLOAT3 & GetAmbientColor();
-	DirectX::XMFLOAT3 & GetWireframeColor();
+	void SetWireframeColor(DirectX::XMFLOAT4 color);
+	DirectX::XMFLOAT4 & GetWireframeColor();
+
+	void SetTintColor(DirectX::XMFLOAT4 color);
+	DirectX::XMFLOAT4 & GetTintColor();
 
 	UInt32 GetShaderFlags1() const { return m_shaderFlags1; }
 	UInt32 GetShaderFlags2() const { return m_shaderFlags2; }
@@ -103,6 +106,8 @@ public:
 		ALPHA_SRCALPHASAT,
 		ALPHA_MAX_MODES
 	};
+
+	D3D11_BLEND GetD3DBlendMode(AlphaFunction alphaFunc);
 
 	enum
 	{
@@ -151,23 +156,28 @@ public:
 	bool IsWireframe() const { return m_wireframe; }
 	void SetWireframe(bool w) { m_wireframe = w; }
 
-protected:
-	LPDIRECT3DBASETEXTURE9 m_diffuseTexture;
+	bool HasDiffuse() const { return m_pTextures[0] != nullptr; }
+	bool HasNormal() const { return m_pTextures[1] != nullptr; }
+	bool HasSpecular() const { return m_pTextures[2] != nullptr; }
+	bool HasDetail() const { return m_pTextures[3] != nullptr; }
+	bool HasTintMask() const { return m_pTextures[4] != nullptr; }
 
-	DirectX::XMFLOAT3	m_specularColor;
-	DirectX::XMFLOAT3	m_diffuseColor;
-	DirectX::XMFLOAT3	m_ambientColor;
-	DirectX::XMFLOAT3 m_wireframeColor;
+protected:
+	ID3D11ShaderResourceView * m_pTextures[5];
+	ID3D11BlendState1* m_blendingState;
+	bool m_blendingDirty;
+
+	DirectX::XMFLOAT4 m_wireframeColor;
+	DirectX::XMFLOAT4 m_tintColor;
 	DeclareFlags(UInt16);
 	UInt32	m_shaderFlags1;
 	UInt32	m_shaderFlags2;
 	UInt8	m_alphaThreshold;
 	bool	m_wireframe;
+
 #ifdef CDX_MUTEX
 	std::mutex	m_mutex;
 #endif
 };
-
-#endif
 
 #endif

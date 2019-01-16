@@ -1,9 +1,9 @@
-#ifdef FIXME
-
 #ifndef __CDXUNDO__
 #define __CDXUNDO__
 
 #pragma once
+
+#include "CDXTypes.h"
 
 #include <vector>
 #include <memory>
@@ -50,7 +50,5 @@ protected:
 };
 
 extern CDXUndoStack	g_undoStack;
-
-#endif
 
 #endif

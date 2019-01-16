@@ -2,9 +2,22 @@
 #define _CDXCAMERA_H_
 #pragma once
 
-#ifdef FIXME
-
 #include "CDXTypes.h"
+
+class CDXCamera
+{
+public:
+	virtual const CDXMatrix* GetWorldMatrix() const = 0;
+	virtual const CDXMatrix&  GetViewMatrix() const = 0;
+	virtual const CDXMatrix&  GetProjMatrix() const = 0;
+	virtual const CDXVec& GetEyePt() const = 0;
+	virtual const CDXVec& GetLookAtPt() const = 0;
+
+	virtual int GetWidth() const = 0;
+	virtual int GetHeight() const = 0;
+
+	virtual void Update() = 0;
+};
 
 class CDXArcBall
 {
@@ -59,17 +72,18 @@ protected:
 	CDXVec                     ScreenToVector( float fScreenPtX, float fScreenPtY );
 };
 
-class CDXModelViewerCamera
+class CDXModelViewerCamera : public CDXCamera
 {
 public:
 	CDXModelViewerCamera();
 
-	const CDXMatrix&  GetViewMatrix() const { return m_mView; }
-	const CDXMatrix&  GetProjMatrix() const { return m_mProj; }
-	const CDXVec& GetEyePt() const      { return m_vEye; }
-	const CDXVec& GetLookAtPt() const   { return m_vLookAt; }
+	virtual const CDXMatrix* GetWorldMatrix() const override { return &m_mWorld; }
+	virtual const CDXMatrix&  GetViewMatrix() const override { return m_mView; }
+	virtual const CDXMatrix&  GetProjMatrix() const override { return m_mProj; }
+	virtual const CDXVec& GetEyePt() const override { return m_vEye; }
+	virtual const CDXVec& GetLookAtPt() const override { return m_vLookAt; }
+	virtual void Update() override;
 
-	void Update();
 	void Reset();
 	void SetViewParams( CDXVec* pvEyePt, CDXVec* pvLookatPt );
 	void SetWindow( int nWidth, int nHeight, float fArcballRadius=0.9f ) { m_WorldArcBall.SetWindow( nWidth, nHeight, fArcballRadius ); m_ViewArcBall.SetWindow( nWidth, nHeight, fArcballRadius ); }
@@ -78,12 +92,10 @@ public:
 	void SetViewQuat( CDXVec q ) { m_ViewArcBall.SetQuatNow( q ); m_bDragSinceLastUpdate = true; }
 	void SetWorldQuat( CDXVec q ) { m_WorldArcBall.SetQuatNow( q ); m_bDragSinceLastUpdate = true; }
 	void SetProjParams( FLOAT fFOV, FLOAT fAspect, FLOAT fNearPlane, FLOAT fFarPlane );
-	//void UpdateMouseDelta(int currentX, int currentY);
-	void ConstrainToBoundary( CDXVec* pV );
 	float GetRadius() const { return m_fRadius; }
 
-	int GetWidth() const { return m_WorldArcBall.GetWidth(); }
-	int GetHeight() const { return m_WorldArcBall.GetHeight(); }
+	virtual int GetWidth() const override { return m_WorldArcBall.GetWidth(); }
+	virtual int GetHeight() const override { return m_WorldArcBall.GetHeight(); }
 
 	void OnRotateBegin(int x, int y) { m_WorldArcBall.OnRotateBegin(x, y); }
 	void OnRotate(int x, int y);
@@ -94,49 +106,27 @@ public:
 	void OnMoveEnd();
 
 	void SetPanSpeed(float speed) { m_fPanMultiplier = speed; };
-
-	// Functions to get state
-	const CDXMatrix* GetWorldMatrix() const { return &m_mWorld; }
 	void SetWorldMatrix( CDXMatrix &mWorld ) { m_mWorld = mWorld; m_bDragSinceLastUpdate = true; }
 
 protected:
 	CDXMatrix m_mView;              // View matrix 
 	CDXMatrix m_mProj;              // Projection matrix
 
-	//CDXVec3 m_vKeyboardDirection;   // Direction vector of keyboard input
-	//POINT m_ptLastMousePosition;  // Last absolute position of mouse cursor
-	//CDXVec2 m_vMouseDelta;          // Mouse relative delta smoothed over a few frames
-	//float m_fFramesToSmoothMouseData; // Number of frames to smooth mouse data over
-
 	CDXVec m_vDefaultEye;          // Default camera eye position
 	CDXVec m_vDefaultLookAt;       // Default LookAt position
 	CDXVec m_vEye;                 // Camera eye position
 	CDXVec m_vLookAt;              // LookAt position
-	float m_fCameraYawAngle;      // Yaw angle of camera
-	float m_fCameraPitchAngle;    // Pitch angle of camera
 
 	float m_fPanMultiplier;
 	CDXVec m_vDragLook;
 	CDXVec m_vDragStart;
 	CDXVec m_vDragPos;
 
-	//RECT m_rcDrag;               // Rectangle within which a drag can be initiated.
-	CDXVec m_vVelocity;            // Velocity of camera
-	//bool m_bMovementDrag;        // If true, then camera movement will slow to a stop otherwise movement is instant
-	//CDXVec3 m_vVelocityDrag;        // Velocity drag force
-	//float m_fDragTimer;           // Countdown timer to apply drag
-	//float m_fTotalDragTimeToZero; // Time it takes for velocity to go from full to 0
-	//CDXVec2 m_vRotVelocity;         // Velocity of camera
-
 	float m_fFOV;                 // Field of view
 	float m_fAspect;              // Aspect ratio
 	float m_fNearPlane;           // Near plane
 	float m_fFarPlane;            // Far plane
 
-	//float m_fRotationScaler;      // Scaler for rotation
-	//float m_fMoveScaler;          // Scaler for movement
-
-	bool m_bClipToBoundary;      // If true, then the camera will be clipped to the boundary
 	CDXVec m_vMinBoundary;         // Min point in clip boundary
 	CDXVec m_vMaxBoundary;         // Max point in clip boundary
 
@@ -152,9 +142,5 @@ protected:
 	float m_fMinRadius;           // Min radius
 	float m_fMaxRadius;           // Max radius
 	bool m_bDragSinceLastUpdate; // True if mouse drag has happened since last time FrameMove is called.
-
-	CDXMatrix m_mCameraRotLast;
-
 };
-#endif
 #endif

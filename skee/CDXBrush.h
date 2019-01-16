@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #ifndef __CDXBRUSH__
 #define __CDXBRUSH__
 
@@ -173,7 +171,5 @@ public:
 	virtual bool BeginStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mesh, bool isMirror);
 	virtual bool UpdateStroke(CDXPickInfo & pickInfo, CDXEditableMesh * mesh, bool isMirror);
 };
-
-#endif
 
 #endif

@@ -38,7 +38,6 @@
 #include <queue>
 
 extern SKSETaskInterface	* g_task;
-extern SKEETaskInterface	g_taskOverride;
 
 extern ItemDataInterface	g_itemDataInterface;
 extern TintMaskInterface	g_tintMaskInterface;
@@ -91,43 +90,8 @@ RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4A10);
 RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360A30);
 RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C20);
 
-
-// REMOVE THIS AFTER SKSE64 UPDATE
-ICriticalSection			s_taskQueueLock;
-std::queue<TaskDelegate*>	s_tasks;
-
-typedef UInt32 (*_ProcessTaskInterface)(void * unk1);
-RelocAddr <_ProcessTaskInterface> ProcessTaskInterface_Hook_Original(0x00C03E60);
-
-static bool IsTaskQueueEmpty()
-{
-	IScopedCriticalSection scoped(&s_taskQueueLock);
-	return s_tasks.empty();
-}
-
-UInt32 ProcessTaskInterface_Hook(void * unk1)
-{
-	while (!IsTaskQueueEmpty())
-	{
-		s_taskQueueLock.Enter();
-		TaskDelegate * cmd = s_tasks.front();
-		s_tasks.pop();
-		s_taskQueueLock.Leave();
-
-		cmd->Run();
-		cmd->Dispose();
-	}
-
-	return ProcessTaskInterface_Hook_Original(unk1);
-}
-
-void ProcessTaskInterface_AddTask(TaskDelegate * cmd)
-{
-	s_taskQueueLock.Enter();
-	s_tasks.push(cmd);
-	s_taskQueueLock.Leave();
-}
-// ---------------------------------------
+typedef void(*_RaceSexMenu_Render)(RaceSexMenu * menu);
+RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E9E0);
 
 typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
 extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
@@ -267,9 +231,9 @@ NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectR
 {
 	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, stackInfo->unk10, unk4, unk5, unk6);
 
-	TESObjectREFR * reference = nullptr;
+	NiPointer<TESObjectREFR> reference;
 	UInt32 handle = addonInfo->handle;
-	LookupREFRByHandle(&handle, &reference);
+	LookupREFRByHandle(handle, reference);
 	if (reference)
 		InstallArmorAddonHook(reference, stackInfo->params, addonInfo->boneTree, retVal);
 
@@ -583,46 +547,31 @@ void SkyrimVM_Hooked::RegisterEventSinks_Hooked()
 }
 #endif
 
-#ifdef FIXME
+#include <d3d11_4.h>
+#include "CDXD3DDevice.h"
 #include "CDXNifScene.h"
 #include "CDXNifMesh.h"
-
 #include "CDXCamera.h"
+#include "Utilities.h"
 
 #include "skse64/NiRenderer.h"
 #include "skse64/NiTextures.h"
-#include <d3dx9.h>
-#pragma comment(lib, "d3dx9.lib")
 
+extern CDXD3DDevice					* g_Device;
+extern CDXNifScene					g_World;
+extern CDXModelViewerCamera			g_Camera;
 
-CDXNifScene						g_World;
-extern CDXModelViewerCamera			g_Camera;                // A model viewing camera
-
-void RaceSexMenu_Hooked::RenderMenu_Hooked(void)
+void RaceSexMenu_Render_Hooked(RaceSexMenu * rsm)
 {
-	CALL_MEMBER_FN(this, RenderMenu)();
-
-	ID3D11Device * pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
-	if (!pDevice) // This shouldnt happen
-		return;
-
-	if (g_World.IsVisible() && g_World.GetTextureGroup()) {
-		NiRenderedTexture * renderedTexture = g_World.GetTextureGroup()->renderedTexture[0];
-		if (renderedTexture) {
-			g_World.Begin(pDevice);
-			LPDIRECT3DSURFACE9 oldTarget;
-			pDevice->GetRenderTarget(0, &oldTarget);
-			LPDIRECT3DSURFACE9 pRenderSurface = NULL;
-			LPDIRECT3DTEXTURE9 pRenderTexture = (LPDIRECT3DTEXTURE9)((NiTexture::NiDX9TextureData*)renderedTexture->rendererData)->texture;
-			pRenderTexture->GetSurfaceLevel(0, &pRenderSurface);
-			pDevice->SetRenderTarget(0, pRenderSurface);
-			g_World.Render(pDevice);
-			pDevice->SetRenderTarget(0, oldTarget);
-			g_World.End(pDevice);
-		}
+	if (g_Device && g_World.IsVisible() && g_World.GetRenderTargetView()) {
+		ScopedCriticalSection cs(&g_renderManager->lock);
+		g_World.Begin(&g_Camera, g_Device);
+		g_World.Render(&g_Camera, g_Device);
+		g_World.End(&g_Camera, g_Device);
 	}
+
+	RaceSexMenu_Render(rsm);
 }
-#endif
 
 void RegenerateHead_Hooked(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc)
 {
@@ -773,7 +722,7 @@ UInt8 BGSHeadPart_Hooked::IsPlayablePart_Hooked()
 class MorphVisitor : public MorphMap::Visitor
 {
 public:
-	MorphVisitor::MorphVisitor(BSFaceGenModel * model, BSFixedString * morphName, NiAVObject ** headNode, float relative, UInt8 unk1)
+	MorphVisitor::MorphVisitor(BSFaceGenModel * model, SKEEFixedString morphName, NiAVObject ** headNode, float relative, UInt8 unk1)
 	{
 		m_model = model;
 		m_morphName = morphName;
@@ -781,7 +730,7 @@ public:
 		m_relative = relative;
 		m_unk1 = unk1;
 	}
-	bool Accept(BSFixedString morphName)
+	bool Accept(const SKEEFixedString & morphName) override
 	{
 		TRIModelData & morphData = g_morphInterface.GetExtendedModelTri(morphName, true);
 		if (morphData.morphModel && morphData.triFile) {
@@ -790,14 +739,14 @@ public:
 				geometry = (*m_headNode)->GetAsBSGeometry();
 
 			if (geometry)
-				morphData.triFile->Apply(geometry, *m_morphName, m_relative);
+				morphData.triFile->Apply(geometry, m_morphName, m_relative);
 		}
 
 		return false;
 	}
 private:
 	BSFaceGenModel	* m_model;
-	BSFixedString	* m_morphName;
+	SKEEFixedString	m_morphName;
 	NiAVObject		** m_headNode;
 	float			m_relative;
 	UInt8			m_unk1;
@@ -813,7 +762,7 @@ UInt8 ApplyRaceMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName, T
 
 	try
 	{
-		MorphVisitor morphVisitor(model, morphName, headNode, relative, unk1);
+		MorphVisitor morphVisitor(model, *morphName, headNode, relative, unk1);
 		g_morphInterface.VisitMorphMap(modelMorph->GetModelName(), morphVisitor);
 	}
 	catch (...)
@@ -834,8 +783,8 @@ UInt8 ApplyChargenMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName
 
 	try
 	{
-		MorphVisitor morphVisitor(model, morphName, headNode, relative, unk1);
-		g_morphInterface.VisitMorphMap(BSFixedString(modelMorph->GetModelName()), morphVisitor);
+		MorphVisitor morphVisitor(model, *morphName, headNode, relative, unk1);
+		g_morphInterface.VisitMorphMap(modelMorph->GetModelName(), morphVisitor);
 	}
 	catch (...)
 	{
@@ -1106,13 +1055,6 @@ bool InstallSKEEHooks()
 		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 		return false;
 	}
-
-	if (g_task->interfaceVersion < 3)
-	{
-		RelocAddr <uintptr_t> ProcessTaskInterface_Target(0x005B31E0 + 0x739);
-		g_branchTrampoline.Write5Call(ProcessTaskInterface_Target.GetUIntPtr(), (uintptr_t)ProcessTaskInterface_Hook);
-		g_taskOverride.AddTask = ProcessTaskInterface_AddTask;
-	}
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5420 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
@@ -1246,6 +1188,9 @@ bool InstallSKEEHooks()
 
 	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC3B0 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
+
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016D4CC8 + 0x30); // ??_7RaceSexMenu@@6B@
+	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{

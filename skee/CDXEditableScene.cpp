@@ -1,9 +1,6 @@
 #include "CDXEditableScene.h"
 #include "CDXShader.h"
 
-#ifdef FIXME
-
-extern CDXModelViewerCamera		g_Camera;
 extern CDXUndoStack				g_undoStack;
 
 CDXEditableScene::CDXEditableScene() : CDXScene()
@@ -29,10 +26,10 @@ void CDXEditableScene::ReleaseBrushes()
 	m_brushes.clear();
 }
 
-void CDXEditableScene::Setup(ID3D11Device * pDevice)
+bool CDXEditableScene::Setup(const CDXInitParams & initParams)
 {
 	CreateBrushes();
-	CDXScene::Setup(pDevice);
+	return CDXScene::Setup(initParams);
 }
 
 void CDXEditableScene::Release()
@@ -61,5 +58,3 @@ void CDXEditableScene::SetCurrentBrush(CDXBrush::BrushType brushType)
 {
 	m_currentBrush = brushType;
 }
-
-#endif

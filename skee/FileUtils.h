@@ -23,9 +23,20 @@ namespace std {
 	std::vector<std::string> explode(const std::string& str, const char& ch);
 }
 
+namespace BSFileUtil {
+	bool ReadLine(BSResourceNiBinaryStream* fin, std::string * str);
 
-bool BSReadLine(BSResourceNiBinaryStream* fin, std::string* str);
-void BSReadAll(BSResourceNiBinaryStream* fin, std::string* str);
+	template<typename Container>
+	void ReadAll(BSResourceNiBinaryStream* fin, Container & c)
+	{
+		char ch;
+		UInt32 ret = fin->Read(&ch, 1);
+		while (ret > 0) {
+			c.push_back(ch);
+			ret = fin->Read(&ch, 1);
+		}
+	}
+}
 
 TESRace * GetRaceByName(std::string & raceName);
 BGSHeadPart * GetHeadPartByName(std::string & headPartName);

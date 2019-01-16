@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #ifndef __CDXNIFCOMMANDS__
 #define __CDXNIFCOMMANDS__
 
@@ -14,7 +12,7 @@
 
 class CDXNifMesh;
 
-class NiGeometry;
+class BSTriShape;
 class UIDelegate;
 
 class CDXNifMaskAddStroke : public CDXMaskAddStroke
@@ -103,7 +101,7 @@ private:
 class CDXNifImportGeometry : public CDXUndoCommand
 {
 public:
-	CDXNifImportGeometry(CDXNifMesh * mesh, NiGeometry * source);
+	CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * source);
 	~CDXNifImportGeometry();
 
 	virtual UndoType GetUndoType();
@@ -121,19 +119,19 @@ private:
 class CRGNTaskUpdateModel : public TaskDelegate
 {
 public:
-	CRGNTaskUpdateModel(NiGeometry * geometry);
+	CRGNTaskUpdateModel(BSTriShape * geometry);
 
 	virtual void Run();
 	virtual void Dispose();
 
 private:
-	NiGeometry * m_geometry;
+	BSTriShape * m_geometry;
 };
 
 class CRGNUITaskAddStroke : public UIDelegate_v1
 {
 public:
-	CRGNUITaskAddStroke(CDXStroke * stroke, NiGeometry * geometry, SInt32 i);
+	CRGNUITaskAddStroke(CDXStroke * stroke, BSTriShape * geometry, SInt32 i);
 
 	virtual void Run();
 	virtual void Dispose();
@@ -141,13 +139,13 @@ public:
 private:
 	CDXStroke * m_stroke;
 	SInt32	m_id;
-	NiGeometry * m_geometry;
+	BSTriShape * m_geometry;
 };
 
 class CRGNUITaskStandardCommand : public UIDelegate_v1
 {
 public:
-	CRGNUITaskStandardCommand(CDXUndoCommand * cmd, NiGeometry * geometry, SInt32 i);
+	CRGNUITaskStandardCommand(CDXUndoCommand * cmd, BSTriShape * geometry, SInt32 i);
 
 	virtual void Run();
 	virtual void Dispose();
@@ -155,9 +153,7 @@ public:
 private:
 	CDXUndoCommand * m_cmd;
 	SInt32	m_id;
-	NiGeometry * m_geometry;
+	BSTriShape * m_geometry;
 };
-
-#endif
 
 #endif

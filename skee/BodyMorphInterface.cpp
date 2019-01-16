@@ -304,16 +304,16 @@ void TriShapeFullVertexData::ApplyMorphRaw(UInt16 vertCount, void * data, float 
 	}
 }
 
-void TriShapeFullVertexData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+void TriShapeFullVertexData::ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor)
 {
-	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_POSITION);
-	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
+	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->vertexDesc, VertexAttribute::VA_POSITION);
+	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->vertexDesc);
 
 	if (m_maxIndex < vertexCount)
 	{
 		for (const auto & vert : m_vertexDeltas)
 		{
-			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->m_RawVertexData[vertexSize * vert.index + offset]);
+			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->vertexData[vertexSize * vert.index + offset]);
 			DirectX::XMStoreFloat4(position, DirectX::XMVectorAdd(DirectX::XMLoadFloat4(position), DirectX::XMVectorScale(vert.delta, factor)));
 		}
 	}
@@ -345,16 +345,16 @@ void TriShapePackedVertexData::ApplyMorphRaw(UInt16 vertCount, void * data, floa
 	}
 }
 
-void TriShapePackedVertexData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+void TriShapePackedVertexData::ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor)
 {
-	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
-	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_POSITION);
+	UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->vertexDesc);
+	UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->vertexDesc, VertexAttribute::VA_POSITION);
 
 	if (m_maxIndex < vertexCount)
 	{
 		for (const auto & vert : m_vertexDeltas)
 		{
-			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->m_RawVertexData[vertexSize * vert.index + offset]);
+			DirectX::XMFLOAT4 * position = reinterpret_cast<DirectX::XMFLOAT4*>(&vertexData->vertexData[vertexSize * vert.index + offset]);
 			DirectX::XMStoreFloat4(position, DirectX::XMVectorAdd(DirectX::XMLoadFloat4(position), DirectX::XMVectorScale(vert.delta, factor)));
 		}
 	}
@@ -385,18 +385,18 @@ void TriShapePackedUVData::ApplyMorphRaw(UInt16 vertCount, void * data, float fa
 	}
 }
 
-void TriShapePackedUVData::ApplyMorph(UInt16 vertexCount, NiSkinPartition::TriShape * vertexData, float factor)
+void TriShapePackedUVData::ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor)
 {
-	VertexFlags flags = NiSkinPartition::GetVertexFlags(vertexData->m_VertexDesc);
+	VertexFlags flags = NiSkinPartition::GetVertexFlags(vertexData->vertexDesc);
 	if ((flags & VF_UV))
 	{
-		UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->m_VertexDesc);
-		UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->m_VertexDesc, VertexAttribute::VA_TEXCOORD0);
+		UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexData->vertexDesc);
+		UInt32 offset = NiSkinPartition::GetVertexAttributeOffset(vertexData->vertexDesc, VertexAttribute::VA_TEXCOORD0);
 		if (m_maxIndex < vertexCount)
 		{
 			for (const auto & delta : m_uvDeltas)
 			{
-				UVCoord * texCoord = reinterpret_cast<UVCoord*>(&vertexData->m_RawVertexData[vertexSize * delta.index + offset]);
+				UVCoord * texCoord = reinterpret_cast<UVCoord*>(&vertexData->vertexData[vertexSize * delta.index + offset]);
 				texCoord->u += (float)delta.u * m_multiplier * factor;
 				texCoord->v += (float)delta.v * m_multiplier * factor;
 			}
@@ -599,12 +599,15 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									auto & partition = newSkinPartition->m_pkPartitions[0];
 									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
 									UInt32 vertexCount = newSkinPartition->vertexCount;
+									TriShapeVertexData::Layout layout;
+									layout.vertexDesc = partition.shapeData->m_VertexDesc;
+									layout.vertexData = partition.shapeData->m_RawVertexData;
 
 									std::function<void(const TriShapeVertexDataPtr, float)> vertexMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
 									{
 										if (morphFactor != 0.0f)
 										{
-											morphData->ApplyMorph(vertexCount, partition.shapeData, morphFactor);
+											morphData->ApplyMorph(vertexCount, &layout, morphFactor);
 										}
 									};
 
@@ -612,7 +615,7 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									{
 										if (morphFactor != 0.0f)
 										{
-											morphData->ApplyMorph(vertexCount, partition.shapeData, morphFactor);
+											morphData->ApplyMorph(vertexCount, &layout, morphFactor);
 										}
 									};
 
@@ -626,12 +629,11 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
 									}
 
-									skinInstance->m_spSkinPartition = newSkinPartition;
-									newSkinPartition->DecRef(); // DeepCopy started refcount at 1
-
 									if (mutex) mutex->lock();
 
-									auto updateTask = new NIOVTaskUpdateSkinPartition(newSkinPartition);
+									auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
+									newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
+
 									if (deferred)
 									{
 										g_task->AddTask(updateTask);
@@ -1180,8 +1182,9 @@ void NIOVTaskUpdateModelWeight::Run()
 	}
 }
 
-NIOVTaskUpdateSkinPartition::NIOVTaskUpdateSkinPartition(NiSkinPartition * partition)
+NIOVTaskUpdateSkinPartition::NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition)
 {
+	m_skinInstance = skinInstance;
 	m_partition = partition;
 }
 
@@ -1192,8 +1195,10 @@ void NIOVTaskUpdateSkinPartition::Dispose(void)
 
 void NIOVTaskUpdateSkinPartition::Run()
 {
-	if (m_partition)
+	if (m_skinInstance && m_partition)
 	{
+		EnterCriticalSection(&g_renderManager->lock);
+		EnterCriticalSection(&m_skinInstance->lock);
 		auto & partition = m_partition->m_pkPartitions[0];
 		UInt32 vertexSize = m_partition->GetVertexSize(partition.vertexDesc);
 		UInt32 vertexCount = m_partition->vertexCount;
@@ -1206,6 +1211,10 @@ void NIOVTaskUpdateSkinPartition::Run()
 			auto & pPartition = m_partition->m_pkPartitions[p];
 			deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
 		}
+
+		m_skinInstance->m_spSkinPartition = m_partition;
+		LeaveCriticalSection(&m_skinInstance->lock);
+		LeaveCriticalSection(&g_renderManager->lock);
 	}
 }
 
@@ -1395,18 +1404,17 @@ bool BodyMorphInterface::ReadBodyMorphTemplates(SKEEFixedString filePath)
 	return true;
 }
 
-void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], UInt8 modIndex, UInt16 lightIndex, UInt32 gender, TESRace * raceFilter)
+void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter)
 {
 	for (UInt32 i = 0; i < (*g_dataHandler)->npcs.count; i++)
 	{
 		TESNPC * npc = nullptr;
 		if ((*g_dataHandler)->npcs.GetNthItem(i, npc))
 		{
-			bool matchMod = modIndex == 0xFF || (npc->formID >> 24) == modIndex;
-			bool matchLightMod = lightIndex == 0xFFFF || (((npc->formID & 0xFF000000) == 0xFE000000) && (lightIndex == ((npc->formID >> 12) & 0xFFF)));
+			bool matchMod = modInfo ? modInfo->IsFormInMod(npc->formID) : false;
 
 			bool matchRace = (raceFilter == nullptr || npc->race.race == raceFilter);
-			if (npc && npc->nextTemplate == nullptr && matchMod && matchLightMod && matchRace)
+			if (npc && npc->nextTemplate == nullptr && matchMod && matchRace)
 			{
 				if (gender == 0xFF)
 				{
@@ -1497,14 +1505,12 @@ bool BodyMorphInterface::ReadBodyMorphs(SKEEFixedString filePath)
 				paramIndex++;
 			}
 
-			GetFilteredNPCList(activeNPCs, 0xFF, 0xFFFF, gender, foundRace);
+			GetFilteredNPCList(activeNPCs, nullptr, gender, foundRace);
 		}
 		else
 		{
-			UInt8 modIndex = (*g_dataHandler)->GetLoadedModIndex(modNameText.c_str());
-			UInt16 lightIndex = (*g_dataHandler)->GetLoadedLightModIndex(modNameText.c_str());
-
-			if (modIndex == 0xFF && lightIndex == 0xFFFF) {
+			const ModInfo * modInfo = (*g_dataHandler)->LookupModByName(modNameText.c_str());
+			if (!modInfo || !modInfo->IsActive()) {
 				_WARNING("%s - Warning - Mod '%s' not a loaded mod.\tLine (%d) [%s]", __FUNCTION__, modNameText.c_str(), lineCount, filePath.c_str());
 				continue;
 			}
@@ -1543,7 +1549,7 @@ bool BodyMorphInterface::ReadBodyMorphs(SKEEFixedString filePath)
 					paramIndex++;
 				}
 
-				GetFilteredNPCList(activeNPCs, modIndex, lightIndex, gender, foundRace);
+				GetFilteredNPCList(activeNPCs, modInfo, gender, foundRace);
 			}
 			else // Fallout4.esm|XXXX[|Gender]
 			{
@@ -1553,19 +1559,13 @@ bool BodyMorphInterface::ReadBodyMorphs(SKEEFixedString filePath)
 					continue;
 				}
 
-				UInt32 formId = 0;
-				if (lightIndex != 0xFFFF)
-					formId = 0xFE000000 | (UInt32(lightIndex) << 12) | (formLower & 0xFFFFFF);
-				else
-					formId = UInt32(modIndex) << 24 | formLower & 0xFFFFFF;
-
+				UInt32 formId = modInfo->GetFormID(formLower);
 				foundForm = LookupFormByID(formId);
 				if (!foundForm) {
 					_ERROR("%s - Error - Invalid form %08X.\tLine (%d) [%s]", __FUNCTION__, formId, lineCount, filePath.c_str());
 					continue;
 				}
 			}
-
 
 			if (foundForm)
 			{
@@ -1813,7 +1813,7 @@ bool BodyMorph::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const 
 				{
 					m_name = StringTable::ReadString(intfc, stringTable);
 				}
-				else if (kVersion >= BodyMorphInterface::kSerializationVersion2)
+				else if (kVersion >= BodyMorphInterface::kSerializationVersion1)
 				{
 					char * stringName = NULL;
 					UInt8 stringLength;

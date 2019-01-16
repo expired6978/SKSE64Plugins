@@ -3,6 +3,27 @@
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <set>
+#include <unordered_map>
+
+class CDXCamera;
+class CDXD3DDevice;
+
+struct ShaderFileData
+{
+	LPCVOID pSrcData;
+	SIZE_T SrcDataSize;
+	LPCSTR pSourceName;
+};
+
+struct CDXInitParams
+{
+	CDXD3DDevice * device;
+	CDXCamera * camera;
+	ShaderFileData vertexShader;
+	ShaderFileData pixelShader;
+	int viewportWidth;
+	int viewportHeight;
+};
 
 typedef DirectX::XMMATRIX		CDXMatrix;
 typedef unsigned short	CDXMeshIndex;
@@ -13,7 +34,7 @@ typedef DirectX::XMFLOAT2		CDXVec2;
 typedef DirectX::XMFLOAT3		CDXColor;
 
 typedef std::set<CDXMeshIndex> CDXMeshIndexSet;
-typedef std::map<CDXMeshIndex, float> CDXHitIndexMap;
+typedef std::unordered_map<CDXMeshIndex, float> CDXHitIndexMap;
 
 struct CDXMeshEdge
 {
@@ -88,7 +109,7 @@ namespace std {
 struct CDXMeshVert
 {
 	CDXVec3		Position;
-	CDXVec3		Normal;
 	CDXVec2		Tex;
+	CDXVec3		Normal;
 	CDXColor	Color;
 };

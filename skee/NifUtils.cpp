@@ -1,4 +1,5 @@
 #include "NifUtils.h"
+#include "Utilities.h"
 
 #include <unordered_map>
 
@@ -20,8 +21,7 @@
 #include "skse64/NiExtraData.h"
 
 #include <d3d11_4.h>
-
-#include "DirectXTex/DirectXTex.h"
+#include <DirectXTex.h>
 
 #ifdef FIXME
 #include <d3dx9.h>
@@ -147,20 +147,19 @@ BSGeometry * GetHeadGeometry(Actor * actor, UInt32 partType)
 	return NULL;
 }
 
-BSGeometry * GetGeometryByHeadPart(BSFaceGenNiNode * faceNode, BGSHeadPart * headPart)
+NiAVObject * GetObjectByHeadPart(BSFaceGenNiNode * faceNode, BGSHeadPart * headPart)
 {
 	for (UInt32 p = 0; p < faceNode->m_children.m_size; p++)
 	{
 		NiAVObject * object = faceNode->m_children.m_data[p];
 		if (object && BSFixedString(object->m_name) == headPart->partName) {
-			BSGeometry * geometry = object->GetAsBSGeometry();
-			if (geometry) {
-				return geometry;
+			if (object) {
+				return object;
 			}
 		}
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 SKSETaskRefreshTintMask::SKSETaskRefreshTintMask(Actor * actor, BSFixedString ddsPath) : m_ddsPath(ddsPath)
@@ -288,9 +287,8 @@ void SKSETaskExportHead::Run()
 
 	IFileStream::MakeAllDirs(m_nifPath.data);
 
-	BSFadeNode * rootNode = BSFadeNode::Create();
-	rootNode->IncRef();
-	NiNode * skinnedNode = NiNode::Create(0);
+	NiPointer<BSFadeNode> rootNode = BSFadeNode::Create();
+	NiPointer<NiNode> skinnedNode = NiNode::Create(0);
 	skinnedNode->m_name = BSFixedString("BSFaceGenNiNodeSkinned").data;
 
 	std::map<NiAVObject*, NiAVObject*> boneMap;
@@ -308,24 +306,24 @@ void SKSETaskExportHead::Run()
 				CALL_MEMBER_FN(geometryData, DeepCopy)((NiObject **)&newGeometryData);
 
 			NiProperty * trishapeEffect = niptr_cast<NiProperty>(geometry->m_spEffectState);
-			NiProperty * newTrishapeEffect = NULL;
+			NiPointer<NiProperty> newTrishapeEffect;
 			if (trishapeEffect)
 				CALL_MEMBER_FN(trishapeEffect, DeepCopy)((NiObject **)&newTrishapeEffect);
 
 			NiProperty * trishapeProperty = niptr_cast<NiProperty>(geometry->m_spPropertyState);
-			NiProperty * newTrishapeProperty = NULL;
+			NiPointer<NiProperty> newTrishapeProperty;
 			if (trishapeProperty)
 				CALL_MEMBER_FN(trishapeProperty, DeepCopy)((NiObject **)&newTrishapeProperty);
 
 			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
-			NiSkinInstance * newSkinInstance = NULL;
+			NiPointer<NiSkinInstance> newSkinInstance;
 			if (skinInstance) {
 				newSkinInstance = skinInstance->Clone();
 				newSkinInstance->m_pkRootParent = skinnedNode;
 
 				UInt32 numBones = 0;
 				NiSkinData * skinData = niptr_cast<NiSkinData>(skinInstance->m_spSkinData);
-				NiSkinData * newSkinData = NULL;
+				NiPointer<NiSkinData> newSkinData;
 				if (skinData) {
 					numBones = skinData->m_uiBones;
 					CALL_MEMBER_FN(skinData, DeepCopy)((NiObject **)&newSkinData);
@@ -337,10 +335,7 @@ void SKSETaskExportHead::Run()
 					CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
 
 				newSkinInstance->m_spSkinData = newSkinData;
-				newSkinData->DecRef();
-
 				newSkinInstance->m_spSkinPartition = newSkinPartition;
-				newSkinPartition->DecRef();
 
 				// Remap the bones to new NiNode instances
 				if (numBones > 0)
@@ -354,6 +349,7 @@ void SKSETaskExportHead::Run()
 							auto it = boneMap.find(bone);
 							if (it == boneMap.end()) {
 								NiNode * newBone = NiNode::Create();
+								newBone->IncRef();
 								newBone->m_name = bone->m_name;
 								newBone->m_flags = bone->m_flags;
 								boneMap.insert(std::make_pair(bone, newBone));
@@ -370,7 +366,7 @@ void SKSETaskExportHead::Run()
 				}
 			}
 
-			NiGeometry * newGeometry = NULL;
+			NiPointer<NiGeometry> newGeometry;
 
 			if (NiTriShape * trishape = geometry->GetAsNiTriShape()) {
 				NiTriShape * newTrishape = NiTriShape::Create(static_cast<NiTriShapeData*>(newGeometryData));
@@ -445,39 +441,36 @@ void SKSETaskExportHead::Run()
 		else if (BSGeometry * geometry = object->GetAsBSGeometry()) {
 
 			NiProperty * trishapeEffect = niptr_cast<NiProperty>(geometry->m_spEffectState);
-			NiProperty * newTrishapeEffect = NULL;
+			NiPointer<NiProperty> newTrishapeEffect;
 			if (trishapeEffect)
 				CALL_MEMBER_FN(trishapeEffect, DeepCopy)((NiObject **)&newTrishapeEffect);
 
 			NiProperty * trishapeProperty = niptr_cast<NiProperty>(geometry->m_spPropertyState);
-			NiProperty * newTrishapeProperty = NULL;
+			NiPointer<NiProperty> newTrishapeProperty;
 			if (trishapeProperty)
 				CALL_MEMBER_FN(trishapeProperty, DeepCopy)((NiObject **)&newTrishapeProperty);
 
 			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
-			NiSkinInstance * newSkinInstance = NULL;
+			NiPointer<NiSkinInstance> newSkinInstance;
 			if (skinInstance) {
-				newSkinInstance = skinInstance->Clone();
+				newSkinInstance = skinInstance->Clone(); // Clonned instance starts at 0
 				newSkinInstance->m_pkRootParent = skinnedNode;
 
 				UInt32 numBones = 0;
 				NiSkinData * skinData = niptr_cast<NiSkinData>(skinInstance->m_spSkinData);
-				NiSkinData * newSkinData = NULL;
+				NiPointer<NiSkinData> newSkinData;
 				if (skinData) {
 					numBones = skinData->m_uiBones;
 					CALL_MEMBER_FN(skinData, DeepCopy)((NiObject **)&newSkinData);
 				}
 
 				NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
-				NiSkinPartition * newSkinPartition = NULL;
+				NiPointer<NiSkinPartition> newSkinPartition;
 				if (skinPartition)
 					CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
 
 				newSkinInstance->m_spSkinData = newSkinData;
-				newSkinData->DecRef();
-
 				newSkinInstance->m_spSkinPartition = newSkinPartition;
-				newSkinPartition->DecRef();
 
 				// Remap the bones to new NiNode instances
 				if (numBones > 0)
@@ -491,6 +484,7 @@ void SKSETaskExportHead::Run()
 							auto it = boneMap.find(bone);
 							if (it == boneMap.end()) {
 								NiNode * newBone = NiNode::Create();
+								newBone->IncRef();
 								newBone->m_name = bone->m_name;
 								newBone->m_flags = bone->m_flags;
 								boneMap.insert(std::make_pair(bone, newBone));
@@ -507,7 +501,7 @@ void SKSETaskExportHead::Run()
 				}
 			}
 
-			BSGeometry * newGeometry = NULL;
+			NiPointer<BSGeometry> newGeometry;
 
 			BSTriShape * trishape = geometry->GetAsBSTriShape();
 			if (trishape)
@@ -541,13 +535,7 @@ void SKSETaskExportHead::Run()
 					newTrishape->m_localTransform = geometry->m_localTransform;
 					newTrishape->m_name = geometry->m_name;
 					newTrishape->m_spEffectState = newTrishapeEffect;
-					if (newTrishapeEffect)
-						newTrishapeEffect->DecRef();
-
 					newTrishape->m_spPropertyState = newTrishapeProperty;
-					if (newTrishapeProperty)
-						newTrishapeProperty->DecRef();
-
 					newTrishape->m_spSkinInstance = newSkinInstance;
 
 					newTrishape->geometryData = trishape->geometryData;
@@ -570,7 +558,7 @@ void SKSETaskExportHead::Run()
 					newTrishape->unk110 = trishape->unk110;
 					newTrishape->unk118 = trishape->unk118;
 					newTrishape->unk140 = trishape->unk140;
-					newTrishape->unk148 = trishape->unk148;
+					newTrishape->vertexDesc = trishape->vertexDesc;
 					newTrishape->unk150 = trishape->unk150;
 					newTrishape->unk151 = trishape->unk151;
 					newTrishape->unk152 = trishape->unk152;
@@ -625,8 +613,10 @@ void SKSETaskExportHead::Run()
 		}
 	}
 
-	for (auto & bones : boneMap)
+	for (auto & bones : boneMap) {
 		rootNode->AttachChild(bones.second, true);
+		bones.second->DecRef();
+	}
 
 	rootNode->AttachChild(skinnedNode, true);
 
@@ -675,6 +665,30 @@ NiTransform GetGeometryTransform(BSGeometry * geometry)
 	NiTransform transform = geometry->m_localTransform;
 	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 	if (dstSkin) {
+		ScopedCriticalSection cs(&dstSkin->lock);
+		NiSkinData * skinData = dstSkin->m_spSkinData;
+		if (skinData) {
+			transform = transform * skinData->m_kRootParentToSkin;
+
+			for (UInt32 i = 0; i < skinData->m_uiBones; i++) {
+				NiAVObject * bone = dstSkin->m_ppkBones[i];
+				if (bone->m_name == BSFixedString("NPC Head [Head]").data) {
+					transform = transform * skinData->m_pkBoneData[i].m_kSkinToBone;
+					break;
+				}
+			}
+		}
+	}
+
+	return transform;
+}
+
+NiTransform GetLegacyGeometryTransform(NiGeometry * geometry)
+{
+	NiTransform transform = geometry->m_localTransform;
+	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
+	if (dstSkin) {
+		ScopedCriticalSection cs(&dstSkin->lock);
 		NiSkinData * skinData = dstSkin->m_spSkinData;
 		if (skinData) {
 			transform = transform * skinData->m_kRootParentToSkin;

@@ -14,11 +14,6 @@ class NiNode;
 #include "skse64/GameExtraData.h"
 #include "skse64/GameMenus.h"
 
-struct SKEETaskInterface : public SKSETaskInterface
-{
-	void(*AddSKSETask)(TaskDelegate * task);
-};
-
 extern RelocAddr<uintptr_t> TESModelTri_vtbl;
 typedef SInt32 (*_AddRaceMenuSlider)(tArray<RaceMenuSlider> * sliders, RaceMenuSlider * slider);
 extern RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider;

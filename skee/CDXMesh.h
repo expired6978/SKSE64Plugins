@@ -4,17 +4,11 @@
 #include <mutex>
 #endif
 
+#include <functional>
+
 #include "CDXTypes.h"
 
-/*const static D3DVERTEXELEMENT9 VertexDecl[6] =
-{
-	{ 0, 0,  D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-	{ 0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL,   0 },
-	{ 0, 24, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-	{ 0, 32, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-	D3DDECL_END()
-};*/
-
+class CDXD3DDevice;
 class CDXMaterial;
 class CDXPicker;
 class CDXShader;
@@ -26,14 +20,18 @@ class CDXMesh
 {
 public:
 	CDXMesh();
-	~CDXMesh();
+	virtual ~CDXMesh();
 
-	virtual void Render(ID3D11Device * pDevice, CDXShader * shader);
-	virtual void Pass(ID3D11Device * pDevice, UInt32 iPass, CDXShader * shader);
+	bool InitializeBuffers(CDXD3DDevice * pDevice, UInt32 vertexCount, UInt32 indexCount, std::function<void(CDXMeshVert*, CDXMeshIndex*)> fillFunction);
+
+	virtual const char* GetName() const { return ""; }
+	virtual void Render(CDXD3DDevice * pDevice, CDXShader * shader);
 	virtual void Release();
 	virtual bool Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo);
-	virtual bool IsEditable() { return false; }
-	virtual bool IsLocked() { return true; }
+	virtual bool IsEditable() const { return false; }
+	virtual bool IsLocked() const { return true; }
+	virtual bool IsMorphable() const { return false; }
+	virtual bool ShowWireframe() const { return false; }
 
 	void SetVisible(bool visible);
 	bool IsVisible();
@@ -41,27 +39,52 @@ public:
 	void SetMaterial(CDXMaterial * material);
 	CDXMaterial * GetMaterial();
 
-	CDXMeshVert* LockVertices();
-	CDXMeshIndex* LockIndices();
+	enum LockMode
+	{
+		READ = D3D11_MAP_READ,
+		WRITE = D3D11_MAP_WRITE_NO_OVERWRITE
+	};
 
-	void UnlockVertices();
-	void UnlockIndices();
+	void SetTopology(D3D_PRIMITIVE_TOPOLOGY topo) { m_topology = topo; }
+
+	virtual CDXMeshVert * LockVertices(const LockMode type = READ);
+	virtual CDXMeshIndex * LockIndices();
+
+	virtual void UnlockVertices(const LockMode type);
+	virtual void UnlockIndices(bool write = false);
 
 	ID3D11Buffer * GetVertexBuffer();
 	ID3D11Buffer * GetIndexBuffer();
 
-	UInt32 GetPrimitiveCount();
+	const CDXMatrix & GetTransform() { return m_transform; };
+	void SetTransform(const CDXMatrix & mat) { m_transform = mat; }
+
+	UInt32 GetIndexCount();
+	UInt32 GetFaceCount();
 	UInt32 GetVertexCount();
 
 protected:
 	bool					m_visible;
 	ID3D11Buffer		*	m_vertexBuffer;
 	UInt32					m_vertCount;
+
+	struct ColoredPrimitive
+	{
+		CDXVec	Position;
+		CDXVec	Color;
+	};
+	union
+	{
+		CDXMeshVert			* m_vertices;
+		ColoredPrimitive	* m_primitive;
+	};
 	ID3D11Buffer		*	m_indexBuffer;
-	UInt32					m_primitiveCount;
-	//UInt8					m_primitiveType;
-	//CDXMaterial				* m_material;
+	UInt32					m_indexCount;
+	CDXMeshIndex		*	m_indices;
+	D3D_PRIMITIVE_TOPOLOGY	m_topology;
+	CDXMaterial				* m_material;
 	CDXMatrix				m_transform;
+	CDXD3DDevice		*	m_pDevice;
 
 #ifdef CDX_MUTEX
 	std::mutex				m_mutex;

@@ -109,7 +109,7 @@ void ReadPartReplacements(std::string fixedPath, std::string modPath, std::strin
 	UInt32 lineCount = 0;
 	UInt8 gender = 0;
 	std::string str = "";
-	while (BSReadLine(&file, &str))
+	while (BSFileUtil::ReadLine(&file, &str))
 	{
 		lineCount++;
 		str = std::trim(str);

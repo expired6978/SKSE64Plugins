@@ -53,7 +53,6 @@ SKSEScaleformInterface			* g_scaleform = nullptr;
 SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
-SKEETaskInterface				g_taskOverride;
 
 // Handlers
 IInterfaceMap				g_interfaceMap;
@@ -105,27 +104,38 @@ bool	g_deferredBodyMorph = false;
 UInt16	g_scaleMode = 0;
 UInt16	g_bodyMorphMode = 0;
 
-// Chargen Start
-#include "CDXBrush.h"
-
 bool	g_externalHeads = false;
 bool	g_extendedMorphs = true;
 bool	g_allowAllMorphs = true;
 bool	g_disableFaceGenCache = true;
 float	g_sliderMultiplier = 1.0f;
 float	g_sliderInterval = 0.01f;
-float	g_panSpeed = 0.01f;
-float	g_cameraFOV = 45.0f;
 UInt32	g_numPresets = 10;
 UInt32	g_customDataMax = 10;
 std::string g_raceTemplate = "NordRace";
 
-#ifdef FIXME
+// Compact DirectX vars
+#include "CDXCamera.h"
+#include "CDXNifScene.h"
+#include "CDXBrush.h"
+
+CDXD3DDevice*		g_Device = nullptr;
+CDXModelViewerCamera	g_Camera;
+CDXNifScene				g_World;
+
+float		g_panSpeed = 0.01f;
+float		g_cameraFOV = 45.0f;
+SInt32		g_viewWidth = 1024;
+SInt32		g_viewHeight = 1024;
+float		g_backgroundA = 0.0f;
+float		g_backgroundR = 0.0f;
+float		g_backgroundG = 0.0f;
+float		g_backgroundB = 0.0f;
+
 extern double g_brushProperties[CDXBrush::kBrushTypes][CDXBrush::kBrushProperties][CDXBrush::kBrushPropertyValues];
-#endif
 
 #define MIN_SERIALIZATION_VERSION	1
-#define MIN_TASK_VERSION			1
+#define MIN_TASK_VERSION			2
 #define MIN_SCALEFORM_VERSION		1
 #define MIN_PAPYRUS_VERSION			1
 
@@ -226,6 +236,7 @@ const char * SKEE64GetTypeFormatting(T * dataOut)
 	return false;
 }
 
+template<> const char * SKEE64GetTypeFormatting(double * dataOut) { return "%lf"; }
 template<> const char * SKEE64GetTypeFormatting(float * dataOut) { return "%f"; }
 template<> const char * SKEE64GetTypeFormatting(bool * dataOut) { return "%c"; }
 template<> const char * SKEE64GetTypeFormatting(SInt16 * dataOut) { return "%hd"; }
@@ -467,6 +478,8 @@ bool RegisterCharGenScaleform(GFxMovieView * view, GFxValue * root)
 	RegisterFunction <SKSEScaleform_DoPaintMesh>(root, view, "DoPaintMesh");
 	RegisterFunction <SKSEScaleform_EndPaintMesh>(root, view, "EndPaintMesh");
 
+	RegisterFunction <SKSEScaleform_DoHoverMesh>(root, view, "DoHoverMesh");
+
 	RegisterFunction <SKSEScaleform_GetCurrentBrush>(root, view, "GetCurrentBrush");
 	RegisterFunction <SKSEScaleform_SetCurrentBrush>(root, view, "SetCurrentBrush");
 
@@ -698,14 +711,6 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		return false;
 	}
 
-	if (g_task->interfaceVersion < 3)
-	{
-		g_taskOverride.AddTask = g_task->AddTask;
-		g_taskOverride.AddSKSETask = g_task->AddTask;
-		g_taskOverride.AddUITask = g_task->AddUITask;
-		g_task = &g_taskOverride;
-	}
-
 	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
 		_ERROR("couldn't get messaging interface");
@@ -818,10 +823,17 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("FaceGen", "bExternalHeads", &g_externalHeads);
 	SKEE64GetConfigValue("FaceGen", "bExtendedMorphs", &g_extendedMorphs);
 	SKEE64GetConfigValue("FaceGen", "bAllowAllMorphs", &g_allowAllMorphs);
-	SKEE64GetConfigValue("FaceGen", "fPanSpeed", &g_panSpeed);
-	SKEE64GetConfigValue("FaceGen", "fFOV", &g_cameraFOV);
 
-#ifdef FIXME
+	SKEE64GetConfigValue("Sculpting", "fPanSpeed", &g_panSpeed);
+	SKEE64GetConfigValue("Sculpting", "fFOV", &g_cameraFOV);
+	SKEE64GetConfigValue("Sculpting", "iWidth", &g_viewWidth);
+	SKEE64GetConfigValue("Sculpting", "iHeight", &g_viewHeight);
+
+	SKEE64GetConfigValue("Sculpting", "fBackgroundA", &g_backgroundA);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundR", &g_backgroundR);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundG", &g_backgroundG);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundB", &g_backgroundB);
+
 	std::string types[CDXBrush::kBrushTypes];
 	types[CDXBrush::kBrushType_Mask_Add] = "Brush/MaskAdd/";
 	types[CDXBrush::kBrushType_Mask_Subtract] = "Brush/MaskSubtract/";
@@ -853,7 +865,6 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 			}
 		}
 	}
-#endif
 
 	if (g_serialization) {
 		g_serialization->SetUniqueID(g_pluginHandle, 'SKEE');

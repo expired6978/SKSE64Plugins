@@ -15,7 +15,7 @@
     <ProjectGuid>{FC9A1EE6-D9DB-47F6-B0ED-8867439C43CE}</ProjectGuid>
     <RootNamespace>skee64</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -51,8 +51,8 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)skse64;$(SolutionDir)jsoncpp;$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;HALF_ROUND_STYLE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PrecompiledHeader>
@@ -65,8 +65,9 @@
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTex.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
+      <AdditionalLibraryDirectories>$(SolutionDir)DirectXTex\Bin\Desktop_2015\$(IntDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -87,8 +88,8 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)skse64;$(SolutionDir)jsoncpp;$(WindowsSDK_IncludePath);$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;HALF_ROUND_STYLE=1;HALF_ENABLE_CPP11_CMATH=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <PrecompiledHeader>
@@ -103,7 +104,8 @@
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTex.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)DirectXTex\Bin\Desktop_2015\$(IntDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -155,6 +157,7 @@
     <ClCompile Include="..\skse64\PapyrusVM.cpp" />
     <ClCompile Include="..\skse64\ScaleformAPI.cpp" />
     <ClCompile Include="..\skse64\ScaleformCallbacks.cpp" />
+    <ClCompile Include="..\skse64\ScaleformLoader.cpp" />
     <ClCompile Include="..\skse64\ScaleformMovie.cpp" />
     <ClCompile Include="..\skse64\ScaleformState.cpp" />
     <ClCompile Include="..\skse64\ScaleformTypes.cpp" />
@@ -162,6 +165,7 @@
     <ClCompile Include="..\skse64\ScaleformVM.cpp" />
     <ClCompile Include="BodyMorphInterface.cpp" />
     <ClCompile Include="CDXBrush.cpp" />
+    <ClCompile Include="CDXBrushMesh.cpp" />
     <ClCompile Include="CDXCamera.cpp" />
     <ClCompile Include="CDXEditableMesh.cpp" />
     <ClCompile Include="CDXEditableScene.cpp" />
@@ -169,12 +173,14 @@
     <ClCompile Include="CDXMesh.cpp" />
     <ClCompile Include="CDXNifBrush.cpp" />
     <ClCompile Include="CDXNifCommands.cpp" />
+    <ClCompile Include="CDXNifMaterial.cpp" />
     <ClCompile Include="CDXNifMesh.cpp" />
     <ClCompile Include="CDXNifScene.cpp" />
     <ClCompile Include="CDXPicker.cpp" />
     <ClCompile Include="CDXResetMask.cpp" />
     <ClCompile Include="CDXScene.cpp" />
     <ClCompile Include="CDXShader.cpp" />
+    <ClCompile Include="CDXShaderCompile.cpp" />
     <ClCompile Include="CDXStroke.cpp" />
     <ClCompile Include="CDXUndo.cpp" />
     <ClCompile Include="FileUtils.cpp" />
@@ -182,7 +188,7 @@
     <ClCompile Include="IPluginInterface.cpp" />
     <ClCompile Include="ItemDataInterface.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MorphHandler.cpp" />
+    <ClCompile Include="FaceMorphInterface.cpp" />
     <ClCompile Include="NifUtils.cpp" />
     <ClCompile Include="NiTransformInterface.cpp" />
     <ClCompile Include="OverlayInterface.cpp" />
@@ -193,7 +199,6 @@
     <ClCompile Include="PartHandler.cpp" />
     <ClCompile Include="ScaleformCharGenFunctions.cpp" />
     <ClCompile Include="ScaleformFunctions.cpp" />
-    <ClCompile Include="ScaleformLoader.cpp" />
     <ClCompile Include="ScaleformUtils.cpp" />
     <ClCompile Include="ShaderUtilities.cpp" />
     <ClCompile Include="SkeletonExtender.cpp" />
@@ -238,6 +243,7 @@
     <ClInclude Include="..\skse64\PapyrusVM.h" />
     <ClInclude Include="..\skse64\ScaleformAPI.h" />
     <ClInclude Include="..\skse64\ScaleformCallbacks.h" />
+    <ClInclude Include="..\skse64\ScaleformLoader.h" />
     <ClInclude Include="..\skse64\ScaleformMovie.h" />
     <ClInclude Include="..\skse64\ScaleformState.h" />
     <ClInclude Include="..\skse64\ScaleformTypes.h" />
@@ -245,27 +251,33 @@
     <ClInclude Include="..\skse64\ScaleformVM.h" />
     <ClInclude Include="BodyMorphInterface.h" />
     <ClInclude Include="CDXBrush.h" />
+    <ClInclude Include="CDXBrushMesh.h" />
     <ClInclude Include="CDXCamera.h" />
+    <ClInclude Include="CDXD3DDevice.h" />
     <ClInclude Include="CDXEditableMesh.h" />
     <ClInclude Include="CDXEditableScene.h" />
     <ClInclude Include="CDXMaterial.h" />
     <ClInclude Include="CDXMesh.h" />
     <ClInclude Include="CDXNifBrush.h" />
     <ClInclude Include="CDXNifCommands.h" />
+    <ClInclude Include="CDXNifMaterial.h" />
     <ClInclude Include="CDXNifMesh.h" />
     <ClInclude Include="CDXNifScene.h" />
     <ClInclude Include="CDXPicker.h" />
     <ClInclude Include="CDXResetMask.h" />
     <ClInclude Include="CDXScene.h" />
     <ClInclude Include="CDXShader.h" />
+    <ClInclude Include="CDXShaderCompile.h" />
     <ClInclude Include="CDXStroke.h" />
+    <ClInclude Include="CDXTypes.h" />
     <ClInclude Include="CDXUndo.h" />
     <ClInclude Include="FileUtils.h" />
+    <ClInclude Include="half.hpp" />
     <ClInclude Include="SKEEHooks.h" />
     <ClInclude Include="IHashType.h" />
     <ClInclude Include="IPluginInterface.h" />
     <ClInclude Include="ItemDataInterface.h" />
-    <ClInclude Include="MorphHandler.h" />
+    <ClInclude Include="FaceMorphInterface.h" />
     <ClInclude Include="NifUtils.h" />
     <ClInclude Include="NiTransformInterface.h" />
     <ClInclude Include="OverlayInterface.h" />
@@ -276,13 +288,13 @@
     <ClInclude Include="PartHandler.h" />
     <ClInclude Include="ScaleformCharGenFunctions.h" />
     <ClInclude Include="ScaleformFunctions.h" />
-    <ClInclude Include="ScaleformLoader.h" />
     <ClInclude Include="ScaleformUtils.h" />
     <ClInclude Include="ShaderUtilities.h" />
     <ClInclude Include="SkeletonExtender.h" />
     <ClInclude Include="StringTable.h" />
     <ClInclude Include="TintMaskInterface.h" />
     <ClInclude Include="tinyxml2.h" />
+    <ClInclude Include="Utilities.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

@@ -1,5 +1,3 @@
-#ifdef FIXME
-
 #include "CDXUndo.h"
 
 CDXUndoStack	g_undoStack;
@@ -19,7 +17,7 @@ void CDXUndoStack::Release()
 SInt32 CDXUndoStack::Push(CDXUndoCommandPtr action)
 {
 	CDXUndoStack::iterator actionIt;
-	int maxState = size() - 1;
+	SInt32 maxState = (SInt32)size() - 1;
 	if(m_index != maxState) { // Not at the end, erase everything from now til the end
 		erase(begin() + (m_index + 1), end());
 		m_index++;
@@ -45,7 +43,7 @@ SInt32 CDXUndoStack::Undo(bool doUpdate)
 
 SInt32 CDXUndoStack::Redo(bool doUpdate)
 {
-	SInt32 maxState = size() - 1;
+	SInt32 maxState = (SInt32)size() - 1;
 	if(m_index < maxState) {
 		m_index++;
 		if(doUpdate) 
@@ -69,5 +67,3 @@ SInt32 CDXUndoStack::GoTo(SInt32 index, bool doUpdate)
 	
 	return result;
 }
-
-#endif

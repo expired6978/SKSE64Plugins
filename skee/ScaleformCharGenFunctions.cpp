@@ -46,10 +46,16 @@ extern SKSETaskInterface * g_task;
 #include "skse64/NiRenderer.h"
 #include "skse64/NiExtraData.h"
 
+#include <DirectXMath.h>
+#include <d3d11_4.h>
+
+#include "CDXShader.h"
+#include "CDXD3DDevice.h"
 #include "CDXCamera.h"
 #include "CDXNifScene.h"
 #include "CDXNifMesh.h"
 #include "CDXBrush.h"
+#include "CDXBrushMesh.h"
 #include "CDXUndo.h"
 #include "CDXNifCommands.h"
 
@@ -64,12 +70,14 @@ UInt32 colors[] = {
 	0x33240d, 0x20330d, 0x0d1633, 0x1a332f
 };
 
-#ifdef FIXME
+extern CDXD3DDevice*				g_Device;
 extern CDXModelViewerCamera			g_Camera;
 extern CDXNifScene					g_World;
 extern float						g_panSpeed;
 extern float						g_cameraFOV;
-#endif
+extern SInt32						g_viewWidth;
+extern SInt32						g_viewHeight;
+extern bool							g_enableHeadExport;
 
 void SKSEScaleform_SavePreset::Invoke(Args * args)
 {
@@ -160,10 +168,15 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 		GFxValue modArray;
 		args->movie->CreateArray(&modArray);
 		for(std::vector<std::string>::iterator it = presetData->modList.begin(); it != presetData->modList.end(); ++it) {
+
+			const ModInfo * modInfo = dataHandler->LookupModByName((*it).c_str());
+			if (!modInfo || !modInfo->IsActive())
+				continue;
+
 			GFxValue modObject;
 			args->movie->CreateObject(&modObject);
 			RegisterString(&modObject, args->movie, "name", (*it).c_str());
-			RegisterNumber(&modObject, "loadedIndex", dataHandler->GetModIndex((*it).c_str()));
+			RegisterNumber(&modObject, "loadedIndex", modInfo->GetPartialIndex());
 			modArray.PushBack(&modObject);
 		}
 		object->SetMember("mods", &modArray);
@@ -426,7 +439,8 @@ void SKSEScaleform_ExportHead::Invoke(Args * args)
 	std::string ddsPath = strData;
 	ddsPath.append(".dds");
 
-	g_task->AddTask(new SKSETaskExportHead(actor, nifPath.c_str(), ddsPath.c_str()));
+	if(g_enableHeadExport)
+		g_task->AddTask(new SKSETaskExportHead(actor, nifPath.c_str(), ddsPath.c_str()));
 }
 
 void SKSEScaleform_ImportHead::Invoke(Args * args)
@@ -436,7 +450,6 @@ void SKSEScaleform_ImportHead::Invoke(Args * args)
 
 	const char	* strData = args->args[0].GetString();
 
-#ifdef FIXME
 	// Release the previous import just in case
 	g_World.ReleaseImport();
 
@@ -467,66 +480,36 @@ void SKSEScaleform_ImportHead::Invoke(Args * args)
 			if (rootNode)
 			{
 				args->movie->CreateArray(args->result);
-				/*args->movie->CreateObject(args->result);
-
-				GFxValue source;
-				args->movie->CreateArray(&source);
-
 				
-
-				GFxValue destination;
-				args->movie->CreateArray(&destination);
-
-				UInt32 numParts = actorBase->numHeadParts;
-				BGSHeadPart ** headParts = actorBase->headparts;
-				if (CALL_MEMBER_FN(actorBase, HasOverlays)()) {
-					numParts = GetNumActorBaseOverlays(actorBase);
-					headParts = GetActorBaseOverlays(actorBase);
-				}
-
-				for (UInt32 i = 0; i < numParts; i++)
-				{
-					BGSHeadPart * headPart = headParts[i];
-					if (!headPart)
-						continue;
-
-					NiTriBasedGeom * geometry = GetTriBasedGeomByHeadPart(faceNode, headPart);
-					if (!geometry)
-						continue;
-					
-					NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
-					if (!geometryData)
-						continue;
-
-					bool morphable = geometry->GetExtraData("FOD") != NULL;
-
-					GFxValue gfxPart;
-					args->movie->CreateObject(&gfxPart);
-					RegisterString(&gfxPart, args->movie, "name", geometry->m_name);
-					RegisterNumber(&gfxPart, "vertices", geometryData->m_usVertices);
-					RegisterBool(&gfxPart, "morphable", morphable);
-					destination.PushBack(&gfxPart);
-				}
-
-				*/
-
 				SInt32 gIndex = 0;
 				VisitObjects(rootNode, [&gIndex, &args](NiAVObject* trishape)
 				{
 					NiNode * parent = trishape->m_parent;
 					if (parent && BSFixedString(parent->m_name) == BSFixedString("BSFaceGenNiNodeSkinned")) {
-						NiTriBasedGeom * geometry = trishape->GetAsNiTriBasedGeom();
-						if (!geometry)
-							return false;
 
-						NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
-						if (!geometryData)
-							return false;
+						UInt32 numVertices = 0;
 
+						NiGeometry * legacyGeometry = trishape->GetAsNiGeometry();
+						BSTriShape * geometry = trishape->GetAsBSTriShape();
+
+						if (geometry) {
+							numVertices = geometry->numVertices;
+						}
+						else if (legacyGeometry) {
+							NiGeometryData * geometryData = niptr_cast<NiGeometryData>(legacyGeometry->m_spModelData);
+							if (geometryData) {
+								numVertices = geometryData->m_usVertices;
+							}
+						}
+						else {
+							gIndex++;
+							return false;
+						}
+						
 						GFxValue gfxGeom;
 						args->movie->CreateObject(&gfxGeom);
-						RegisterString(&gfxGeom, args->movie, "name", geometry->m_name);
-						RegisterNumber(&gfxGeom, "vertices", geometryData->m_usVertices);
+						RegisterString(&gfxGeom, args->movie, "name", trishape->m_name);
+						RegisterNumber(&gfxGeom, "vertices", numVertices);
 						RegisterNumber(&gfxGeom, "gIndex", gIndex);
 						args->result->PushBack(&gfxGeom);
 						gIndex++;
@@ -534,9 +517,6 @@ void SKSEScaleform_ImportHead::Invoke(Args * args)
 
 					return false;
 				});
-
-				//args->result->SetMember("source", &source);
-				//args->result->SetMember("destination", &destination);
 			}
 		}
 	}
@@ -549,14 +529,11 @@ void SKSEScaleform_ImportHead::Invoke(Args * args)
 
 	// Release the created NiStream
 	CALL_MEMBER_FN(niStream, dtor)();
-#endif
 }
 
 void SKSEScaleform_ReleaseImportedHead::Invoke(Args * args)
 {
-#ifdef FIXME
 	g_World.ReleaseImport();
-#endif
 }
 
 void SKSEScaleform_LoadImportedHead::Invoke(Args * args)
@@ -564,13 +541,13 @@ void SKSEScaleform_LoadImportedHead::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Array);
 
-#ifdef FIXME
 
-	UInt32 meshLength = min(g_World.GetNumMeshes(), args->args[0].GetArraySize());
+	UInt32 meshLength = g_World.GetNumMeshes();
+	UInt32 reqLength = args->args[0].GetArraySize();
 
-	for (UInt32 i = 0; i < meshLength; i++)
+	for (UInt32 i = 0, m = 0; i < meshLength && m < reqLength; i++)
 	{
-		CDXNifMesh * mesh = static_cast<CDXNifMesh*>(g_World.GetNthMesh(i));
+		CDXNifMesh * mesh = dynamic_cast<CDXNifMesh*>(g_World.GetNthMesh(i));
 		if (mesh) {
 			NiNode * importRoot = g_World.GetImportRoot();
 			if (importRoot) {
@@ -578,28 +555,32 @@ void SKSEScaleform_LoadImportedHead::Invoke(Args * args)
 				SInt32 searchIndex = -1;
 
 				GFxValue gfxIndex;
-				args->args[0].GetElement(i, &gfxIndex);
+				args->args[0].GetElement(m, &gfxIndex);
 				searchIndex = gfxIndex.GetNumber();
 
-				NiGeometry * sourceGeometry = NULL;
+				NiAVObject * sourceGeometry = NULL;
 				SInt32 gIndex = 0;
 				VisitObjects(importRoot, [&gIndex, &args, &searchIndex, &sourceGeometry](NiAVObject* trishape)
 				{
 					NiNode * parent = trishape->m_parent;
 					if (parent && BSFixedString(parent->m_name) == BSFixedString("BSFaceGenNiNodeSkinned")) {
-						NiTriBasedGeom * geometry = trishape->GetAsNiTriBasedGeom();
-						if (!geometry)
-							return false;
+						NiTriBasedGeom * legacyGeometry = trishape->GetAsNiTriBasedGeom();
+						BSTriShape * geometry = trishape->GetAsBSTriShape();
 
-						NiGeometryData * geometryData = niptr_cast<NiGeometryData>(geometry->m_spModelData);
-						if (!geometryData)
-							return false;
+						if (legacyGeometry) {
+							NiGeometryData * geometryData = niptr_cast<NiGeometryData>(legacyGeometry->m_spModelData);
+							if (!geometryData) {
+								gIndex++;
+								return false;
+							}
+						}
 
 						if (searchIndex == gIndex) {
-							sourceGeometry = geometry;
+							if (geometry) sourceGeometry = geometry;
+							else if (legacyGeometry) sourceGeometry = legacyGeometry;
+							else return false;
 							return true;
 						}
-						
 						gIndex++;
 					}
 
@@ -612,9 +593,10 @@ void SKSEScaleform_LoadImportedHead::Invoke(Args * args)
 						importGeometry->Apply(g_undoStack.Push(importGeometry));
 				}
 			}
+
+			m++;
 		}
 	}
-#endif
 }
 
 
@@ -622,8 +604,6 @@ void SKSEScaleform_ClearSculptData::Invoke(Args * args)
 {
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Array);
-
-#ifdef FIXME
 
 	UInt32 meshLength = args->args[0].GetArraySize();
 
@@ -633,14 +613,13 @@ void SKSEScaleform_ClearSculptData::Invoke(Args * args)
 		args->args[0].GetElement(i, &gfxIndex);
 		SInt32 meshIndex = gfxIndex.GetNumber();
 
-		CDXNifMesh * mesh = static_cast<CDXNifMesh*>(g_World.GetNthMesh(meshIndex));
+		CDXNifMesh * mesh = dynamic_cast<CDXNifMesh*>(g_World.GetNthMesh(meshIndex));
 		if (mesh) {	
 			std::shared_ptr<CDXNifResetSculpt> resetGeometry = std::make_shared<CDXNifResetSculpt>(mesh);
 			if (resetGeometry->Length() > 0)
 				resetGeometry->Apply(g_undoStack.Push(resetGeometry));
 		}
 	}
-#endif
 }
 
 
@@ -814,37 +793,87 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 
 void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 {
-#ifdef FIXME
-	ID3D11Device * pDevice = NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
-	if (!pDevice) {
-		_ERROR("%s - Failed to acquire DirectX device.", __FUNCTION__);
+	auto pDeviceContext = g_renderManager->context;
+
+	Microsoft::WRL::ComPtr<ID3D11Device> pDevice;
+	pDeviceContext->GetDevice(&pDevice);
+	if (!pDevice) // This shouldnt happen
+		return;
+
+	Microsoft::WRL::ComPtr<ID3D11Device3> device3;
+	pDevice->QueryInterface(__uuidof(ID3D11Device3), (void**)&device3);
+	if (!device3) {
+		_ERROR("%s - Failed to acquire device3.", __FUNCTION__);
+		return;
+	}
+
+	g_Device = new CDXD3DDevice(device3, pDeviceContext);
+
+	CDXInitParams initParams;
+	initParams.camera = &g_Camera;
+	initParams.device = g_Device;
+	initParams.viewportWidth = g_viewWidth;
+	initParams.viewportHeight = g_viewHeight;
+
+	CDXVec vecEye = DirectX::XMVectorSet(32.0f, 0.0f, 0.0f, 1.0f);
+	CDXVec vecAt = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+	g_Camera.SetWindow(initParams.viewportWidth, initParams.viewportHeight);
+	g_Camera.SetViewParams(&vecEye, &vecAt);
+	g_Camera.SetProjParams(g_cameraFOV * (DirectX::XM_PI / 180.0f), 1.0f, 1.0f, 1000.0f);
+	g_Camera.SetPanSpeed(g_panSpeed);
+	g_Camera.Update();
+
+	const char * shaderPaths[] = {
+		"SKSE/Plugins/CharGen/shader.vs",
+		"SKSE/Plugins/CharGen/shader.ps"
+	};
+
+	std::vector<char> vsb, psb;
+	BSResourceNiBinaryStream vs(shaderPaths[0]), ps(shaderPaths[1]);
+	if (!vs.IsValid()) {
+		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPaths[0]);
+		return;
+	}
+	if (!ps.IsValid()) {
+		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPaths[1]);
+		return;
+	}
+	BSFileUtil::ReadAll(&vs, vsb);
+	BSFileUtil::ReadAll(&ps, psb);
+
+	initParams.vertexShader.pSrcData = &vsb.at(0);
+	initParams.vertexShader.SrcDataSize = vsb.size();
+	initParams.vertexShader.pSourceName = "shader.vs";
+	initParams.pixelShader.pSrcData = &psb.at(0);
+	initParams.pixelShader.SrcDataSize = psb.size();
+	initParams.pixelShader.pSourceName = "shader.ps";
+
+	if (!g_World.Setup(initParams)) {
+		_ERROR("%s - Failed to setup world.", __FUNCTION__);
 		return;
 	}
 
 	PlayerCharacter * player = (*g_thePlayer);
-	g_Camera.SetProjParams(g_cameraFOV * (D3DX_PI / 180.0f), 1.0f, 1.0f, 1000.0f);
-	g_Camera.SetPanSpeed(g_panSpeed);
-	g_World.SetWorkingActor(player);
-	g_World.Setup(pDevice);
-
-	Actor * actor = g_World.GetWorkingActor();
-	if (!actor) {
+	if (!player) {
 		_ERROR("%s - Invalid working actor.", __FUNCTION__);
 		return;
 	}
 
-	TESNPC * actorBase = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
+	TESNPC * actorBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
 	if (!actorBase) {
 		_ERROR("%s - No actor base.", __FUNCTION__);
 		return;
 	}
 
-	NiNode * rootFaceGen = actor->GetFaceGenNiNode();
+	NiNode * rootFaceGen = player->GetFaceGenNiNode();
 	if (!rootFaceGen) {
 		_ERROR("%s - No FaceGen node.", __FUNCTION__);
 		return;
 	}
 
+	g_World.SetWorkingActor(player);
+
+#if 0
 	BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
 	if (animationData) {
 		FaceGen::GetSingleton()->isReset = 0;
@@ -857,6 +886,7 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 		}
 		UpdateModelFace(rootFaceGen);
 	}
+#endif
 
 	UInt32 numHeadParts = actorBase->numHeadParts;
 	BGSHeadPart ** headParts = actorBase->headparts;
@@ -893,7 +923,17 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 				continue;
 
 			if(headPart->partName == BSFixedString(object->m_name)) {
-				CDXNifMesh * mesh = CDXNifMesh::Create(pDevice, object->GetAsNiGeometry());
+				NiGeometry* legacyGeometry = object->GetAsNiGeometry();
+				BSTriShape* geometry = object->GetAsBSTriShape();
+
+				CDXNifMesh * mesh = nullptr;
+				if (legacyGeometry) {
+					mesh = CDXLegacyNifMesh::Create(g_Device, legacyGeometry);
+				}
+				if (geometry) {
+					mesh = CDXBSTriShapeMesh::Create(g_Device, geometry);
+				}
+
 				if (!mesh)
 					continue;
 
@@ -902,7 +942,7 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 					
 				CDXMaterial * material = mesh->GetMaterial();
 				if (material)
-					material->SetWireframeColor(CDXVec3(((colors[i] >> 16) & 0xFF) / 255.0, ((colors[i] >> 8) & 0xFF) / 255.0, (colors[i] & 0xFF) / 255.0));
+					material->SetWireframeColor(DirectX::XMFLOAT4(((colors[i] >> 16) & 0xFF) / 255.0, ((colors[i] >> 8) & 0xFF) / 255.0, (colors[i] & 0xFF) / 255.0, 1.0f));
 
 				if (headPart->type != BGSHeadPart::kTypeFace)
 					mesh->SetLocked(true);
@@ -913,24 +953,25 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 		}
 	}
 
+#if 0
 	if (animationData) {
 		animationData->overrideFlag = 0;
 		CALL_MEMBER_FN(animationData, Reset)(1.0, 1, 1, 0, 0);
 		FaceGen::GetSingleton()->isReset = 1;
 		UpdateModelFace(rootFaceGen);
 	}
+#endif
 
 	args->movie->CreateObject(args->result);
-	RegisterNumber(args->result, "width", g_World.GetWidth());
-	RegisterNumber(args->result, "height", g_World.GetHeight());
-#endif
+	RegisterNumber(args->result, "width", initParams.viewportWidth);
+	RegisterNumber(args->result, "height", initParams.viewportHeight);
 }
 
 void SKSEScaleform_ReleaseMorphEditor::Invoke(Args * args)
 {
-#ifdef FIXME
 	g_World.Release();
-#endif
+	delete g_Device;
+	g_Device = nullptr;
 }
 
 void SKSEScaleform_BeginRotateMesh::Invoke(Args * args)
@@ -939,9 +980,7 @@ void SKSEScaleform_BeginRotateMesh::Invoke(Args * args)
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	g_Camera.OnRotateBegin(args->args[0].GetNumber(), args->args[1].GetNumber());
-#endif
 };
 
 void SKSEScaleform_DoRotateMesh::Invoke(Args * args)
@@ -950,16 +989,12 @@ void SKSEScaleform_DoRotateMesh::Invoke(Args * args)
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	g_Camera.OnRotate(args->args[0].GetNumber(), args->args[1].GetNumber());
-#endif
 };
 
 void SKSEScaleform_EndRotateMesh::Invoke(Args * args)
 {
-#ifdef FIXME
 	g_Camera.OnRotateEnd();
-#endif
 };
 
 void SKSEScaleform_BeginPanMesh::Invoke(Args * args)
@@ -968,9 +1003,7 @@ void SKSEScaleform_BeginPanMesh::Invoke(Args * args)
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	g_Camera.OnMoveBegin(args->args[0].GetNumber(), args->args[1].GetNumber());
-#endif
 };
 
 void SKSEScaleform_DoPanMesh::Invoke(Args * args)
@@ -979,16 +1012,12 @@ void SKSEScaleform_DoPanMesh::Invoke(Args * args)
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	g_Camera.OnMove(args->args[0].GetNumber(), args->args[1].GetNumber());
-#endif
 };
 
 void SKSEScaleform_EndPanMesh::Invoke(Args * args)
 {
-#ifdef FIXME
 	g_Camera.OnMoveEnd();
-#endif
 };
 
 void SKSEScaleform_BeginPaintMesh::Invoke(Args * args)
@@ -1001,15 +1030,14 @@ void SKSEScaleform_BeginPaintMesh::Invoke(Args * args)
 	SInt32 y = args->args[1].GetNumber();
 
 	bool hitMesh = false;
-#ifdef FIXME
+
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush) {
 		CDXBrushPickerBegin brushStroke(brush);
 		brushStroke.SetMirror(brush->IsMirror());
-		if (g_World.Pick(x, y, brushStroke))
+		if (g_World.Pick(&g_Camera, x, y, brushStroke))
 			hitMesh = true;
 	}
-#endif
 
 	args->result->SetBool(hitMesh);
 };
@@ -1023,36 +1051,44 @@ void SKSEScaleform_DoPaintMesh::Invoke(Args * args)
 	SInt32 x = args->args[0].GetNumber();
 	SInt32 y = args->args[1].GetNumber();
 
-#ifdef FIXME
-
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush) {
 		CDXBrushPickerUpdate brushStroke(brush);
 		brushStroke.SetMirror(brush->IsMirror());
-		g_World.Pick(x, y, brushStroke);
+		g_World.Pick(&g_Camera, x, y, brushStroke);
 	}
-#endif
 };
 
 void SKSEScaleform_EndPaintMesh::Invoke(Args * args)
 {
-#ifdef FIXME
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if(brush)
 		brush->EndStroke();
-#endif
 };
 
+void SKSEScaleform_DoHoverMesh::Invoke(Args * args)
+{
+	ASSERT(args->numArgs >= 2);
+	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
+	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
+
+	SInt32 x = args->args[0].GetNumber();
+	SInt32 y = args->args[1].GetNumber();
+
+	CDXBrush * brush = g_World.GetCurrentBrush();
+	if (brush) {
+		CDXBrushTranslator translator(brush, static_cast<CDXBrushMesh*>(g_World.GetNthMesh(0)), static_cast<CDXBrushMesh*>(g_World.GetNthMesh(1)));
+		g_World.Pick(&g_Camera, x, y, translator);
+	}
+};
 
 void SKSEScaleform_GetCurrentBrush::Invoke(Args * args)
 {
-#ifdef FIXME
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush)
 		args->result->SetNumber(brush->GetType());
 	else
 		args->result->SetNull();
-#endif
 }
 
 void SKSEScaleform_SetCurrentBrush::Invoke(Args * args)
@@ -1060,21 +1096,18 @@ void SKSEScaleform_SetCurrentBrush::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	CDXBrush::BrushType brushType = (CDXBrush::BrushType)(UInt32)args->args[0].GetNumber();
 	CDXBrush * brush = g_World.GetBrush(brushType);
 	if (brush)
 		g_World.SetCurrentBrush(brushType);
 
 	args->result->SetBool(brush != NULL);
-#endif
 }
 
 void SKSEScaleform_GetBrushes::Invoke(Args * args)
 {
 	args->movie->CreateArray(args->result);
 
-#ifdef FIXME
 	for (auto brush : g_World.GetBrushes()) {
 		GFxValue object;
 		args->movie->CreateObject(&object);
@@ -1094,7 +1127,6 @@ void SKSEScaleform_GetBrushes::Invoke(Args * args)
 		RegisterNumber(&object, "mirror", brush->IsMirror() ? 1.0 : 0.0);
 		args->result->PushBack(&object);
 	}
-#endif
 }
 
 void SKSEScaleform_SetBrushData::Invoke(Args * args)
@@ -1103,7 +1135,6 @@ void SKSEScaleform_SetBrushData::Invoke(Args * args)
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Object);
 
-#ifdef FIXME
 	CDXBrush::BrushType brushType = (CDXBrush::BrushType)(UInt32)args->args[0].GetNumber();
 	CDXBrush * brush = g_World.GetBrush(brushType);
 	if (brush) {
@@ -1126,41 +1157,35 @@ void SKSEScaleform_SetBrushData::Invoke(Args * args)
 	else {
 		args->result->SetBool(false);
 	}
-#endif
 }
 
 void SKSEScaleform_GetMeshes::Invoke(Args * args)
 {
 	args->movie->CreateArray(args->result);
 
-#ifdef FIXME
 	for (UInt32 i = 0; i < g_World.GetNumMeshes(); i++) {
-		CDXNifMesh * mesh = static_cast<CDXNifMesh*>(g_World.GetNthMesh(i));
-		if (mesh) {
-			NiGeometry * geometry = mesh->GetNifGeometry();
-			if (geometry) {
-				GFxValue object;
-				args->movie->CreateObject(&object);
-				RegisterString(&object, args->movie, "name", geometry->m_name);
-				RegisterNumber(&object, "meshIndex", i);
-				RegisterBool(&object, "wireframe", mesh->ShowWireframe());
-				RegisterBool(&object, "locked", mesh->IsLocked());
-				RegisterBool(&object, "visible", mesh->IsVisible());
-				RegisterBool(&object, "morphable", mesh->IsMorphable());
-				RegisterNumber(&object, "vertices", mesh->GetVertexCount());
+		CDXMesh * mesh = g_World.GetNthMesh(i);
+		if (mesh && mesh->IsEditable()) {
+			GFxValue object;
+			args->movie->CreateObject(&object);
+			RegisterString(&object, args->movie, "name", mesh->GetName());
+			RegisterNumber(&object, "meshIndex", i);
+			RegisterBool(&object, "wireframe", mesh->ShowWireframe());
+			RegisterBool(&object, "locked", mesh->IsLocked());
+			RegisterBool(&object, "visible", mesh->IsVisible());
+			RegisterBool(&object, "morphable", mesh->IsMorphable());
+			RegisterNumber(&object, "vertices", mesh->GetVertexCount());
 
-				CDXMaterial * material = mesh->GetMaterial();
-				if (material) {
-					CDXVec3 fColor = material->GetWireframeColor();
-					UInt32 color = 0xFF000000 | (UInt32)(fColor.x * 255) << 16 | (UInt32)(fColor.y * 255) << 8 | (UInt32)(fColor.z * 255);
-					RegisterNumber(&object, "wfColor", color);
-				}
-
-				args->result->PushBack(&object);
+			CDXMaterial * material = mesh->GetMaterial();
+			if (material) {
+				DirectX::XMFLOAT4 fColor = material->GetWireframeColor();
+				UInt32 color = 0xFF000000 | (UInt32)(fColor.x * 255) << 16 | (UInt32)(fColor.y * 255) << 8 | (UInt32)(fColor.z * 255);
+				RegisterNumber(&object, "wfColor", color);
 			}
+
+			args->result->PushBack(&object);
 		}
 	}
-#endif
 }
 
 void SKSEScaleform_SetMeshData::Invoke(Args * args)
@@ -1171,8 +1196,7 @@ void SKSEScaleform_SetMeshData::Invoke(Args * args)
 
 	UInt32 i = (UInt32)args->args[0].GetNumber();
 
-#ifdef FIXME
-	CDXNifMesh * mesh = static_cast<CDXNifMesh*>(g_World.GetNthMesh(i));
+	CDXEditableMesh * mesh = dynamic_cast<CDXEditableMesh*>(g_World.GetNthMesh(i));
 	if (mesh) {
 		GFxValue wireframe;
 		args->args[1].GetMember("wireframe", &wireframe);
@@ -1189,7 +1213,7 @@ void SKSEScaleform_SetMeshData::Invoke(Args * args)
 		CDXMaterial * material = mesh->GetMaterial();
 		if (material) {
 			UInt32 color = wfColor.GetNumber();
-			material->SetWireframeColor(CDXVec3(((color >> 16) & 0xFF) / 255.0, ((color >> 8) & 0xFF) / 255.0, (color & 0xFF) / 255.0));
+			material->SetWireframeColor(DirectX::XMFLOAT4(((color >> 16) & 0xFF) / 255.0, ((color >> 8) & 0xFF) / 255.0, (color & 0xFF) / 255.0, 1.0f));
 		}
 
 		args->result->SetBool(true);
@@ -1197,28 +1221,21 @@ void SKSEScaleform_SetMeshData::Invoke(Args * args)
 	else {
 		args->result->SetBool(false);
 	}
-#endif
 }
 
 void SKSEScaleform_GetActionLimit::Invoke(Args * args)
 {
-#ifdef FIXME
 	args->result->SetNumber(g_undoStack.GetLimit());
-#endif
 }
 
 void SKSEScaleform_UndoAction::Invoke(Args * args)
 {
-#ifdef FIXME
 	args->result->SetNumber(g_undoStack.Undo(true));
-#endif
 }
 
 void SKSEScaleform_RedoAction::Invoke(Args * args)
 {
-#ifdef FIXME
 	args->result->SetNumber(g_undoStack.Redo(true));
-#endif
 }
 
 void SKSEScaleform_GoToAction::Invoke(Args * args)
@@ -1226,7 +1243,6 @@ void SKSEScaleform_GoToAction::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	SInt32 previous = g_undoStack.GetIndex();
 	SInt32 result = g_undoStack.GoTo(args->args[0].GetNumber(), true);
 
@@ -1239,14 +1255,11 @@ void SKSEScaleform_GoToAction::Invoke(Args * args)
 	}
 
 	args->result->SetNumber(result);
-#endif
 }
 
 void SKSEScaleform_GetMeshCameraRadius::Invoke(Args * args)
 {
-#ifdef FIXME
 	args->result->SetNumber(g_Camera.GetRadius());
-#endif
 }
 
 void SKSEScaleform_SetMeshCameraRadius::Invoke(Args * args)
@@ -1254,10 +1267,8 @@ void SKSEScaleform_SetMeshCameraRadius::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 
-#ifdef FIXME
 	g_Camera.SetRadius(args->args[0].GetNumber());
 	g_Camera.Update();
-#endif
 }
 
 #include <Shlwapi.h>
