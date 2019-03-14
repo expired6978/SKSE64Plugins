@@ -1,9 +1,9 @@
 #include "NiTransformInterface.h"
-#include "OverrideInterface.h"
 #include "ShaderUtilities.h"
 #include "SkeletonExtender.h"
 #include "StringTable.h"
 #include "NifUtils.h"
+#include "Utilities.h"
 
 #include "skse64/PluginAPI.h"
 #include "skse64/GameReferences.h"
@@ -18,7 +18,6 @@
 
 #include <algorithm>
 
-extern OverrideInterface			g_overrideInterface;
 extern SKSETaskInterface			* g_task;
 extern StringTable					g_stringTable;
 extern bool							g_enableEquippableTransforms;
@@ -153,7 +152,7 @@ bool NodeTransformRegistrationMapHolder::Load(SKSESerializationInterface* intfc,
 	}
 
 	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		*outHandle = 0;
 		return error;
@@ -249,7 +248,7 @@ bool NiTransformInterface::AddNodeTransform(TESObjectREFR * refr, bool firstPers
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	transformData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].erase(value);
 	transformData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].insert(value);
 	return true;
@@ -262,7 +261,7 @@ bool NiTransformInterface::RemoveNodeTransform(TESObjectREFR * refr, bool firstP
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 
 	auto & it = transformData.m_data.find(handle);
 	if (it != transformData.m_data.end())
@@ -349,7 +348,7 @@ void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR * refr)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto & it = transformData.m_data.find(handle);
 	if (it != transformData.m_data.end())
 	{
@@ -363,7 +362,7 @@ bool NiTransformInterface::RemoveNodeTransformComponent(TESObjectREFR * refr, bo
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto & it = transformData.m_data.find(handle);
 	if (it != transformData.m_data.end())
 	{
@@ -395,7 +394,7 @@ void NiTransformInterface::VisitNodes(TESObjectREFR * refr, bool firstPerson, bo
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 
 	auto & it = transformData.m_data.find(handle); // Find ActorHandle
 	if (it != transformData.m_data.end())
@@ -414,7 +413,7 @@ bool NiTransformInterface::VisitNodeTransforms(TESObjectREFR * refr, bool firstP
 	bool ret = false;
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto & it = transformData.m_data.find(handle); // Find ActorHandle
 	if (it != transformData.m_data.end())
 	{
@@ -563,7 +562,7 @@ bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR * refr, bool f
 
 void NiTransformInterface::UpdateNodeAllTransforms(TESObjectREFR * refr)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SetHandleNodeTransforms(handle);
 }
 
@@ -571,7 +570,7 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		return;
 	}

@@ -793,21 +793,15 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 
 void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 {
-	auto pDeviceContext = g_renderManager->context;
-
+	Microsoft::WRL::ComPtr<ID3D11DeviceContext> pDeviceContext = g_renderManager->context;
 	Microsoft::WRL::ComPtr<ID3D11Device> pDevice;
 	pDeviceContext->GetDevice(&pDevice);
-	if (!pDevice) // This shouldnt happen
-		return;
-
-	Microsoft::WRL::ComPtr<ID3D11Device3> device3;
-	pDevice->QueryInterface(__uuidof(ID3D11Device3), (void**)&device3);
-	if (!device3) {
-		_ERROR("%s - Failed to acquire device3.", __FUNCTION__);
+	if (!pDevice) { // This shouldnt happen
+		_ERROR("%s - Failed to acquire device from context.", __FUNCTION__);
 		return;
 	}
 
-	g_Device = new CDXD3DDevice(device3, pDeviceContext);
+	g_Device = new CDXD3DDevice(pDevice, pDeviceContext);
 
 	CDXInitParams initParams;
 	initParams.camera = &g_Camera;

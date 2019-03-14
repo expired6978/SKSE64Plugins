@@ -1,8 +1,8 @@
 #include "BodyMorphInterface.h"
-#include "OverrideInterface.h"
 #include "OverlayInterface.h"
 #include "ShaderUtilities.h"
 #include "StringTable.h"
+#include "Utilities.h"
 
 #include "FileUtils.h"
 #include "NifUtils.h"
@@ -30,7 +30,6 @@
 #include "skse64/NiRTTI.h"
 
 extern BodyMorphInterface				g_bodyMorphInterface;
-extern OverrideInterface				g_overrideInterface;
 extern OverlayInterface					g_overlayInterface;
 extern StringTable						g_stringTable;
 extern SKSETaskInterface				* g_task;
@@ -56,13 +55,13 @@ void BodyMorphInterface::LoadMods()
 		ForEachMod([&](ModInfo * modInfo)
 		{
 			std::string templatesPath = fixedPath + std::string(modInfo->name) + "\\templates.ini";
-			ReadBodyMorphTemplates(templatesPath.c_str());
+			Impl_ReadBodyMorphTemplates(templatesPath.c_str());
 		});
 
 		ForEachMod([&](ModInfo * modInfo)
 		{
 			std::string morphsPath = fixedPath + std::string(modInfo->name) + "\\morphs.ini";
-			ReadBodyMorphs(morphsPath.c_str());
+			Impl_ReadBodyMorphs(morphsPath.c_str());
 		});
 	}
 }
@@ -73,17 +72,17 @@ void BodyMorphInterface::Revert()
 	actorMorphs.m_data.clear();
 }
 
-void BodyMorphInterface::SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative)
+void BodyMorphInterface::Impl_SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	actorMorphs.m_data[handle][g_stringTable.GetString(morphName)][g_stringTable.GetString(morphKey)] = relative;
 }
 
-float BodyMorphInterface::GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
+float BodyMorphInterface::Impl_GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -103,9 +102,9 @@ float BodyMorphInterface::GetMorph(TESObjectREFR * actor, SKEEFixedString morphN
 	return 0.0;
 }
 
-void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
+void BodyMorphInterface::Impl_ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -123,9 +122,9 @@ void BodyMorphInterface::ClearMorph(TESObjectREFR * actor, SKEEFixedString morph
 	}
 }
 
-bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
+bool BodyMorphInterface::Impl_HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -143,9 +142,9 @@ bool BodyMorphInterface::HasBodyMorph(TESObjectREFR * actor, SKEEFixedString mor
 	return false;
 }
 
-float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName)
+float BodyMorphInterface::Impl_GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -179,9 +178,9 @@ float BodyMorphInterface::GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString m
 	return 0.0;
 }
 
-bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey)
+bool BodyMorphInterface::Impl_HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -200,9 +199,9 @@ bool BodyMorphInterface::HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString 
 	return false;
 }
 
-void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey)
+void BodyMorphInterface::Impl_ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -219,9 +218,9 @@ void BodyMorphInterface::ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedStri
 	}
 }
 
-bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName)
+bool BodyMorphInterface::Impl_HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -237,9 +236,9 @@ bool BodyMorphInterface::HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString
 	return false;
 }
 
-void BodyMorphInterface::ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName)
+void BodyMorphInterface::Impl_ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -253,9 +252,9 @@ void BodyMorphInterface::ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedStr
 	}
 }
 
-void BodyMorphInterface::ClearMorphs(TESObjectREFR * actor)
+void BodyMorphInterface::Impl_ClearMorphs(TESObjectREFR * actor)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -265,9 +264,9 @@ void BodyMorphInterface::ClearMorphs(TESObjectREFR * actor)
 	}
 }
 
-bool BodyMorphInterface::HasMorphs(TESObjectREFR * actor)
+bool BodyMorphInterface::Impl_HasMorphs(TESObjectREFR * actor)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	SimpleLocker locker(&actorMorphs.m_lock);
 	auto & it = actorMorphs.m_data.find(handle);
@@ -1129,12 +1128,12 @@ bool MorphCache::CacheFile(const char * relativePath)
 	return false;
 }
 
-void BodyMorphInterface::SetCacheLimit(UInt32 limit)
+void BodyMorphInterface::Impl_SetCacheLimit(UInt32 limit)
 {
 	morphCache.memoryLimit = limit;
 }
 
-void BodyMorphInterface::ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool attach)
+void BodyMorphInterface::Impl_ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool attach)
 {
 	if(!refr || !rootNode) {
 #ifdef _DEBUG
@@ -1152,7 +1151,7 @@ void BodyMorphInterface::ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * root
 	}
 }
 
-void BodyMorphInterface::ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate)
+void BodyMorphInterface::Impl_ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate)
 {
 #ifdef _DEBUG
 	_DMESSAGE("%s - Updating morphs for %08X.", __FUNCTION__, refr->formID);
@@ -1218,9 +1217,9 @@ void NIOVTaskUpdateSkinPartition::Run()
 	}
 }
 
-void BodyMorphInterface::VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)> functor)
+void BodyMorphInterface::Impl_VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)> functor)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
@@ -1231,9 +1230,9 @@ void BodyMorphInterface::VisitMorphs(TESObjectREFR * actor, std::function<void(S
 	}
 }
 
-void BodyMorphInterface::VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor)
+void BodyMorphInterface::Impl_VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor)
 {
-	UInt64 handle = g_overrideInterface.GetHandle(actor, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 	auto & it = actorMorphs.m_data.find(handle);
 	if (it != actorMorphs.m_data.end())
 	{
@@ -1249,7 +1248,7 @@ void BodyMorphInterface::VisitKeys(TESObjectREFR * actor, SKEEFixedString name, 
 }
 
 
-void BodyMorphInterface::UpdateModelWeight(TESObjectREFR * refr, bool immediate)
+void BodyMorphInterface::Impl_UpdateModelWeight(TESObjectREFR * refr, bool immediate)
 {
 	Actor * actor = DYNAMIC_CAST(refr, TESObjectREFR, Actor);
 	if(actor) {
@@ -1265,7 +1264,7 @@ void BodyMorphInterface::UpdateModelWeight(TESObjectREFR * refr, bool immediate)
 	}
 }
 
-bool BodyMorphInterface::ReadBodyMorphTemplates(SKEEFixedString filePath)
+bool BodyMorphInterface::Impl_ReadBodyMorphTemplates(SKEEFixedString filePath)
 {
 	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
@@ -1411,7 +1410,7 @@ void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], c
 		TESNPC * npc = nullptr;
 		if ((*g_dataHandler)->npcs.GetNthItem(i, npc))
 		{
-			bool matchMod = modInfo ? modInfo->IsFormInMod(npc->formID) : false;
+			bool matchMod = modInfo ? modInfo->IsFormInMod(npc->formID) : true;
 
 			bool matchRace = (raceFilter == nullptr || npc->race.race == raceFilter);
 			if (npc && npc->nextTemplate == nullptr && matchMod && matchRace)
@@ -1428,7 +1427,7 @@ void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], c
 	}
 }
 
-bool BodyMorphInterface::ReadBodyMorphs(SKEEFixedString filePath)
+bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 {
 	BSResourceNiBinaryStream file(filePath.c_str());
 	if (!file.IsValid()) {
@@ -1734,7 +1733,7 @@ UInt32 BodyGenDataTemplates::Evaluate(std::function<void(SKEEFixedString, float)
 	return total;
 }
 
-UInt32 BodyMorphInterface::EvaluateBodyMorphs(TESObjectREFR * actor)
+UInt32 BodyMorphInterface::Impl_EvaluateBodyMorphs(TESObjectREFR * actor)
 {
 	TESNPC * actorBase = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
 	if (actorBase) {
@@ -1762,7 +1761,7 @@ UInt32 BodyMorphInterface::EvaluateBodyMorphs(TESObjectREFR * actor)
 	return 0;
 }
 
-void BodyMorphInterface::VisitStrings(std::function<void(SKEEFixedString)> functor)
+void BodyMorphInterface::Impl_VisitStrings(std::function<void(SKEEFixedString)> functor)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
 	for (auto & i1 : actorMorphs.m_data) {
@@ -1775,11 +1774,11 @@ void BodyMorphInterface::VisitStrings(std::function<void(SKEEFixedString)> funct
 	}
 }
 
-void BodyMorphInterface::VisitActors(std::function<void(TESObjectREFR*)> functor)
+void BodyMorphInterface::Impl_VisitActors(std::function<void(TESObjectREFR*)> functor)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
 	for (auto & actor : actorMorphs.m_data) {
-		TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(actor.first, TESObjectREFR::kTypeID);
+		TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(actor.first, TESObjectREFR::kTypeID);
 		if (refr) {
 			functor(refr);
 		}
@@ -2100,7 +2099,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 	{
 		m_data.insert_or_assign(newHandle, morphMap);
 
-		TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+		TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 
 #ifdef _DEBUG
 		if (refr)

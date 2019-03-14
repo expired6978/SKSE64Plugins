@@ -303,12 +303,12 @@ typedef std::shared_ptr<BodyGenDataTemplates> BodyGenDataTemplatesPtr;
 
 typedef std::unordered_map<TESNPC*, BodyGenDataTemplatesPtr> BodyGenData;
 
-class BodyMorphInterface : public IPluginInterface
+class BodyMorphInterface : public IBodyMorphInterface
 {
 public:
 	enum
 	{
-		kCurrentPluginVersion = 3,
+		kCurrentPluginVersion = 4,
 		kSerializationVersion1 = 1,
 		kSerializationVersion2 = 2,
 		kSerializationVersion3 = 3,
@@ -317,45 +317,84 @@ public:
 	virtual UInt32 GetVersion();
 
 	// Serialization
-	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
-	virtual void Revert();
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	virtual void Revert() override;
+
+	virtual void SetMorph(TESObjectREFR * actor, const char * morphName, const char * morphKey, float relative) override { Impl_SetMorph(actor, morphName, morphKey, relative); }
+	virtual float GetMorph(TESObjectREFR * actor, const char * morphName, const char * morphKey) override { return Impl_GetMorph(actor, morphName, morphKey); }
+	virtual void ClearMorph(TESObjectREFR * actor, const char * morphName, const char * morphKey) override { Impl_ClearMorph(actor, morphName, morphKey); }
+
+	virtual float GetBodyMorphs(TESObjectREFR * actor, const char * morphName) override { return Impl_GetBodyMorphs(actor, morphName); }
+	virtual void ClearBodyMorphNames(TESObjectREFR * actor, const char * morphName) override { Impl_ClearBodyMorphNames(actor, morphName); }
+
+	virtual void VisitMorphValues(TESObjectREFR * actor, MorphValueVisitor & visitor) override
+	{
+		Impl_VisitMorphs(actor, [&](SKEEFixedString key, std::unordered_map<StringTableItem, float> * map)
+		{
+			for (auto & item : *map)
+			{
+				visitor.Visit(actor, key, item.first->c_str(), item.second);
+			}
+		});
+	}
+
+	virtual void VisitMorphs(TESObjectREFR * actor, MorphVisitor & visitor) override { Impl_VisitMorphs(actor, [&](SKEEFixedString key, std::unordered_map<StringTableItem, float> * map) { visitor.Visit(actor, key); }); }
+	virtual void VisitKeys(TESObjectREFR * actor, const char * name, MorphKeyVisitor & visitor) override { Impl_VisitKeys(actor, name, [&](SKEEFixedString key, float value) { visitor.Visit(key, value); }); }
+
+	virtual void ClearMorphs(TESObjectREFR * actor) override { Impl_ClearMorphs(actor); }
+
+	virtual void ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false) override { Impl_ApplyVertexDiff(refr, rootNode, erase); }
+
+	virtual void ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true) override { Impl_ApplyBodyMorphs(refr, deferUpdate); }
+	virtual void UpdateModelWeight(TESObjectREFR * refr, bool immediate = false) override { Impl_UpdateModelWeight(refr, immediate); }
+
+	virtual void SetCacheLimit(UInt32 limit) override { Impl_SetCacheLimit(limit); }
+	virtual bool HasMorphs(TESObjectREFR * actor) override { return Impl_HasMorphs(actor); }
+	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor) override { return Impl_EvaluateBodyMorphs(actor); }
+
+	virtual bool HasBodyMorph(TESObjectREFR * actor, const char * morphName, const char * morphKey) override { return Impl_HasBodyMorph(actor, morphName, morphKey); }
+	virtual bool HasBodyMorphName(TESObjectREFR * actor, const char * morphName) override { return Impl_HasBodyMorphName(actor, morphName); }
+	virtual bool HasBodyMorphKey(TESObjectREFR * actor, const char * morphKey) override { return Impl_HasBodyMorphKey(actor, morphKey); }
+	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, const char * morphKey) override { Impl_ClearBodyMorphKeys(actor, morphKey); }
+	virtual void VisitStrings(StringVisitor & visitor) override { Impl_VisitStrings([&visitor](SKEEFixedString key) { visitor.Visit(key); }); }
+	virtual void VisitActors(ActorVisitor & visitor) override { Impl_VisitActors([&visitor](TESObjectREFR* actor) { visitor.Visit(actor); }); }
 
 	void LoadMods();
 
-	virtual void SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative);
-	virtual float GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
-	virtual void ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
-
-	virtual float GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName);
-	virtual void ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName);
-
-	virtual void VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString, std::unordered_map<StringTableItem, float> *)> functor);
-	virtual void VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor);
-
-	virtual void ClearMorphs(TESObjectREFR * actor);
-
-	virtual void ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
-
-	virtual void ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true);
-	virtual void UpdateModelWeight(TESObjectREFR * refr, bool immediate = false);
-
-	virtual void SetCacheLimit(UInt32 limit);
-	virtual bool HasMorphs(TESObjectREFR * actor);
-
-	virtual bool ReadBodyMorphs(SKEEFixedString filePath);
-	virtual bool ReadBodyMorphTemplates(SKEEFixedString filePath);
-	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor);
-
-	virtual bool HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
-	virtual bool HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName);
-	virtual bool HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey);
-	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey);
-	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
-	virtual void VisitActors(std::function<void(TESObjectREFR*)> functor);
-
-protected:
+private:
 	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter);
+
+	void Impl_SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative);
+	float Impl_GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
+	void Impl_ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
+
+	float Impl_GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName);
+	void Impl_ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName);
+
+	void Impl_VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString, std::unordered_map<StringTableItem, float> *)> functor);
+	void Impl_VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor);
+
+	void Impl_ClearMorphs(TESObjectREFR * actor);
+
+	void Impl_ApplyVertexDiff(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false);
+
+	void Impl_ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true);
+	void Impl_UpdateModelWeight(TESObjectREFR * refr, bool immediate = false);
+
+	void Impl_SetCacheLimit(UInt32 limit);
+	bool Impl_HasMorphs(TESObjectREFR * actor);
+
+	bool Impl_ReadBodyMorphs(SKEEFixedString filePath);
+	bool Impl_ReadBodyMorphTemplates(SKEEFixedString filePath);
+	UInt32 Impl_EvaluateBodyMorphs(TESObjectREFR * actor);
+
+	bool Impl_HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);
+	bool Impl_HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName);
+	bool Impl_HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey);
+	void Impl_ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey);
+	void Impl_VisitStrings(std::function<void(SKEEFixedString)> functor);
+	void Impl_VisitActors(std::function<void(TESObjectREFR*)> functor);
 
 private:
 	ActorMorphs	actorMorphs;
@@ -364,4 +403,6 @@ private:
 	BodyGenData	bodyGenData[2];
 
 	friend class NIOVTaskUpdateMorph;
+	friend class NIOVTaskUpdateModelWeight;
+	friend class FaceMorphInterface;
 };

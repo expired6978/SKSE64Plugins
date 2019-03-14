@@ -29,11 +29,11 @@ void CDXMesh::Release()
 	m_vertCount = 0;
 	m_indexCount = 0;
 	m_visible = false;
-	if(m_vertexBuffer) {
+	if (m_vertexBuffer) {
 		m_vertexBuffer->Release();
 		m_vertexBuffer = nullptr;
 	}
-	if(m_indexBuffer) {
+	if (m_indexBuffer) {
 		m_indexBuffer->Release();
 		m_indexBuffer = nullptr;
 	}
@@ -82,14 +82,14 @@ bool CDXMesh::IsVisible()
 	return m_visible;
 }
 
-ID3D11Buffer * CDXMesh::GetVertexBuffer()
+ID3D11Buffer* CDXMesh::GetVertexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_vertexBuffer;
 }
-ID3D11Buffer * CDXMesh::GetIndexBuffer()
+ID3D11Buffer* CDXMesh::GetIndexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -301,16 +301,31 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	HRESULT result;
 
 	m_pDevice = device;
+	if (!device) {
+		_ERROR("%s - No device found to create brushes", __FUNCTION__);
+		return false;
+	}
+
 	m_vertCount = vertexCount;
 	m_indexCount = indexCount;
 
 	auto pDevice = device->GetDevice();
+	if (!pDevice) {
+		_ERROR("%s - No device3 found", __FUNCTION__);
+		return false;
+	}
+
 	auto pDeviceContext = device->GetDeviceContext();
+	if (!pDevice) {
+		_ERROR("%s - No device deviceContext4 found", __FUNCTION__);
+		return false;
+	}
 
 	// Create the vertex array.
 	m_vertices = new CDXMeshVert[m_vertCount];
 	if (!m_vertices)
 	{
+		_ERROR("%s - Failed to create vertex array", __FUNCTION__);
 		return false;
 	}
 
@@ -318,6 +333,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	m_indices = new CDXMeshIndex[m_indexCount];
 	if (!m_indices)
 	{
+		_ERROR("%s - Failed to create index array", __FUNCTION__);
 		return false;
 	}
 
@@ -341,6 +357,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, &m_vertexBuffer);
 	if (FAILED(result))
 	{
+		_ERROR("%s - Failed to create vertex buffer", __FUNCTION__);
 		return false;
 	}
 
@@ -361,6 +378,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, &m_indexBuffer);
 	if (FAILED(result))
 	{
+		_ERROR("%s - Failed to create index buffer", __FUNCTION__);
 		return false;
 	}
 

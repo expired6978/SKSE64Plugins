@@ -21,6 +21,7 @@
 #include "BodyMorphInterface.h"
 #include "OverrideVariant.h"
 #include "ShaderUtilities.h"
+#include "Utilities.h"
 
 extern OverlayInterface					g_overlayInterface;
 extern OverrideInterface				g_overrideInterface;
@@ -816,7 +817,7 @@ bool OverlayInterface::HasOverlays(TESObjectREFR * reference)
 	if(reference == (*g_thePlayer)) // Always true for the player
 		return true;
 
-	UInt64 handle = g_overrideInterface.GetHandle(reference, reference->formType);
+	UInt64 handle = VirtualMachine::GetHandle(reference, reference->formType);
 	auto & it = overlays.find(handle);
 	if(it != overlays.end())
 		return true;
@@ -886,7 +887,7 @@ void OverlayInterface::RemoveOverlays(TESObjectREFR * reference)
 		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
 	}
 
-	UInt64 handle = g_overrideInterface.GetHandle(reference, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
 	overlays.erase(handle);
 }
 
@@ -899,7 +900,7 @@ void OverlayInterface::AddOverlays(TESObjectREFR * reference)
 	_DMESSAGE("%s Installing Overlays to %08X", __FUNCTION__, reference->formID);
 #endif
 
-	UInt64 handle = g_overrideInterface.GetHandle(reference, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
 	overlays.insert(handle);
 
 	if (g_enableOverlays)
@@ -974,7 +975,7 @@ void OverlayInterface::AddOverlays(TESObjectREFR * reference)
 void OverlayInterface::Revert()
 {
 	for (auto & handle : overlays) {
-		TESObjectREFR * reference = static_cast<TESObjectREFR *>(g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID));
+		TESObjectREFR * reference = static_cast<TESObjectREFR *>(VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID));
 		if (reference) {
 			RevertOverlays(reference, true);
 		}
@@ -1026,7 +1027,7 @@ bool OverlayHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	_DMESSAGE("%s - Loading overlay for %016llX", __FUNCTION__, newHandle);
 #endif
 
-	TESObjectREFR * refr = static_cast<TESObjectREFR*>(g_overrideInterface.GetObject(newHandle, TESObjectREFR::kTypeID));
+	TESObjectREFR * refr = static_cast<TESObjectREFR*>(VirtualMachine::GetObject(newHandle, TESObjectREFR::kTypeID));
 	if(refr)
 		g_overlayInterface.AddOverlays(refr);
 

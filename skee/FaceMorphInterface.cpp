@@ -2087,7 +2087,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 
 	// Collect body morph data
 	PresetData::BodyMorphData bodyMorphData;
-	g_bodyMorphInterface.VisitMorphs(player, [&](SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)
+	g_bodyMorphInterface.Impl_VisitMorphs(player, [&](SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)
 	{
 		for (auto & it : *map)
 		{

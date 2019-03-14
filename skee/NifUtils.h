@@ -48,8 +48,7 @@ BSGeometry * GetHeadGeometry(Actor * actor, UInt32 partType);
 void ExportTintMaskDDS(Actor * actor, BSFixedString filePath);
 NiAVObject * GetObjectByHeadPart(BSFaceGenNiNode * faceNode, BGSHeadPart * headPart);
 
-void SaveSourceDDS(NiSourceTexture * pkSrcTexture, const char * pcFileName);
-void SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName);
+bool SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName);
 
 bool VisitObjects(NiAVObject * parent, std::function<bool(NiAVObject*)> functor);
 

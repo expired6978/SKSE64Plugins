@@ -15,3 +15,9 @@ public:
 private:
 	LPCRITICAL_SECTION m_cs;
 };
+
+namespace VirtualMachine
+{
+	UInt64 GetHandle(void * src, UInt32 typeID);
+	void * GetObject(UInt64 handle, UInt32 typeID);
+}

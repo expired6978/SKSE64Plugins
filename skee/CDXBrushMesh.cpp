@@ -11,7 +11,10 @@ CDXBrushMesh::CDXBrushMesh() : CDXMesh()
 	m_vertexShader = nullptr;
 	m_pixelShader = nullptr;
 	m_solidState = nullptr;
+	m_matrixBuffer = nullptr;
 	m_layout = nullptr;
+	m_sphere.m_vertexBuffer = nullptr;
+	m_sphere.m_indexBuffer = nullptr;
 }
 
 bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor, XMVECTOR dotColor, const ShaderFileData & vertexShaderData, const ShaderFileData & pixelShaderData)
@@ -20,25 +23,40 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	static const float RADIUS = 1.0f;
 	static const float RADIUS_STEP = 5.0f * (XM_PI / 180.0f);
 
-	ID3DBlob* vertexShaderBuffer;
-	ID3DBlob* pixelShaderBuffer;
+	ID3DBlob* vertexShaderBuffer = nullptr;
+	ID3DBlob* pixelShaderBuffer = nullptr;
 	D3D11_BUFFER_DESC vertexBufferDesc, indexBufferDesc;
 	D3D11_SUBRESOURCE_DATA vertexData, indexData;
 	HRESULT result;
 
 	m_pDevice = device;
+	if (!device) {
+		_ERROR("%s - No device found to create brushes", __FUNCTION__);
+		return false;
+	}
+
 	m_vertCount = NUM_VERTS;
 	m_indexCount = NUM_VERTS;
 
 	m_dashed = dashed;
 
 	auto pDevice = device->GetDevice();
+	if (!pDevice) {
+		_ERROR("%s - No device3 found", __FUNCTION__);
+		return false;
+	}
+
 	auto pDeviceContext = device->GetDeviceContext();
+	if (!pDevice) {
+		_ERROR("%s - No device deviceContext4 found", __FUNCTION__);
+		return false;
+	}
 
 	// Create the vertex array.
 	m_primitive = new ColoredPrimitive[m_vertCount];
 	if (!m_primitive)
 	{
+		_ERROR("%s - Failed to initialize colored primitive with %d vertices", __FUNCTION__, m_vertCount);
 		return false;
 	}
 
@@ -46,6 +64,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	m_indices = new CDXMeshIndex[m_indexCount];
 	if (!m_indices)
 	{
+		_ERROR("%s - Failed to initialize %d indices", __FUNCTION__, m_indexCount);
 		return false;
 	}
 
@@ -138,6 +157,12 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 		return false;
 	}
 
+	if (!vertexShaderBuffer)
+	{
+		_ERROR("%s - Failed to acquire vertex shader buffer", __FUNCTION__);
+		return false;
+	}
+
 	// Create the vertex shader from the buffer.
 	result = pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_vertexShader);
 	if (FAILED(result))
@@ -146,12 +171,17 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 		return false;
 	}
 
-
 	// Compile the pixel shader code.
 	result = CompileShaderFromData(pixelShaderData.pSrcData, pixelShaderData.SrcDataSize, pixelShaderData.pSourceName, "BrushPShader", "ps_5_0", &pixelShaderBuffer, nullptr);
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to compile pixel shader", __FUNCTION__);
+		return false;
+	}
+
+	if (!pixelShaderBuffer)
+	{
+		_ERROR("%s - Failed to acquire pixel shader buffer", __FUNCTION__);
 		return false;
 	}
 
@@ -192,10 +222,10 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	}
 
 	vertexShaderBuffer->Release();
-	vertexShaderBuffer = 0;
+	vertexShaderBuffer = nullptr;
 
 	pixelShaderBuffer->Release();
-	pixelShaderBuffer = 0;
+	pixelShaderBuffer = nullptr;
 
 	// Setup the raster description which will determine how and what polygons will be drawn.
 	D3D11_RASTERIZER_DESC rasterDesc;
@@ -381,32 +411,36 @@ void CDXBrushMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 
 void CDXBrushMesh::Release()
 {
-	__super::Release();
-
-	if (m_pixelShader)
-	{
-		m_pixelShader->Release();
-		m_pixelShader = nullptr;
-	}
-
-	// Release the vertex shader.
-	if (m_vertexShader)
-	{
+	if (m_vertexShader) {
 		m_vertexShader->Release();
 		m_vertexShader = nullptr;
 	}
-
-	if (m_solidState)
-	{
+	if (m_pixelShader) {
+		m_pixelShader->Release();
+		m_pixelShader = nullptr;
+	}
+	if (m_solidState) {
 		m_solidState->Release();
 		m_solidState = nullptr;
 	}
-
-	if (m_layout)
-	{
+	if (m_matrixBuffer) {
+		m_matrixBuffer->Release();
+		m_matrixBuffer = nullptr;
+	}
+	if (m_layout) {
 		m_layout->Release();
 		m_layout = nullptr;
 	}
+	if (m_sphere.m_vertexBuffer) {
+		m_sphere.m_vertexBuffer->Release();
+		m_sphere.m_vertexBuffer = nullptr;
+	}
+	if (m_sphere.m_indexBuffer) {
+		m_sphere.m_indexBuffer->Release();
+		m_sphere.m_indexBuffer = nullptr;
+	}
+	
+	__super::Release();
 }
 
 bool CDXBrushMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)

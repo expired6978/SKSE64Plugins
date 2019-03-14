@@ -249,6 +249,7 @@ public:
 	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<void(ColorMap*)> overrides);
 	virtual void ManageTints() { m_maskMap.ManageRenderTargetGroups(); }
 	virtual void ReleaseTints() { m_maskMap.ReleaseRenderTargetGroups(); }
+	virtual void Revert() { };
 
 	void CreateTintsFromData(tArray<TintMask*> & masks, UInt32 size, const char ** textureData, SInt32 * colorData, float * alphaData, ColorMap & overrides);
 	void ReleaseTintsFromData(tArray<TintMask*> & masks);

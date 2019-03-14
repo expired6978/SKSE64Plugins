@@ -20,111 +20,90 @@
 #include "skse64/NiTextures.h"
 #include "skse64/NiExtraData.h"
 
+#include <wrl/client.h>
 #include <d3d11_4.h>
 #include <DirectXTex.h>
 
-#ifdef FIXME
-#include <d3dx9.h>
-#pragma comment(lib, "d3dx9.lib")
-
-typedef NiSourceTexture * (* _NiRenderedTextureToNiSourceTexture)(NiRenderedTexture * texture, bool bRGBA);
-const _NiRenderedTextureToNiSourceTexture NiRenderedTextureToNiSourceTexture = (_NiRenderedTextureToNiSourceTexture)0x00C8CD60;
-UInt8 * g_bAlwaysCreateRendererData = (UInt8 *)0x012C5D48; // This is set as 1 in 0x00C6DBF0 (SetupRenderer)
-
-void SaveSourceDDS(NiSourceTexture * pkSrcTexture, const char * pcFileName)
+bool SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
 {
-	if(!pkSrcTexture)
-		return;
-
-	LPDIRECT3DTEXTURE9 pkD3DTexture = NULL;
-	D3DLOCKED_RECT pkLockedTexture;
-
-	UInt32 uiWidth = pkSrcTexture->GetWidth();
-	UInt32 uiHeight = pkSrcTexture->GetHeight();
-
-	ID3D11Device * pkD3DDevice9 = (ID3D11Device *)NiDX9Renderer::GetSingleton()->m_pkD3DDevice9;
-	if (D3DXCreateTexture(pkD3DDevice9, uiWidth, uiHeight, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &pkD3DTexture) != -1)
+	HRESULT res = 0;
+	if (!pkTexture)
 	{
-		if(!pkD3DTexture) {
-			// Failed to create texture
-			return;
-		}
-
-		if (pkSrcTexture)
-		{
-			NiPixelData * pkPixelData = pkSrcTexture->pixelData;
-			if(pkPixelData)
-			{
-				if (pkD3DTexture->LockRect(0, &pkLockedTexture, 0, 0) != -1)
-				{
-					UInt8 * pucSrc = pkPixelData->GetPixels();
-					UInt8 * pucDest = (UInt8 *)pkLockedTexture.pBits;
-
-					for (UInt32 y = 0; y < uiHeight; y++)
-					{
-						for (UInt32 x = 0; x < uiWidth; x++)
-						{
-							pucDest[0] = pucSrc[0]; // A
-							pucDest[1] = pucSrc[1]; // R
-							pucDest[2] = pucSrc[2]; // G
-							pucDest[3] = pucSrc[3]; // B
-
-							pucDest+=4;
-							pucSrc+=4;
-						}
-					}
-				}
-
-				pkD3DTexture->UnlockRect(0);
-				D3DXSaveTextureToFile(pcFileName, D3DXIFF_DDS, pkD3DTexture, 0);
-			}
-		}
-
-		pkD3DTexture->Release();
+		_ERROR("%s - Texture to render from", __FUNCTION__);
+		return false;
 	}
-}
 
-void SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
-{
-	UInt8 oldVal = *g_bAlwaysCreateRendererData;
-	*g_bAlwaysCreateRendererData = 0; // Need to set this to 0 because NiSourceTexture is inited with flag DestroyAppData = 0x04, and CreateRenderData checks this
-	NiSourceTexture * pkSrcTexture = NiRenderedTextureToNiSourceTexture(pkTexture, 1);
-	*g_bAlwaysCreateRendererData = oldVal;
-
-	SaveSourceDDS(pkSrcTexture, pcFileName);
-}
-#endif
-
-void SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
-{
-	if (pkTexture->rendererData)
+	auto rendererData = pkTexture->rendererData;
+	if (!rendererData)
 	{
-		auto texture = pkTexture->rendererData;
-		if (texture)
+		_ERROR("%s - No rendererData on NiTexture", __FUNCTION__);
+		return false;
+	}
+	
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+	Microsoft::WRL::ComPtr<ID3D11Resource> resource = rendererData->texture;
+	if (resource)
+	{
+		texture = rendererData->texture;
+	}
+	else if (!resource && rendererData->resourceView) // Didn't have texture directly but still has resource view, acquire it
+	{
+		rendererData->resourceView->GetResource(&resource);
+		res = resource->QueryInterface(__uuidof(ID3D11Texture2D), &texture);
+		if (FAILED(res))
 		{
-			auto context = g_renderManager->context;
-			ID3D11Device * device = nullptr;
-			context->GetDevice(&device);
-
-			DirectX::ScratchImage si;
-			if (texture->texture)
-			{
-				DirectX::CaptureTexture(device, context, texture->texture, si);
-			}
-
-			auto image = si.GetImage(0, 0, 0);
-			if (image)
-			{
-				size_t len = strlen(pcFileName) + 1;
-				wchar_t * fileName = new wchar_t[len];
-				memset(fileName, 0, sizeof(len) * 2);
-				size_t converted = 0;
-				mbstowcs_s(&converted, fileName, len, pcFileName, len * 2);
-				DirectX::SaveToDDSFile(*image, DirectX::DDS_FLAGS_NONE, fileName);
-				delete[] fileName;
-			}
+			_ERROR("%s - Failed to query texture from resource", __FUNCTION__);
+			return false;
 		}
 	}
+
+	if (!texture)
+	{
+		_ERROR("%s - No texture to capture", __FUNCTION__);
+		return false;
+	}
+
+	auto context = g_renderManager->context;
+
+	Microsoft::WRL::ComPtr<ID3D11Device> device;
+	context->GetDevice(&device);
+	if (!device)
+	{
+		_ERROR("%s - No texture to capture", __FUNCTION__);
+		return false;
+	}
+
+	DirectX::ScratchImage si;
+	res = DirectX::CaptureTexture(device.Get(), context, texture.Get(), si);
+	if (FAILED(res))
+	{
+		_ERROR("%s - Failed to capture texture from device", __FUNCTION__);
+		return false;
+	}
+
+	auto image = si.GetImage(0, 0, 0);
+	if (!image)
+	{
+		_ERROR("%s - Failed to acquire image from scratch", __FUNCTION__);
+		return false;
+	}
+
+	size_t len = strlen(pcFileName) + 1;
+	wchar_t * fileName = new wchar_t[len];
+	memset(fileName, 0, sizeof(len) * 2);
+	size_t converted = 0;
+	mbstowcs_s(&converted, fileName, len, pcFileName, len * 2);
+					
+	res = DirectX::SaveToDDSFile(*image, DirectX::DDS_FLAGS_NONE, fileName);
+	if (FAILED(res))
+	{
+		delete[] fileName;
+		_ERROR("%s - Failed to save image to DDS at %s", __FUNCTION__, pcFileName);
+		return false;
+	}
+
+	delete[] fileName;
+	return true;
 }
 
 BSGeometry * GetHeadGeometry(Actor * actor, UInt32 partType)

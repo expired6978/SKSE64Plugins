@@ -16,12 +16,12 @@
 #include "ShaderUtilities.h"
 #include "OverrideInterface.h"
 #include "NifUtils.h"
+#include "Utilities.h"
 
 extern SKSETaskInterface	* g_task;
 extern SKSEMessagingInterface * g_messaging;
 extern TintMaskInterface	g_tintMaskInterface;
 extern ItemDataInterface	g_itemDataInterface;
-extern OverrideInterface	g_overrideInterface;
 
 UInt32 ItemDataInterface::GetVersion()
 {
@@ -655,8 +655,8 @@ void ItemDataInterface::Save(SKSESerializationInterface * intfc, UInt32 kVersion
 		TESForm * ownerForm = LookupFormByID(ownerFormId);
 		TESForm * itemForm = LookupFormByID(itemFormId);
 
-		UInt64 ownerHandle = g_overrideInterface.GetHandle(ownerForm, TESForm::kTypeID);
-		UInt64 itemHandle = g_overrideInterface.GetHandle(itemForm, TESForm::kTypeID);
+		UInt64 ownerHandle = VirtualMachine::GetHandle(ownerForm, TESForm::kTypeID);
+		UInt64 itemHandle = VirtualMachine::GetHandle(itemForm, TESForm::kTypeID);
 		
 		intfc->WriteRecordData(&rankId, sizeof(rankId));
 		intfc->WriteRecordData(&uid, sizeof(uid));

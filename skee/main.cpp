@@ -19,13 +19,14 @@
 #include "skse64/ScaleformCallbacks.h"
 #include "skse64/ScaleformMovie.h"
 
-#include "IPluginInterface.h"
+#include "PluginInterface.h"
 #include "OverrideInterface.h"
 #include "OverlayInterface.h"
 #include "BodyMorphInterface.h"
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
+#include "ActorUpdateManager.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -55,7 +56,7 @@ SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
 
 // Handlers
-IInterfaceMap				g_interfaceMap;
+InterfaceMap				g_interfaceMap;
 DyeMap						g_dyeMap;
 OverrideInterface			g_overrideInterface;
 TintMaskInterface			g_tintMaskInterface;
@@ -64,6 +65,7 @@ BodyMorphInterface			g_bodyMorphInterface;
 ItemDataInterface			g_itemDataInterface;
 NiTransformInterface		g_transformInterface;
 FaceMorphInterface			g_morphInterface;
+ActorUpdateManager			g_actorUpdateManager;
 PartSet	g_partSet;
 
 StringTable g_stringTable;
@@ -509,65 +511,6 @@ bool RegisterPapyrusFunctions(VMClassRegistry * registry)
 	return true;
 }
 
-class SKSEObjectLoadSink : public BSTEventSink<TESObjectLoadedEvent>
-{
-public:
-	virtual ~SKSEObjectLoadSink() {}	// todo?
-	virtual	EventResult ReceiveEvent(TESObjectLoadedEvent * evn, EventDispatcher<TESObjectLoadedEvent> * dispatcher)
-	{
-		if (evn) {
-			TESForm * form = LookupFormByID(evn->formId);
-			if (form) {
-				if (g_enableBodyGen && form->formType == Character::kTypeID) {
-					TESObjectREFR * reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
-					if (reference) {
-						if (!g_bodyMorphInterface.HasMorphs(reference)) {
-							UInt32 total = g_bodyMorphInterface.EvaluateBodyMorphs(reference);
-							if (total) {
-								_DMESSAGE("%s - Applied %d morph(s) to %s", __FUNCTION__, total, CALL_MEMBER_FN(reference, GetReferenceName)());
-								g_bodyMorphInterface.UpdateModelWeight(reference);
-							}
-						}
-					}
-				}
-
-				if (g_enableAutoTransforms) {
-					UInt64 handle = g_overrideInterface.GetHandle(form, TESObjectREFR::kTypeID);
-					g_transformInterface.SetHandleNodeTransforms(handle);
-				}
-			}
-		}
-		return kEvent_Continue;
-	};
-};
-
-SKSEObjectLoadSink	g_objectLoadSink;
-
-class SKSEInitScriptSink : public BSTEventSink < TESInitScriptEvent >
-{
-public:
-	virtual ~SKSEInitScriptSink() {}	// todo?
-	virtual	EventResult ReceiveEvent(TESInitScriptEvent * evn, EventDispatcher<TESInitScriptEvent> * dispatcher)
-	{
-		if (evn) {
-			TESObjectREFR * reference = evn->reference;
-			if (reference && g_enableBodyInit) {
-				if (reference->formType == Character::kTypeID) {
-					if (!g_bodyMorphInterface.HasMorphs(reference)) {
-						UInt32 total = g_bodyMorphInterface.EvaluateBodyMorphs(reference);
-						if (total) {
-							_DMESSAGE("%s - Applied %d morph(s) to %s", __FUNCTION__, total, CALL_MEMBER_FN(reference, GetReferenceName)());
-						}
-					}
-				}
-			}
-		}
-		return kEvent_Continue;
-	};
-};
-
-SKSEInitScriptSink g_initScriptSink;
-
 void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 {
 	switch (message->type)
@@ -575,7 +518,7 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 		case SKSEMessagingInterface::kMessage_InputLoaded:
 		{
 			if (g_enableAutoTransforms || g_enableBodyGen) {
-				GetEventDispatcherList()->objectLoadedDispatcher.AddEventSink(&g_objectLoadSink);
+				GetEventDispatcherList()->objectLoadedDispatcher.AddEventSink(&g_actorUpdateManager);
 			}
 		}
 		break;
@@ -590,7 +533,7 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 		case SKSEMessagingInterface::kMessage_DataLoaded:
 		{
 			if (g_enableBodyGen) {
-				GetEventDispatcherList()->initScriptDispatcher.AddEventSink(&g_initScriptSink);
+				GetEventDispatcherList()->initScriptDispatcher.AddEventSink(&g_actorUpdateManager);
 
 				g_bodyMorphInterface.LoadMods();
 			}
@@ -641,9 +584,9 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_62)
+	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_73)
 	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_62;
+		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_73;
 		char buf[512];
 		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
 			GET_EXE_VERSION_MAJOR(runtimeVersion),

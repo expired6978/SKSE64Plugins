@@ -2,9 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="IPluginInterface.cpp">
-      <Filter>interfaces</Filter>
-    </ClCompile>
     <ClCompile Include="ItemDataInterface.cpp">
       <Filter>interfaces</Filter>
     </ClCompile>
@@ -251,6 +248,15 @@
     <ClCompile Include="CDXNifMaterial.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
+    <ClCompile Include="ActorUpdateManager.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="Utilities.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="PluginInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
@@ -315,9 +321,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="IPluginInterface.h">
-      <Filter>interfaces</Filter>
-    </ClInclude>
     <ClInclude Include="ItemDataInterface.h">
       <Filter>interfaces</Filter>
     </ClInclude>
@@ -578,6 +581,15 @@
     </ClInclude>
     <ClInclude Include="Utilities.h">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="ActorUpdateManager.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="PluginInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="IPluginInterface.h">
+      <Filter>interfaces</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

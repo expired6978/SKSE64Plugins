@@ -57,7 +57,16 @@ bool CDXNifScene::Setup(const CDXInitParams & initParams)
 		Release();
 
 	auto device = initParams.device->GetDevice();
+	if (!device) {
+		_ERROR("%s - Failed to acquire device3", __FUNCTION__);
+		return false;
+	}
+
 	auto deviceContext = initParams.device->GetDeviceContext();
+	if (!deviceContext) {
+		_ERROR("%s - Failed to acquire deviceContext4", __FUNCTION__);
+		return false;
+	}
 
 	ShaderFileData brushShader;
 
@@ -110,7 +119,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 
 	auto rendererData = m_renderTexture->rendererData = new NiTexture::RendererData(width, height);
 
-	D3D11_TEXTURE2D_DESC1 textureDesc;
+	D3D11_TEXTURE2D_DESC textureDesc;
 	ZeroMemory(&textureDesc, sizeof(textureDesc));
 
 	textureDesc.Width = width;
@@ -124,7 +133,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 	textureDesc.CPUAccessFlags = 0;
 	textureDesc.MiscFlags = 0;
 
-	HRESULT result = device->CreateTexture2D1(&textureDesc, NULL, &rendererData->texture);
+	HRESULT result = device->CreateTexture2D(&textureDesc, NULL, &rendererData->texture);
 	if (FAILED(result)) {
 		_ERROR("%s - Failed to create render texture.", __FUNCTION__);
 		return false;
@@ -142,14 +151,14 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 		return false;
 	}
 
-	D3D11_SHADER_RESOURCE_VIEW_DESC1 shaderResourceViewDesc;
+	D3D11_SHADER_RESOURCE_VIEW_DESC shaderResourceViewDesc;
 	ZeroMemory(&shaderResourceViewDesc, sizeof(shaderResourceViewDesc));
 	shaderResourceViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	shaderResourceViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	shaderResourceViewDesc.Texture2D.MostDetailedMip = 0;
 	shaderResourceViewDesc.Texture2D.MipLevels = 1;
 
-	result = device->CreateShaderResourceView1(rendererData->texture, &shaderResourceViewDesc, &rendererData->resourceView);
+	result = device->CreateShaderResourceView(rendererData->texture, &shaderResourceViewDesc, &rendererData->resourceView);
 	if (FAILED(result)) {
 		_ERROR("%s - Failed to create shader resource view.", __FUNCTION__);
 		return false;

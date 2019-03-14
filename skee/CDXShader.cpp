@@ -116,6 +116,12 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 		return false;
 	}
 
+	if (!vertexShaderBuffer)
+	{
+		_ERROR("%s - Failed to acquire vertex shader buffer", __FUNCTION__);
+		return false;
+	}
+
 	// Create the vertex shader from the buffer.
 	result = pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_vertexShader);
 	if (FAILED(result))
@@ -123,7 +129,6 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 		_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
 		return false;
 	}
-
 
 	// Compile the pixel shader code.
 	result = CompileShaderFromData(initParams.pixelShader.pSrcData, initParams.pixelShader.SrcDataSize, initParams.pixelShader.pSourceName, "LightPixelShader", "ps_5_0", &pixelShaderBuffer, &errorMessage);
@@ -135,6 +140,12 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 			OutputShaderErrorMessage(errorMessage, errors);
 		}
 		_ERROR("%s - Failed to compile pixel shader %s", __FUNCTION__, errors.str().c_str());
+		return false;
+	}
+
+	if (!pixelShaderBuffer)
+	{
+		_ERROR("%s - Failed to acquire pixel shader buffer", __FUNCTION__);
 		return false;
 	}
 

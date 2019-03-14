@@ -18,6 +18,7 @@
 #include "NiTransformInterface.h"
 
 #include "ShaderUtilities.h"
+#include "Utilities.h"
 
 extern SKSETaskInterface	* g_task;
 extern OverrideInterface	g_overrideInterface;
@@ -143,7 +144,7 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 
-		UInt64 handle = g_overrideInterface.GetHandle(refr, TESObjectREFR::kTypeID);
+		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 		g_overrideInterface.SetHandleProperties(handle, false);
 	}
 
@@ -236,7 +237,7 @@ namespace papyrusNiOverride
 
 	void ApplyNodeOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
-		UInt64 handle = g_overrideInterface.GetHandle(refr, TESObjectREFR::kTypeID);
+		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 		return g_overrideInterface.SetHandleNodeProperties(handle, false);
 	}
 
@@ -351,7 +352,7 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 
-		UInt64 handle = g_overrideInterface.GetHandle(refr, TESObjectREFR::kTypeID);
+		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 		g_overrideInterface.SetHandleWeaponProperties(handle, false);
 	}
 
@@ -455,7 +456,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return;
 
-		UInt64 handle = g_overrideInterface.GetHandle(refr, TESObjectREFR::kTypeID);
+		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 		g_overrideInterface.SetHandleSkinProperties(handle, false);
 	}
 
@@ -763,21 +764,44 @@ namespace papyrusNiOverride
 	VMResultArray<TESObjectREFR*> GetMorphedReferences(StaticFunctionTag* base)
 	{
 		VMResultArray<TESObjectREFR*> results;
-		g_bodyMorphInterface.VisitActors([&](TESObjectREFR* refr)
-		{
-			results.push_back(refr);
-		});
 
+		class Visitor : public BodyMorphInterface::ActorVisitor
+		{
+		public:
+			Visitor(VMResultArray<TESObjectREFR*> * res) : result(res) { }
+
+			virtual void Visit(TESObjectREFR * ref) override
+			{
+				result->push_back(ref);
+			}
+		private:
+			VMResultArray<TESObjectREFR*> * result;
+		};
+
+		Visitor visitor(&results);
+		g_bodyMorphInterface.VisitActors(visitor);
 		return results;
 	}
 
 	void ForEachMorphedReference(StaticFunctionTag* base, BSFixedString eventName, TESForm * receiver)
 	{
-		g_bodyMorphInterface.VisitActors([&](TESObjectREFR* refr)
+		class Visitor : public BodyMorphInterface::ActorVisitor
 		{
-			MorpedReferenceEventFunctor fn(eventName, receiver, refr);
-			fn.Run();
-		});
+		public:
+			Visitor(BSFixedString eventName, TESForm * receiver) : m_eventName(eventName), m_receiver(receiver) { }
+
+			virtual void Visit(TESObjectREFR * refr) override
+			{
+				MorpedReferenceEventFunctor fn(m_eventName, m_receiver, refr);
+				fn.Run();
+			}
+		private:
+			BSFixedString m_eventName;
+			TESForm * m_receiver;
+		};
+
+		Visitor visitor(eventName, receiver);
+		g_bodyMorphInterface.VisitActors(visitor);
 	}
 
 	void UpdateModelWeight(StaticFunctionTag* base, TESObjectREFR * refr)
@@ -1267,11 +1291,21 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_bodyMorphInterface.VisitMorphs(refr, [&](SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)
+		class Visitor : public BodyMorphInterface::MorphVisitor
 		{
-			result.push_back(name);
-		});
+		public:
+			Visitor(VMResultArray<BSFixedString> * res) : result(res) { }
 
+			virtual void Visit(TESObjectREFR * ref, const char* name) override
+			{
+				result->push_back(name);
+			}
+		private:
+			VMResultArray<BSFixedString> * result;
+		};
+
+		Visitor visitor(&result);
+		g_bodyMorphInterface.VisitMorphs(refr, visitor);
 		return result;
 	}
 
@@ -1281,10 +1315,21 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_bodyMorphInterface.VisitKeys(refr, morphName, [&](SKEEFixedString name, float value)
+		class Visitor : public BodyMorphInterface::MorphKeyVisitor
 		{
-			result.push_back(name);
-		});
+		public:
+			Visitor(VMResultArray<BSFixedString> * res) : result(res) { }
+
+			virtual void Visit(const char* name, float values) override
+			{
+				result->push_back(name);
+			}
+		private:
+			VMResultArray<BSFixedString> * result;
+		};
+
+		Visitor visitor(&result);
+		g_bodyMorphInterface.VisitKeys(refr, morphName, visitor);
 
 		return result;
 	}

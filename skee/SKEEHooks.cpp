@@ -68,33 +68,33 @@ extern bool					g_externalHeads;
 extern bool					g_extendedMorphs;
 extern bool					g_allowAllMorphs;
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAE60);
+RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAC70);
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
-RelocAddr <_RegenerateHead> RegenerateHead(0x003D2C50);
+RelocAddr <_RegenerateHead> RegenerateHead(0x003D2A60);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E10030);
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01DEA030);
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x015B08A0);
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x01596850);
 
 // DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00857000);
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856E10);
 
 // 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2410);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC950);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4A10);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2220);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC760);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4820);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360A30);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360C20);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360840);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360A30);
 
 typedef void(*_RaceSexMenu_Render)(RaceSexMenu * menu);
-RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E9E0);
+RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E7F0);
 
-typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
-extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
+typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
+RelocAddr<_UpdateHeadState> UpdateHeadState(0x00362E90);
 
 void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObject * resultNode1, NiAVObject * resultNode2, UInt32 firstPerson)
 {
@@ -130,6 +130,9 @@ void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObje
 }
 
 #ifdef FIXME
+typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
+extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
+
 // Store stack values here, they would otherwise be lost
 enum
 {
@@ -467,6 +470,20 @@ bool BSLightingShaderProperty_Hooked::HasFlags_Hooked(UInt32 flags)
 		}
 	}
 
+	return ret;
+}
+
+SInt32 UpdateHeadState_Enable_Hooked(TESNPC * npc, Actor * actor, UInt32 unk1)
+{
+	SInt32 ret = UpdateHeadState(npc, actor, unk1);
+	InstallFaceOverlayHook(actor, true, g_immediateFace);
+	return ret;
+}
+
+SInt32 UpdateHeadState_Disabled_Hooked(TESNPC * npc, Actor * actor, UInt32 unk1)
+{
+	SInt32 ret = UpdateHeadState(npc, actor, unk1);
+	InstallFaceOverlayHook(actor, false, g_immediateFace);
 	return ret;
 }
 
@@ -1055,20 +1072,26 @@ bool InstallSKEEHooks()
 		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 		return false;
 	}
+
+	RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
+	g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
+
+	RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00364FF0 + 0x33E);
+	g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5420 + 0x9FB);
+	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
-	RelocAddr <uintptr_t> AddSlider_Target(0x08B6010 + 0x37E4);
+	RelocAddr <uintptr_t> AddSlider_Target(0x008B5E20 + 0x37E4);
 	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x08B6010 + 0x3CD5);
+	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x008B5E20 + 0x3CD5);
 	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x08B1DB0 + 0x4F); // ChangeDoubleMorph callback
+	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008B1BC0 + 0x4F); // ChangeDoubleMorph callback
 	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 	
-	RelocAddr<uintptr_t> SliderLookup_Target(0x08B6010 + 0x3895);
+	RelocAddr<uintptr_t> SliderLookup_Target(0x008B5E20 + 0x3895);
 	{
 		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
 			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1099,9 +1122,9 @@ bool InstallSKEEHooks()
 
 	if (!g_externalHeads)
 	{
-		RelocAddr<uintptr_t> PreprocessedHeads1_Target(0x00363FD0 + 0x58);
-		RelocAddr<uintptr_t> PreprocessedHeads2_Target(0x00363FD0 + 0x81);
-		RelocAddr<uintptr_t> PreprocessedHeads3_Target(0x00363FD0 + 0x67);
+		RelocAddr<uintptr_t> PreprocessedHeads1_Target(0x00363DE0 + 0x58);
+		RelocAddr<uintptr_t> PreprocessedHeads2_Target(0x00363DE0 + 0x81);
+		RelocAddr<uintptr_t> PreprocessedHeads3_Target(0x00363DE0 + 0x67);
 		{
 			struct UsePreprocessedHeads_Entry_Code : Xbyak::CodeGenerator {
 				UsePreprocessedHeads_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1176,31 +1199,31 @@ bool InstallSKEEHooks()
 
 	if (g_extendedMorphs)
 	{
-		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D2570 + 0xF3);
+		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D2380 + 0xF3);
 		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D47A0 + 0x56);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D45B0 + 0x56);
 		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
 	}
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D26E0 + 0xC7);
+	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D24F0 + 0xC7);
 	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC3B0 + 0x79);
+	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC1C0 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016D4CC8 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC78 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		RelocAddr <uintptr_t> Cache_Target(0x008B2DD0);
+		RelocAddr <uintptr_t> Cache_Target(0x008B2BE0);
 		SafeWrite8(Cache_Target.GetUIntPtr(), 0xC3); // Cache immediate retn
-		RelocAddr <uintptr_t> CacheClear_Target(0x008B2F50);
+		RelocAddr <uintptr_t> CacheClear_Target(0x008B2D60);
 		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn
 	}
 
-	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C7180 + 0xB4A);
+	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C6F90 + 0xB4A);
 	{
 		struct ArmorAddonHook_Entry_Code : Xbyak::CodeGenerator {
 			ArmorAddonHook_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)

@@ -75,7 +75,7 @@ public:
 	void SetTexture(int index, ID3D11ShaderResourceView* texture);
 	ID3D11ShaderResourceView** GetTextures() { return m_pTextures; }
 
-	ID3D11BlendState1* GetBlendingState(CDXD3DDevice * device);
+	ID3D11BlendState* GetBlendingState(CDXD3DDevice * device);
 
 	void SetWireframeColor(DirectX::XMFLOAT4 color);
 	DirectX::XMFLOAT4 & GetWireframeColor();
@@ -164,7 +164,7 @@ public:
 
 protected:
 	ID3D11ShaderResourceView * m_pTextures[5];
-	ID3D11BlendState1* m_blendingState;
+	ID3D11BlendState* m_blendingState;
 	bool m_blendingDirty;
 
 	DirectX::XMFLOAT4 m_wireframeColor;

@@ -163,6 +163,7 @@
     <ClCompile Include="..\skse64\ScaleformTypes.cpp" />
     <ClCompile Include="..\skse64\ScaleformValue.cpp" />
     <ClCompile Include="..\skse64\ScaleformVM.cpp" />
+    <ClCompile Include="ActorUpdateManager.cpp" />
     <ClCompile Include="BodyMorphInterface.cpp" />
     <ClCompile Include="CDXBrush.cpp" />
     <ClCompile Include="CDXBrushMesh.cpp" />
@@ -185,7 +186,7 @@
     <ClCompile Include="CDXUndo.cpp" />
     <ClCompile Include="FileUtils.cpp" />
     <ClCompile Include="SKEEHooks.cpp" />
-    <ClCompile Include="IPluginInterface.cpp" />
+    <ClCompile Include="PluginInterface.cpp" />
     <ClCompile Include="ItemDataInterface.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="FaceMorphInterface.cpp" />
@@ -205,6 +206,7 @@
     <ClCompile Include="StringTable.cpp" />
     <ClCompile Include="TintMaskInterface.cpp" />
     <ClCompile Include="tinyxml2.cpp" />
+    <ClCompile Include="Utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\skse64\GameAPI.h" />
@@ -249,6 +251,7 @@
     <ClInclude Include="..\skse64\ScaleformTypes.h" />
     <ClInclude Include="..\skse64\ScaleformValue.h" />
     <ClInclude Include="..\skse64\ScaleformVM.h" />
+    <ClInclude Include="ActorUpdateManager.h" />
     <ClInclude Include="BodyMorphInterface.h" />
     <ClInclude Include="CDXBrush.h" />
     <ClInclude Include="CDXBrushMesh.h" />
@@ -273,9 +276,10 @@
     <ClInclude Include="CDXUndo.h" />
     <ClInclude Include="FileUtils.h" />
     <ClInclude Include="half.hpp" />
+    <ClInclude Include="IPluginInterface.h" />
     <ClInclude Include="SKEEHooks.h" />
     <ClInclude Include="IHashType.h" />
-    <ClInclude Include="IPluginInterface.h" />
+    <ClInclude Include="PluginInterface.h" />
     <ClInclude Include="ItemDataInterface.h" />
     <ClInclude Include="FaceMorphInterface.h" />
     <ClInclude Include="NifUtils.h" />

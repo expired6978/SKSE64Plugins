@@ -251,9 +251,6 @@ public:
 	virtual void AddRawNodeOverride(UInt64 handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
 	virtual void AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
 
-	UInt64 GetHandle(void * src, UInt32 typeID);
-	void * GetObject(UInt64 handle, UInt32 typeID);
-
 	// Applies all properties for a handle
 	void SetHandleProperties(UInt64 handle, bool immediate);
 

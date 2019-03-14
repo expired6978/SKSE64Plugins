@@ -21,15 +21,35 @@ HRESULT CompileShaderFromData(LPCVOID pSrcData, _In_ SIZE_T SrcDataSize, _In_opt
 		NULL, NULL
 	};
 
-	HMODULE d3dcompiler = GetModuleHandle("d3dcompiler_43.dll"); // Try to find the compiler matching the DirectX version Skyrim SE is built on
+	char name[MAX_PATH];
+	const char * versions[] = {
+		"43",
+		"42",
+		"44",
+		"45",
+		"46",
+		"47",
+		"46e"
+	};
+
+	HMODULE d3dcompiler = 0;
+	for (UInt32 i = 0; i < sizeof(versions) / sizeof(const char*); ++i)
+	{
+		_snprintf_s(name, MAX_PATH, "d3dcompiler_%s.dll", versions[i]);
+		d3dcompiler = LoadLibrary(name);
+		if (d3dcompiler)
+			break;
+	}
+
 	if (!d3dcompiler) {
-		d3dcompiler = GetModuleHandle("d3dcompiler_42.dll"); // Alt that seems to also be shipped with SE
+		_ERROR("%s - Failed to find d3dcompiler module", __FUNCTION__);
+		return E_NOINTERFACE;
 	}
 
 	_D3DCompile compile = (_D3DCompile)GetProcAddress(d3dcompiler, "D3DCompile");
 	if (!compile) {
-		_ERROR("Failed to find d3dcompiler");
-		return ERROR_API_UNAVAILABLE;
+		_ERROR("%s - Failed to find D3DCompile function", __FUNCTION__);
+		return E_NOINTERFACE;
 	}
 
 	ID3DBlob* shaderBlob = nullptr;

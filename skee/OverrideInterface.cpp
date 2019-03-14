@@ -6,6 +6,7 @@
 #include "OverrideVariant.h"
 #include "StringTable.h"
 #include "NifUtils.h"
+#include "Utilities.h"
 
 #include "skse64/GameReferences.h"
 #include "skse64/GameObjects.h"
@@ -35,9 +36,9 @@ void OverrideInterface::AddRawOverride(UInt64 handle, bool isFemale, UInt64 armo
 
 void OverrideInterface::AddOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant & value)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
-	UInt64 armorHandle = GetHandle(armor, armor->formType);
-	UInt64 addonHandle = GetHandle(addon, addon->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
+	UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
+	UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 	armorData.Lock();
 	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].erase(value);
 	armorData.m_data[handle][isFemale ? 1 : 0][armorHandle][addonHandle][g_stringTable.GetString(nodeName)].insert(value);
@@ -54,7 +55,7 @@ void OverrideInterface::AddRawNodeOverride(UInt64 handle, bool isFemale, BSFixed
 
 void OverrideInterface::AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, OverrideVariant & value)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	nodeData.Lock();
 	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].erase(value);
 	nodeData.m_data[handle][isFemale ? 1 : 0][g_stringTable.GetString(nodeName)].insert(value);
@@ -71,8 +72,8 @@ void OverrideInterface::AddRawWeaponOverride(UInt64 handle, bool isFemale, bool 
 
 void OverrideInterface::AddWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant & value)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
-	UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
+	UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 	weaponData.Lock();
 	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].erase(value);
 	weaponData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][weaponHandle][g_stringTable.GetString(nodeName)].insert(value);
@@ -89,23 +90,23 @@ void OverrideInterface::AddRawSkinOverride(UInt64 handle, bool isFemale, bool fi
 
 void OverrideInterface::AddSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	AddRawSkinOverride(handle, isFemale, firstPerson, slotMask, value);
 }
 
 OverrideVariant * OverrideInterface::GetOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&armorData.m_lock);
 	auto & it = armorData.m_data.find(handle);
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto & ait = it->second[gender].find(armorHandle);
 		if(ait != it->second[gender].end())
 		{
-			UInt64 addonHandle = GetHandle(addon, addon->formType);
+			UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
@@ -131,7 +132,7 @@ OverrideVariant * OverrideInterface::GetOverride(TESObjectREFR * refr, bool isFe
 OverrideVariant * OverrideInterface::GetNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&nodeData.m_lock);
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
@@ -156,12 +157,12 @@ OverrideVariant * OverrideInterface::GetNodeOverride(TESObjectREFR * refr, bool 
 OverrideVariant * OverrideInterface::GetWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&weaponData.m_lock);
 	auto & it = weaponData.m_data.find(handle);
 	if (it != weaponData.m_data.end())
 	{
-		UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+		UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 		auto & ait = it->second[gender][firstPerson].find(weaponHandle);
 		if (ait != it->second[gender][firstPerson].end())
 		{
@@ -186,7 +187,7 @@ OverrideVariant * OverrideInterface::GetWeaponOverride(TESObjectREFR * refr, boo
 OverrideVariant * OverrideInterface::GetSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&skinData.m_lock);
 	auto & it = skinData.m_data.find(handle);
 	if (it != skinData.m_data.end())
@@ -208,47 +209,27 @@ OverrideVariant * OverrideInterface::GetSkinOverride(TESObjectREFR * refr, bool 
 	return NULL;
 }
 
-UInt64 OverrideInterface::GetHandle(void * src, UInt32 typeID)
-{
-	VMClassRegistry		* registry =	(*g_skyrimVM)->GetClassRegistry();
-	IObjectHandlePolicy	* policy =		registry->GetHandlePolicy();
-
-	return policy->Create(typeID, (void*)src);
-}
-
-void * OverrideInterface::GetObject(UInt64 handle, UInt32 typeID)
-{
-	VMClassRegistry		* registry =	(*g_skyrimVM)->GetClassRegistry();
-	IObjectHandlePolicy	* policy =		registry->GetHandlePolicy();
-
-	if(handle == policy->GetInvalidHandle()) {
-		return NULL;
-	}
-
-	return policy->Resolve(typeID, handle);
-}
-
 void OverrideInterface::RemoveAllReferenceOverrides(TESObjectREFR * refr)
 {
-	UInt64 handle = GetHandle(refr, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 	RemoveAllReferenceOverrides(handle);
 }
 
 void OverrideInterface::RemoveAllReferenceNodeOverrides(TESObjectREFR * refr)
 {
-	UInt64 handle = GetHandle(refr, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 	RemoveAllReferenceNodeOverrides(handle);
 }
 
 void OverrideInterface::RemoveAllReferenceWeaponOverrides(TESObjectREFR * refr)
 {
-	UInt64 handle = GetHandle(refr, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 	RemoveAllReferenceWeaponOverrides(handle);
 }
 
 void OverrideInterface::RemoveAllReferenceSkinOverrides(TESObjectREFR * refr)
 {
-	UInt64 handle = GetHandle(refr, TESObjectREFR::kTypeID);
+	UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
 	RemoveAllReferenceSkinOverrides(handle);
 }
 
@@ -283,12 +264,12 @@ void OverrideInterface::RemoveAllReferenceSkinOverrides(UInt64 handle)
 void OverrideInterface::RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&armorData.m_lock);
 	auto & it = armorData.m_data.find(handle);
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto & nit = it->second[gender].find(armorHandle);
 		if(nit != it->second[gender].end()) {
 			nit->second.clear();
@@ -299,16 +280,16 @@ void OverrideInterface::RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFem
 void OverrideInterface::RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&armorData.m_lock);
 	auto & it = armorData.m_data.find(handle);
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto & ait = it->second[gender].find(armorHandle);
 		if(ait != it->second[gender].end())
 		{
-			UInt64 addonHandle = GetHandle(addon, addon->formType);
+			UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
@@ -321,16 +302,16 @@ void OverrideInterface::RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool 
 void OverrideInterface::RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&armorData.m_lock);
 	auto & it = armorData.m_data.find(handle);
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto & ait = it->second[gender].find(armorHandle);
 		if(ait != it->second[gender].end())
 		{
-			UInt64 addonHandle = GetHandle(addon, addon->formType);
+			UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
@@ -347,16 +328,16 @@ void OverrideInterface::RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, b
 void OverrideInterface::RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&armorData.m_lock);
 	auto & it = armorData.m_data.find(handle);
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto & ait = it->second[gender].find(armorHandle);
 		if(ait != it->second[gender].end())
 		{
-			UInt64 addonHandle = GetHandle(addon, addon->formType);
+			UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 			auto & dit = ait->second.find(addonHandle);
 			if(dit != ait->second.end())
 			{
@@ -380,7 +361,7 @@ void OverrideInterface::RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFe
 void OverrideInterface::RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&nodeData.m_lock);
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
@@ -396,7 +377,7 @@ void OverrideInterface::RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool is
 void OverrideInterface::RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&nodeData.m_lock);
 	auto & it = nodeData.m_data.find(handle);
 	if(it != nodeData.m_data.end())
@@ -419,12 +400,12 @@ void OverrideInterface::RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, 
 void OverrideInterface::RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&weaponData.m_lock);
 	auto & it = weaponData.m_data.find(handle);
 	if(it != weaponData.m_data.end())
 	{
-		UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+		UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 		WeaponRegistration::iterator ait = it->second[gender][firstPerson ? 1 : 0].find(weaponHandle);
 		if(ait != it->second[gender][firstPerson ? 1 : 0].end())
 		{
@@ -438,12 +419,12 @@ void OverrideInterface::RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&weaponData.m_lock);
 	auto & it = weaponData.m_data.find(handle);
 	if(it != weaponData.m_data.end())
 	{
-		UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+		UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weaponHandle);
 		if(ait != it->second[gender][firstPerson].end())
 		{
@@ -461,12 +442,12 @@ void OverrideInterface::RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&weaponData.m_lock);
 	auto & it = weaponData.m_data.find(handle);
 	if(it != weaponData.m_data.end())
 	{
-		UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+		UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weaponHandle);
 		if(ait != it->second[gender][firstPerson].end())
 		{
@@ -489,7 +470,7 @@ void OverrideInterface::RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale
 void OverrideInterface::RemoveAllSkinOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask)
 {
 	UInt8 gender = isFemale ? 1 : 0;
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&skinData.m_lock);
 	auto & it = skinData.m_data.find(handle);
 	if (it != skinData.m_data.end())
@@ -507,7 +488,7 @@ void OverrideInterface::RemoveSkinOverride(TESObjectREFR * refr, bool isFemale, 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	SimpleLocker locker(&skinData.m_lock);
 	auto & it = skinData.m_data.find(handle);
 	if (it != skinData.m_data.end())
@@ -764,7 +745,7 @@ void OverrideInterface::GetSkinProperty(TESObjectREFR * refr, bool firstPerson, 
 
 void OverrideInterface::SetHandleProperties(UInt64 handle, bool immediate)
 {
-	TESObjectREFR * refr = (TESObjectREFR *)GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if(!refr) {
 		return;
 	}
@@ -785,13 +766,13 @@ void OverrideInterface::SetHandleProperties(UInt64 handle, bool immediate)
 	{
 		for(ArmorRegistration::iterator ait = it->second[gender].begin(); ait != it->second[gender].end(); ++ait) // Loop Armors
 		{
-			TESObjectARMO * armor = (TESObjectARMO *)GetObject(ait->first, TESObjectARMO::kTypeID);
+			TESObjectARMO * armor = (TESObjectARMO *)VirtualMachine::GetObject(ait->first, TESObjectARMO::kTypeID);
 			if(!armor)
 				continue;
 
 			for(AddonRegistration::iterator dit = ait->second.begin(); dit != ait->second.end(); ++dit) // Loop Addons
 			{
-				TESObjectARMA * addon = (TESObjectARMA *)GetObject(dit->first, TESObjectARMA::kTypeID);
+				TESObjectARMA * addon = (TESObjectARMA *)VirtualMachine::GetObject(dit->first, TESObjectARMA::kTypeID);
 				if(!addon)
 					continue;
 
@@ -854,7 +835,7 @@ void OverrideInterface::GetNodeProperty(TESObjectREFR * refr, bool firstPerson, 
 
 void OverrideInterface::SetHandleNodeProperties(UInt64 handle, bool immediate)
 {
-	TESObjectREFR * refr = (TESObjectREFR *)GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if(!refr) {
 		return;
 	}
@@ -902,7 +883,7 @@ void OverrideInterface::SetHandleNodeProperties(UInt64 handle, bool immediate)
 
 void OverrideInterface::SetHandleWeaponProperties(UInt64 handle, bool immediate)
 {
-	TESObjectREFR * refr = (TESObjectREFR *)GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		return;
 	}
@@ -922,7 +903,7 @@ void OverrideInterface::SetHandleWeaponProperties(UInt64 handle, bool immediate)
 		{
 			for (WeaponRegistration::iterator ait = it->second[gender][i].begin(); ait != it->second[gender][i].end(); ++ait) // Loop Armors
 			{
-				TESObjectWEAP * weapon = (TESObjectWEAP *)GetObject(ait->first, TESObjectWEAP::kTypeID);
+				TESObjectWEAP * weapon = (TESObjectWEAP *)VirtualMachine::GetObject(ait->first, TESObjectWEAP::kTypeID);
 				if (!weapon)
 					continue;
 
@@ -968,7 +949,7 @@ void OverrideInterface::SetHandleWeaponProperties(UInt64 handle, bool immediate)
 
 void OverrideInterface::SetHandleSkinProperties(UInt64 handle, bool immediate)
 {
-	TESObjectREFR * refr = (TESObjectREFR *)GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		return;
 	}
@@ -1044,7 +1025,7 @@ void OverrideInterface::SetHandleSkinProperties(UInt64 handle, bool immediate)
 
 void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(SKEEFixedString, OverrideVariant&)> functor)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	
 	UInt8 gender = 0;
 	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -1066,7 +1047,7 @@ void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(SKEE
 
 void OverrideInterface::VisitSkin(TESObjectREFR * refr, bool isFemale, bool firstPerson, std::function<void(UInt32, OverrideVariant&)> functor)
 {
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 
 	UInt8 fp = firstPerson ? 1 : 0;
 	UInt8 gender = 0;
@@ -1090,7 +1071,7 @@ void OverrideInterface::VisitSkin(TESObjectREFR * refr, bool isFemale, bool firs
 /*
 void OverrideInterface::SetHandleArmorAddonProperties(UInt64 handle, UInt64 armorHandle, UInt64 addonHandle, bool immediate)
 {
-	TESObjectREFR * refr = (TESObjectREFR *)GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if(!refr) {
 		armorData.Lock();
 		armorData.m_data.erase(handle);
@@ -1107,7 +1088,7 @@ void OverrideInterface::SetHandleArmorAddonProperties(UInt64 handle, UInt64 armo
 	ActorRegistrationMapHolder::RegMap::iterator it = armorData.m_data.find(handle); // Find ActorHandle
 	if(it != armorData.m_data.end())
 	{
-		TESObjectARMO * armor = (TESObjectARMO *)GetObject(armorHandle, TESObjectARMO::kTypeID);
+		TESObjectARMO * armor = (TESObjectARMO *)VirtualMachine::GetObject(armorHandle, TESObjectARMO::kTypeID);
 		if(!armor) {
 			armorData.Lock();
 			armorData.m_data[handle][gender].erase(armorHandle);
@@ -1118,7 +1099,7 @@ void OverrideInterface::SetHandleArmorAddonProperties(UInt64 handle, UInt64 armo
 		ArmorRegistration::iterator ait = it->second[gender].find(armorHandle); // Find ArmorHandle
 		if(ait != it->second[gender].end())
 		{
-			TESObjectARMA * addon = (TESObjectARMA *)GetObject(addonHandle, TESObjectARMA::kTypeID);
+			TESObjectARMA * addon = (TESObjectARMA *)VirtualMachine::GetObject(addonHandle, TESObjectARMA::kTypeID);
 			if(!addon) {
 				armorData.Lock();
 				armorData.m_data[handle][gender][armorHandle].erase(addonHandle);
@@ -1323,7 +1304,7 @@ void OverrideInterface::ApplyNodeOverrides(TESObjectREFR * refr, NiAVObject * ob
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&nodeData.m_lock);
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto & nit = nodeData.m_data.find(handle);
 	if(nit != nodeData.m_data.end()) {
 		NodeOverrideApplicator applicator(&nit->second[gender], immediate);
@@ -1339,15 +1320,15 @@ void OverrideInterface::ApplyOverrides(TESObjectREFR * refr, TESObjectARMO * arm
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&armorData.m_lock);
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto & it = armorData.m_data.find(handle); // Find ActorHandle
 	if(it != armorData.m_data.end())
 	{
-		UInt64 armorHandle = GetHandle(armor, armor->formType);
+		UInt64 armorHandle = VirtualMachine::GetHandle(armor, armor->formType);
 		auto ait = it->second[gender].find(armorHandle); // Find ArmorHandle
 		if(ait != it->second[gender].end())
 		{
-			UInt64 addonHandle = GetHandle(addon, addon->formType);
+			UInt64 addonHandle = VirtualMachine::GetHandle(addon, addon->formType);
 			auto dit = ait->second.find(addonHandle); // Find AddonHandle
 			if(dit != ait->second.end())
 			{
@@ -1367,11 +1348,11 @@ void OverrideInterface::ApplyWeaponOverrides(TESObjectREFR * refr, bool firstPer
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&weaponData.m_lock);
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto it = weaponData.m_data.find(handle); // Find ActorHandle
 	if(it != weaponData.m_data.end())
 	{
-		UInt64 weaponHandle = GetHandle(weapon, weapon->formType);
+		UInt64 weaponHandle = VirtualMachine::GetHandle(weapon, weapon->formType);
 		auto ait = it->second[gender][firstPerson ? 1 : 0].find(weaponHandle); // Find WeaponHandle
 		if(ait != it->second[gender][firstPerson ? 1 : 0].end())
 		{
@@ -1390,7 +1371,7 @@ void OverrideInterface::ApplySkinOverrides(TESObjectREFR * refr, bool firstPerso
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&skinData.m_lock);
-	UInt64 handle = GetHandle(refr, refr->formType);
+	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 	auto it = skinData.m_data.find(handle); // Find ActorHandle
 	if (it != skinData.m_data.end())
 	{
@@ -2255,7 +2236,7 @@ bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 
 	}
 
 	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		*outHandle = 0;
 		return error;
@@ -2340,7 +2321,7 @@ bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 
 	}
 
 	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		*outHandle = 0;
 		return error;
@@ -2414,7 +2395,7 @@ bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32
 	}
 
 	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		*outHandle = 0;
 		return error;
@@ -2488,7 +2469,7 @@ bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 k
 	}
 
 	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)g_overrideInterface.GetObject(handle, TESObjectREFR::kTypeID);
+	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
 	if (!refr) {
 		*outHandle = 0;
 		return error;

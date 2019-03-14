@@ -55,7 +55,7 @@ void CDXMaterial::SetTexture(int index, ID3D11ShaderResourceView* texture)
 		m_pTextures[index]->AddRef();
 }
 
-ID3D11BlendState1* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
+ID3D11BlendState* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
 {
 	if (m_blendingDirty)
 	{
@@ -65,9 +65,9 @@ ID3D11BlendState1* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
 			m_blendingState = nullptr;
 		}
 
-		D3D11_BLEND_DESC1 blendStateDescription;
+		D3D11_BLEND_DESC blendStateDescription;
 		// Clear the blend state description.
-		ZeroMemory(&blendStateDescription, sizeof(D3D11_BLEND_DESC1));
+		ZeroMemory(&blendStateDescription, sizeof(D3D11_BLEND_DESC));
 
 		// Create an alpha enabled blend state description.
 		blendStateDescription.RenderTarget[0].BlendEnable = GetAlphaBlending();
@@ -80,7 +80,7 @@ ID3D11BlendState1* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
 		blendStateDescription.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
 		// Create the blend state using the description.
-		HRESULT result = device->GetDevice()->CreateBlendState1(&blendStateDescription, &m_blendingState);
+		HRESULT result = device->GetDevice()->CreateBlendState(&blendStateDescription, &m_blendingState);
 		if (FAILED(result))
 		{
 			return nullptr;
