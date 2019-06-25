@@ -156,7 +156,7 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_73)
+	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_80)
 	{
 		_MESSAGE("unsupported runtime version %08X", skse->runtimeVersion);
 		return false;
