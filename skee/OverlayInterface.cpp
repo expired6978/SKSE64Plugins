@@ -174,7 +174,28 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 					targetMaterial->ReleaseTextures();
 					CALL_MEMBER_FN(shaderProperty, InvalidateTextures)(0);
 					CALL_MEMBER_FN(shaderProperty, InitializeShader)(targetShape);
-				}				
+
+#if 0
+					for (UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
+					{
+
+						NiTexturePtr * sourceTexture = GetTextureFromIndex(sourceMaterial, i);
+						NiTexturePtr * targetTexture = GetTextureFromIndex(targetMaterial, i);
+
+						if (sourceTexture && targetTexture)
+						{
+							if (!(*sourceTexture))
+							{
+								LoadTexture(sourceMaterial->textureSet->GetTexturePath(i), 1, (*sourceTexture), false);
+							}
+
+							*targetTexture = *sourceTexture;
+						}
+					}
+
+					CALL_MEMBER_FN(shaderProperty, InitializeShader)(targetShape);
+#endif
+				}
 			}
 		}
 

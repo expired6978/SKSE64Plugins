@@ -83,7 +83,7 @@ class ExtraContainerChangesData_Hooked : public ExtraContainerChanges::Data
 {
 public:
 	MEMBER_FN_PREFIX(ExtraContainerChangesData_Hooked);
-	DEFINE_MEMBER_FN(TransferItemUID, void, 0x00000000, BaseExtraList * extraList, TESForm * oldForm, TESForm * newForm, UInt32 unk1);
+	DEFINE_MEMBER_FN(TransferItemUID, void, 0x001ECE20, BaseExtraList * extraList, TESForm * oldForm, TESForm * newForm, UInt32 unk1);
 
 	void TransferItemUID_Hooked(BaseExtraList * extraList, TESForm * oldForm, TESForm * newForm, UInt32 unk1);
 };

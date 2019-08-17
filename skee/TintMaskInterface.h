@@ -3,6 +3,7 @@
 #include "IPluginInterface.h"
 #include "IHashType.h"
 #include "ItemDataInterface.h"
+#include "CDXNifTextureRenderer.h"
 
 struct SKSESerializationInterface;
 
@@ -25,163 +26,24 @@ class BSRenderTargetGroup;
 
 #include <unordered_map>
 #include <functional>
+#include <memory>
 
-/*
-MAKE_NI_POINTER(NiRenderedTexture);
-MAKE_NI_POINTER(BSRenderTargetGroup);
-
-class TintMaskShaderMaterial
+struct ShaderHasher
 {
-public:
-	TintMaskShaderMaterial::TintMaskShaderMaterial()
+	std::size_t operator()(const NiPointer<BSLightingShaderProperty>& k) const
 	{
-		unk04 = 0;
-		unk08 = 0;
-		unk10 = 0;
-		unk14 = 0;
-		unk28 = -1;
-		unk18 = 1.0f;
-		unk1C = 1.0f;
-		unk20 = 1.0f;
-		unk24 = 1.0f;
-		unk30 = 1.0f;
-		unk34 = 1.0f;
-		unk38 = 1.0f;
-		diffuse = NULL;
-		normalMap = NULL;
-		heightMap = NULL;
-		specular = NULL;
-		unk4C = 3;
-		alpha = 1.0f;
-		unk58 = 0.0f;
-		glossiness = 1.0f;
-		specularStrength = 1.0f;
-		lightingEffect1 = 0.0f;
-		lightingEffect2 = 0.0f;
-		unk6C = 0;
-		renderedTexture = NULL;
-		unk74 = NULL;
-		unk78 = NULL;
-
-		// Custom Param
-		renderTarget = NULL;
-	};
-	virtual ~TintMaskShaderMaterial()
-	{
-		CALL_MEMBER_FN(this, dtor)();
-	};
-	virtual TintMaskShaderMaterial * Create(void) { return new TintMaskShaderMaterial; };
-	virtual void Copy(TintMaskShaderMaterial * source)
-	{
-		CALL_MEMBER_FN(this, FnCopy)(source);
-	};
-
-	virtual bool Unk_03(void * unk1) { return CALL_MEMBER_FN(this, Fn03)(unk1); };
-	virtual SInt32 Unk_04(void * unk1) { return CALL_MEMBER_FN(this, Fn04)(unk1); };
-	virtual void * Unk_05(void) { return CALL_MEMBER_FN(this, Fn05)(); };
-	virtual UInt32 GetShaderType(void) { return BSMaskedShaderMaterial::kShaderType_FaceTint; };
-	virtual UInt32 Unk_07(void) { return 2; };	// Always seems to be 2
-	virtual void SetTexture(UInt32 index, BSTextureSet * texture, SInt32 unk1)
-	{
-		CALL_MEMBER_FN(this, FnSetTexture)(index, texture, unk1);
-	};
-	virtual void ReleaseTextures(void)
-	{
-		CALL_MEMBER_FN(this, FnReleaseTextures)();
-	};
-	virtual void Unk_0A(UInt8 unk1, UInt8 unk2, UInt8 unk3, UInt8 unk4, UInt8 unk5, UInt32 unk6, UInt32 unk7) { CALL_MEMBER_FN(this, Fn0A)(unk1, unk2, unk3, unk4, unk5, unk6, unk7); }; // AddRefs
-	virtual void Unk_0B(void * unk1, UInt32 unk2) { CALL_MEMBER_FN(this, Fn0B)(unk1, unk2); };
-	virtual void * Unk_0C(void * unk1) { return CALL_MEMBER_FN(this, Fn0C)(unk1); };
-	virtual void * Unk_0D(void * unk1) { return CALL_MEMBER_FN(this, Fn0D)(unk1); };
-
-	MEMBER_FN_PREFIX(TintMaskShaderMaterial);
-	DEFINE_MEMBER_FN(dtor, void, 0x00C987E0);
-	DEFINE_MEMBER_FN(FnCopy, void, 0x00C98900, TintMaskShaderMaterial * other);
-	DEFINE_MEMBER_FN(Fn03, bool, 0x00C96A30, void * unk1);
-	DEFINE_MEMBER_FN(Fn04, SInt32, 0x00C973C0, void * unk1);
-	DEFINE_MEMBER_FN(Fn05, void *, 0x00C96950);
-	DEFINE_MEMBER_FN(FnSetTexture, void *, 0x00C9A050, UInt32 index, BSTextureSet * texture, SInt32 unk1);
-	DEFINE_MEMBER_FN(FnReleaseTextures, void, 0x00C97460);
-	DEFINE_MEMBER_FN(Fn0A, void, 0x00C989C0, UInt8 unk1, UInt8 unk2, UInt8 unk3, UInt8 unk4, UInt8 unk5, UInt32 unk6, UInt32 unk7);
-	DEFINE_MEMBER_FN(Fn0B, void, 0x00C974E0, void * unk1, UInt32 unk2);
-	DEFINE_MEMBER_FN(Fn0C, void *, 0x00C99990, void * unk1);
-	DEFINE_MEMBER_FN(Fn0D, void *, 0x00C99A90, void * unk1);
-
-	// redirect to formheap
-	static void * operator new(std::size_t size)
-	{
-		return FormHeap_Allocate(size);
+		return (size_t)k.m_pObject;
 	}
+};
 
-	static void * operator new(std::size_t size, const std::nothrow_t &)
-	{
-		return FormHeap_Allocate(size);
-	}
-
-	// placement new
-	static void * operator new(std::size_t size, void * ptr)
-	{
-		return ptr;
-	}
-
-	static void operator delete(void * ptr)
-	{
-		FormHeap_Free(ptr);
-	}
-
-	static void operator delete(void * ptr, const std::nothrow_t &)
-	{
-		FormHeap_Free(ptr);
-	}
-
-	static void operator delete(void *, void *)
-	{
-		// placement delete
-	}
-
-	UInt32	unk04;	// 04 BSIntrusiveRefCounted?
-	UInt32	unk08;	// 08 inited to 0
-	UInt32	unk0C;	// 0C inited to 0
-	UInt32	unk10;	// 10 inited to 0
-	UInt32	unk14;	// 14 inited to 0
-	float	unk18;	// 18 inited to 1.0
-	float	unk1C;	// 1C inited to 1.0
-	float	unk20;	// 20 inited to 1.0
-	float	unk24;	// 24 inited to 1.0
-	SInt32	unk28;	// 28 inited to -1 flags?
-	UInt32	unk2C;	// 2C flags?
-	float	unk30;
-	float	unk34;
-	float	unk38;
-	NiSourceTexture	* diffuse;	// 3C inited to 0
-	NiSourceTexture	* normalMap;	// 40 inited to 0
-	NiSourceTexture	* heightMap;	// 44 inited to 0
-	NiSourceTexture	* specular;	// 48 inited to 0
-	UInt32	unk4C;				// 4C inited to 3
-	BSTextureSetPtr	textureSet;		// 50 inited to 0
-	float	alpha;				// 54 inited to 1.0
-	float	unk58;				// 58 inited to 0
-	float	glossiness;			// 5C inited to 1.0
-	float	specularStrength;	// 60 inited to 1.0
-	float	lightingEffect1;	// 64 inited to 0
-	float	lightingEffect2;	// 68 inited to 0
-	UInt32	unk6C;				// 6C inited to 0
-	NiRenderedTexturePtr renderedTexture;	// 70 inited to 0
-	NiSourceTexture * unk74;				// 74 inited to 0
-	NiSourceTexture * unk78;				// 78 inited to 0
-
-	// Custom Param
-	BSRenderTargetGroupPtr renderTarget;		// 7C
-};*/
-
-typedef std::unordered_map<BSLightingShaderProperty*, NiTexture*> TintMaskCacheMap;
+typedef std::unordered_map<NiPointer<BSLightingShaderProperty>, std::unordered_map<SInt32, std::shared_ptr<CDXNifTextureRenderer>>, ShaderHasher> TintMaskCacheMap;
 
 class TintMaskMap : public SafeDataHolder<TintMaskCacheMap>
 {
 public:
 	void ManageRenderTargetGroups();
-	NiTexture * GetRenderTarget(BSLightingShaderProperty* key);
-	void AddRenderTargetGroup(BSLightingShaderProperty* key, NiTexture* value);
+	std::shared_ptr<CDXNifTextureRenderer> GetRenderTarget(BSLightingShaderProperty* key, SInt32 index);
+	void AddRenderTargetGroup(BSLightingShaderProperty* key, SInt32 index, std::shared_ptr<CDXNifTextureRenderer> value);
 	void ReleaseRenderTargetGroups();
 
 	bool IsCaching() const { return m_caching; }
@@ -190,37 +52,46 @@ private:
 	bool m_caching;
 };
 
-typedef std::vector<const char*> MaskTextureList;
-typedef std::vector<SInt32> MaskColorList;
-typedef std::vector<float> MaskAlphaList;
+typedef std::unordered_map<SInt32, SKEEFixedString>	LayerTextureMap;
+typedef std::unordered_map<SInt32, SInt32>			LayerColorMap;
+typedef std::unordered_map<SInt32, float>			LayerAlphaMap;
+typedef std::unordered_map<SInt32, SKEEFixedString>	LayerBlendMap;
+typedef std::unordered_map<SInt32, UInt8>			TextureTypeMap;
 
-typedef std::tuple<UInt16, UInt16, MaskTextureList, MaskColorList, MaskAlphaList, UInt8> MaskLayerTuple;
+struct TextureLayer
+{
+	LayerTextureMap textures;
+	LayerColorMap colors;
+	LayerAlphaMap alphas;
+	LayerBlendMap blendModes;
+	TextureTypeMap types;
+};
 
 // maps diffuse names to layer data
-class MaskDiffuseMap : public std::unordered_map<const char*, MaskLayerTuple>
+class TextureLayerMap : public std::unordered_map<SKEEFixedString, TextureLayer>
 {
 public:
-	MaskLayerTuple * GetMaskLayers(BSFixedString texture);
+	TextureLayer * GetTextureLayer(SKEEFixedString texture);
 };
 
 // maps trishape names to diffuse names
-class MaskTriShapeMap : public std::unordered_map<const char*, MaskDiffuseMap>
+class MaskTriShapeMap : public std::unordered_map<SKEEFixedString, TextureLayerMap>
 {
 public:
-	MaskDiffuseMap * GetDiffuseMap(BSFixedString triShape);
+	TextureLayerMap * GetTextureMap(SKEEFixedString triShape);
 };
 
 
-typedef std::unordered_map<const char*, MaskTriShapeMap> MaskModelContainer;
+typedef std::unordered_map<SKEEFixedString, MaskTriShapeMap> MaskModelContainer;
 
 // Maps model names to trishape names
 class MaskModelMap : public SafeDataHolder<MaskModelContainer>
 {
 public:
-	MaskLayerTuple * GetMask(BSFixedString nif, BSFixedString trishape, BSFixedString diffuse);
+	TextureLayer * GetMask(SKEEFixedString nif, SKEEFixedString trishape, SKEEFixedString diffuse);
 
-	void ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(BSGeometry*, MaskLayerTuple*)> functor);
-	MaskTriShapeMap * GetTriShapeMap(BSFixedString nifPath);
+	void ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor);
+	MaskTriShapeMap * GetTriShapeMap(SKEEFixedString nifPath);
 };
 
 class TintMaskInterface : public IPluginInterface
@@ -234,25 +105,24 @@ public:
 	};
 	virtual UInt32 GetVersion();
 	
-	struct ObjectMask
+	struct LayerTarget
 	{
-		BSGeometry		* object = NULL;
-		UInt32			layerCount = 0;
-		const char		** textureData = NULL;
-		SInt32			* colorData = NULL;
-		float			* alphaData = NULL;
-		UInt32			resolutionWData = NULL;
-		UInt32			resolutionHData = NULL;
+		NiPointer<BSGeometry>			object;
+		UInt32							targetIndex;
+		LayerTextureMap					textureData;
+		LayerColorMap					colorData;
+		LayerAlphaMap					alphaData;
+		LayerBlendMap					blendData;
+		TextureTypeMap					typeData;
 	};
-	typedef std::vector<ObjectMask> MaskList;
+	typedef std::vector<LayerTarget> LayerTargetList;
 
-	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<void(ColorMap*)> overrides);
+	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
 	virtual void ManageTints() { m_maskMap.ManageRenderTargetGroups(); }
 	virtual void ReleaseTints() { m_maskMap.ReleaseRenderTargetGroups(); }
 	virtual void Revert() { };
 
-	void CreateTintsFromData(tArray<TintMask*> & masks, UInt32 size, const char ** textureData, SInt32 * colorData, float * alphaData, ColorMap & overrides);
-	void ReleaseTintsFromData(tArray<TintMask*> & masks);
+	void CreateTintsFromData(std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides);
 
 	//void ReadTintData();
 	void ReadTintData(LPCTSTR lpFolder, LPCTSTR lpFilePattern);
@@ -265,7 +135,7 @@ public:
 class NIOVTaskDeferredMask : public TaskDelegate
 {
 public:
-	NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<void(ColorMap*)> overrides);
+	NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
 
 	virtual void Run();
 	virtual void Dispose();
@@ -275,6 +145,6 @@ private:
 	UInt32							m_formId;
 	UInt32							m_armorId;
 	UInt32							m_addonId;
-	NiAVObject						* m_object;
-	std::function<void(ColorMap*)>	m_overrides;
+	NiPointer<NiAVObject>			m_object;
+	std::function<std::shared_ptr<ItemAttributeData>()>	m_overrides;
 };

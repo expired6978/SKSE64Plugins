@@ -856,20 +856,85 @@ namespace papyrusNiOverride
 
 	void SetItemDyeColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 maskIndex, UInt32 color)
 	{
-		g_itemDataInterface.SetItemDyeColor(uniqueID, maskIndex, color);
+		g_itemDataInterface.SetItemTextureLayerColor(uniqueID, 0, maskIndex, color);
 	}
 
 	UInt32 GetItemDyeColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 maskIndex)
 	{
-		return g_itemDataInterface.GetItemDyeColor(uniqueID, maskIndex);
+		return g_itemDataInterface.GetItemTextureLayerColor(uniqueID, 0, maskIndex);
 	}
 
 	void ClearItemDyeColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 maskIndex)
 	{
-		g_itemDataInterface.ClearItemDyeColor(uniqueID, maskIndex);
+		g_itemDataInterface.ClearItemTextureLayerColor(uniqueID, 0, maskIndex);
 	}
 
 	void UpdateItemDyeColor(StaticFunctionTag* base, TESObjectREFR * refr, UInt32 uniqueID)
+	{
+		UpdateItemTextureLayers(base, refr, uniqueID);
+	}
+
+	void SetItemTextureLayerColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color)
+	{
+		g_itemDataInterface.SetItemTextureLayerColor(uniqueID, textureIndex, layerIndex, color);
+	}
+
+	UInt32 GetItemTextureLayerColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		return g_itemDataInterface.GetItemTextureLayerColor(uniqueID, textureIndex, layerIndex);
+	}
+
+	void ClearItemTextureLayerColor(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		g_itemDataInterface.ClearItemTextureLayerColor(uniqueID, textureIndex, layerIndex);
+	}
+
+	void SetItemTextureLayerType(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color)
+	{
+		g_itemDataInterface.SetItemTextureLayerType(uniqueID, textureIndex, layerIndex, color);
+	}
+
+	UInt32 GetItemTextureLayerType(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		return g_itemDataInterface.GetItemTextureLayerType(uniqueID, textureIndex, layerIndex);
+	}
+
+	void ClearItemTextureLayerType(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		g_itemDataInterface.ClearItemTextureLayerType(uniqueID, textureIndex, layerIndex);
+	}
+
+	void SetItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, BSFixedString texture)
+	{
+		g_itemDataInterface.SetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex, texture);
+	}
+
+	BSFixedString GetItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		return g_itemDataInterface.GetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex);
+	}
+
+	void ClearItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		g_itemDataInterface.ClearItemTextureLayerTexture(uniqueID, textureIndex, layerIndex);
+	}
+
+	void SetItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, BSFixedString texture)
+	{
+		g_itemDataInterface.SetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex, texture);
+	}
+
+	BSFixedString GetItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		return g_itemDataInterface.GetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex);
+	}
+
+	void ClearItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+	{
+		g_itemDataInterface.ClearItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex);
+	}
+
+	void UpdateItemTextureLayers(StaticFunctionTag* base, TESObjectREFR * refr, UInt32 uniqueID)
 	{
 		if (Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor)) {
 			ModifiedItemIdentifier identifier;
@@ -2129,6 +2194,20 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->SetFunctionFlags("NiOverride", "GetItemDyeColor", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "ClearItemDyeColor", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "UpdateItemDyeColor", VMClassRegistry::kFunctionFlag_NoWait);
+
+	registry->SetFunctionFlags("NiOverride", "SetItemTextureLayerColor", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "GetItemTextureLayerColor", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "ClearItemTextureLayerColor", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "SetItemTextureLayerTexture", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "GetItemTextureLayerTexture", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "ClearItemTextureLayerTexture", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "SetItemTextureLayerBlendMode", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "GetItemTextureLayerBlendMode", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "ClearItemTextureLayerBlendMode", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "SetItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "GetItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "ClearItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "UpdateItemTextureLayer", VMClassRegistry::kFunctionFlag_NoWait);
 
 	registry->SetFunctionFlags("NiOverride", "IsFormDye", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "GetFormDyeColor", VMClassRegistry::kFunctionFlag_NoWait);

@@ -312,15 +312,13 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 #endif
 
 	// Apply no v-diffs if theres no morphs at all
+	NiPointer<NiAVObject> node = resultNode;
 	if (g_bodyMorphInterface.HasMorphs(refr)) {
-		NiAutoRefCounter rf(resultNode);
 		g_bodyMorphInterface.ApplyVertexDiff(refr, resultNode, true);
 	}
 
-	
 	if (g_enableEquippableTransforms)
 	{
-		NiAutoRefCounter rf(resultNode);
 		SkeletonExtender::AddTransforms(refr, isFirstPerson, isFirstPerson ? node1P : node3P, resultNode);
 	}
 
@@ -332,32 +330,27 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 	}
 
 	{
-		NiAutoRefCounter rf(resultNode);
 		g_overrideInterface.ApplyOverrides(refr, params->armor, params->addon, resultNode, g_immediateArmor);
 	}
 
 	{
 		UInt32 armorMask = params->armor->bipedObject.GetSlotMask();
 		UInt32 addonMask = params->addon->biped.GetSlotMask();
-		NiAutoRefCounter rf(resultNode);
 		g_overrideInterface.ApplySkinOverrides(refr, isFirstPerson, params->armor, params->addon, armorMask & addonMask, resultNode, g_immediateArmor);
 	}
 
 	UInt32 armorMask = params->armor->bipedObject.GetSlotMask();
 
-	std::function<void(ColorMap*)> overrideFunc = [=](ColorMap* colorMap)
+	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
 	{
 		Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
 		if (actor) {
 			ModifiedItemIdentifier identifier;
 			identifier.SetSlotMask(armorMask);
-			ItemAttributeData * data = g_itemDataInterface.GetExistingData(actor, identifier);
-			if (data) {
-				if (data->m_tintData) {
-					*colorMap = data->m_tintData->m_colorMap;
-				}
-			}
+			return g_itemDataInterface.GetExistingData(actor, identifier);
 		}
+
+		return std::shared_ptr<ItemAttributeData>();
 	};
 
 	g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, params->armor, params->addon, resultNode, overrideFunc));
@@ -532,23 +525,6 @@ SInt32 TESNPC_Hooked::UpdateHeadState_Hooked(Actor * actor, UInt32 unk1)
 	return ret;
 }
 #endif
-
-class UniqueIDEventHandler : public BSTEventSink <TESUniqueIDChangeEvent>
-{
-public:
-	virtual	EventResult		ReceiveEvent(TESUniqueIDChangeEvent * evn, EventDispatcher<TESUniqueIDChangeEvent> * dispatcher)
-	{
-		if (evn->oldOwnerFormId != 0) {
-			g_itemDataInterface.UpdateUID(evn->oldUniqueId, evn->oldOwnerFormId, evn->newUniqueId, evn->newOwnerFormId);
-		}
-		if (evn->newOwnerFormId == 0) {
-			g_itemDataInterface.EraseByUID(evn->oldUniqueId, evn->oldOwnerFormId);
-		}
-		return EventResult::kEvent_Continue;
-	}
-};
-
-UniqueIDEventHandler			g_uniqueIdEventSink;
 
 #ifdef FIXME
 void SkyrimVM_Hooked::RegisterEventSinks_Hooked()

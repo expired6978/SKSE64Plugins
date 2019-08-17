@@ -7,13 +7,15 @@ class ItemAttributeData;
 #include "skse64/GameThreads.h"
 #include "skse64/GameExtraData.h"
 
+#include "CDXTextureRenderer.h"
 #include "IPluginInterface.h"
+#include "StringTable.h"
 
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <memory>
 
-typedef std::map<SInt32, UInt32> ColorMap;
 
 struct ModifiedItem
 {
@@ -32,7 +34,7 @@ struct ModifiedItem
 		return (pForm && pExtraData);
 	}
 
-	ItemAttributeData * GetAttributeData(TESObjectREFR * reference, bool makeUnique = true, bool allowNewEntry = true, bool allowSelf = false, UInt32 * idOut = NULL);
+	std::shared_ptr<ItemAttributeData> GetAttributeData(TESObjectREFR * reference, bool makeUnique = true, bool allowNewEntry = true, bool allowSelf = false, UInt32 * idOut = NULL);
 };
 
 struct ModifiedItemIdentifier
@@ -118,44 +120,54 @@ private:
 class ItemAttributeData
 {
 public:
-	ItemAttributeData::~ItemAttributeData()
-	{
-		if (m_tintData) {
-			delete m_tintData;
-			m_tintData = NULL;
-		}
-	}
-
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
+
+	typedef std::unordered_map<SInt32, StringTableItem> TextureMap;
+	typedef std::unordered_map<SInt32, UInt32> ColorMap;
+	typedef std::unordered_map<SInt32, StringTableItem> BlendMap;
+	typedef std::unordered_map<SInt32, UInt8> TypeMap;
 
 	class TintData
 	{
 	public:
-		TintData::~TintData()
+		enum OverrideFlags
 		{
-			m_colorMap.clear();
-		}
+			kNone		= 0,
+			kColor		= (1 << 0),
+			kTextureMap = (1 << 1),
+			kBlendMap	= (1 << 2),
+			kTypeMap	= (1 << 3)
+		};
 
+		bool empty() const { return m_textureMap.empty() && m_colorMap.empty() && m_blendMap.empty() && m_typeMap.empty(); }
+
+		TextureMap m_textureMap;
 		ColorMap m_colorMap;
+		BlendMap m_blendMap;
+		TypeMap m_typeMap;
 
 		void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-		bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+		bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	};
 
-	TintData	* m_tintData = NULL;
+	std::unordered_map<SInt32, TintData> m_tintData;
 };
 
 
-static const UInt32 ITEM_ATTRIBUTE_RANK = 0;
-static const UInt32 ITEM_ATTRIBUTE_UID = 1;
-static const UInt32 ITEM_ATTRIBUTE_OWNERFORM = 2;
-static const UInt32 ITEM_ATTRIBUTE_FORMID = 3;
-static const UInt32 ITEM_ATTRIBUTE_DATA = 4;
+struct ItemAttribute
+{
+	UInt32 rank;
+	UInt16 uid;
+	UInt32 ownerForm;
+	UInt32 formId;
+	std::shared_ptr<ItemAttributeData> data;
+};
 
-typedef std::tuple<UInt32, UInt16, UInt32, UInt32, ItemAttributeData*> ItemAttribute;
-
-class ItemDataInterface : public SafeDataHolder<std::vector<ItemAttribute>>, public IPluginInterface
+class ItemDataInterface : 
+	public SafeDataHolder<std::vector<ItemAttribute>>, 
+	public IPluginInterface, 
+	public BSTEventSink <TESUniqueIDChangeEvent>
 {
 public:
 	typedef std::vector<ItemAttribute> Data;
@@ -164,24 +176,41 @@ public:
 	{
 		kCurrentPluginVersion = 1,
 		kSerializationVersion1 = 1,
-		kSerializationVersion = kSerializationVersion1
+		kSerializationVersion2 = 2,
+		kSerializationVersion = kSerializationVersion2
 	};
 	virtual UInt32 GetVersion();
 
+
+	virtual	EventResult ReceiveEvent(TESUniqueIDChangeEvent * evn, EventDispatcher<TESUniqueIDChangeEvent> * dispatcher) override;
+
 	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	virtual void Revert();
 
 	virtual UInt32 GetItemUniqueID(TESObjectREFR * reference, ModifiedItemIdentifier & identifier, bool makeUnique);
-	virtual void SetItemDyeColor(UInt32 uniqueID, SInt32 maskIndex, UInt32 color);
-	virtual UInt32 GetItemDyeColor(UInt32 uniqueID, SInt32 maskIndex);
-	virtual void ClearItemDyeColor(UInt32 uniqueID, SInt32 maskIndex);
+	virtual void SetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color);
+	virtual void SetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 type);
+	virtual void SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString blendMode);
+	virtual void SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString texture);
+
+	virtual UInt32 GetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual UInt32 GetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual SKEEFixedString GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual SKEEFixedString GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+
+	virtual void ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual void ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual void ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual void ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex);
+	virtual void ClearItemTextureLayer(UInt32 uniqueID, SInt32 textureIndex);
+
 	virtual TESForm * GetFormFromUniqueID(UInt32 uniqueID);
 	virtual TESForm * GetOwnerOfUniqueID(UInt32 uniqueID);
 
-	ItemAttributeData * GetExistingData(TESObjectREFR * reference, ModifiedItemIdentifier & identifier);
-	ItemAttributeData * CreateData(UInt32 rankId, UInt16 uid, UInt32 ownerId, UInt32 formId);
-	ItemAttributeData * GetData(UInt32 rankId);
+	std::shared_ptr<ItemAttributeData> GetExistingData(TESObjectREFR * reference, ModifiedItemIdentifier & identifier);
+	std::shared_ptr<ItemAttributeData> CreateData(UInt32 rankId, UInt16 uid, UInt32 ownerId, UInt32 formId);
+	std::shared_ptr<ItemAttributeData> GetData(UInt32 rankId);
 	bool UpdateUIDByRank(UInt32 rankId, UInt16 uid, UInt32 formId);
 	bool UpdateUID(UInt16 oldId, UInt32 oldFormId, UInt16 newId, UInt32 newFormId);
 	bool EraseByRank(UInt32 rankId);

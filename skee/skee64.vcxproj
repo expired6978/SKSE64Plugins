@@ -97,6 +97,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ForcedIncludeFiles>common/IPrefix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
@@ -176,13 +177,18 @@
     <ClCompile Include="CDXNifCommands.cpp" />
     <ClCompile Include="CDXNifMaterial.cpp" />
     <ClCompile Include="CDXNifMesh.cpp" />
+    <ClCompile Include="CDXNifPixelShaderCache.cpp" />
     <ClCompile Include="CDXNifScene.cpp" />
+    <ClCompile Include="CDXNifTextureRenderer.cpp" />
     <ClCompile Include="CDXPicker.cpp" />
+    <ClCompile Include="CDXRenderState.cpp" />
     <ClCompile Include="CDXResetMask.cpp" />
     <ClCompile Include="CDXScene.cpp" />
     <ClCompile Include="CDXShader.cpp" />
+    <ClCompile Include="CDXPixelShaderCache.cpp" />
     <ClCompile Include="CDXShaderCompile.cpp" />
     <ClCompile Include="CDXStroke.cpp" />
+    <ClCompile Include="CDXTextureRenderer.cpp" />
     <ClCompile Include="CDXUndo.cpp" />
     <ClCompile Include="FileUtils.cpp" />
     <ClCompile Include="SKEEHooks.cpp" />
@@ -266,14 +272,19 @@
     <ClInclude Include="CDXNifMaterial.h" />
     <ClInclude Include="CDXNifMesh.h" />
     <ClInclude Include="CDXNifScene.h" />
+    <ClInclude Include="CDXNifTextureRenderer.h" />
     <ClInclude Include="CDXPicker.h" />
+    <ClInclude Include="CDXRenderState.h" />
     <ClInclude Include="CDXResetMask.h" />
     <ClInclude Include="CDXScene.h" />
     <ClInclude Include="CDXShader.h" />
+    <ClInclude Include="CDXPixelShaderCache.h" />
     <ClInclude Include="CDXShaderCompile.h" />
     <ClInclude Include="CDXStroke.h" />
+    <ClInclude Include="CDXTextureRenderer.h" />
     <ClInclude Include="CDXTypes.h" />
     <ClInclude Include="CDXUndo.h" />
+    <ClInclude Include="CDXNifPixelShaderCache.h" />
     <ClInclude Include="FileUtils.h" />
     <ClInclude Include="half.hpp" />
     <ClInclude Include="IPluginInterface.h" />

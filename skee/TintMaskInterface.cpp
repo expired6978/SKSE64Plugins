@@ -22,67 +22,59 @@
 
 #include "tinyxml2.h"
 
+#include "CDXD3DDevice.h"
+#include "CDXNifTextureRenderer.h"
+#include "CDXNifPixelShaderCache.h"
+
 #include <vector>
 #include <algorithm>
 
+CDXNifPixelShaderCache		g_pixelShaders;
 extern TintMaskInterface	g_tintMaskInterface;
-
-RelocAddr<uintptr_t> TESTexture_vtbl(0x015506C8);
 
 UInt32 TintMaskInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }
 
-void TintMaskInterface::CreateTintsFromData(tArray<TintMask*> & masks, UInt32 size, const char ** textureData, SInt32 * colorData, float * alphaData, ColorMap & overrides)
+void TintMaskInterface::CreateTintsFromData(std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides)
 {
-	masks.Allocate(size);
-	for(UInt32 m = 0; m < masks.count; m++) {
-		TintMask * tintMask = new TintMask;
-		void* memory = Heap_Allocate(sizeof(TESTexture));
-		memset(memory, 0, sizeof(TESTexture));
-		((uintptr_t*)memory)[0] = TESTexture_vtbl.GetUIntPtr();
-		TESTexture* newTexture = (TESTexture*)memory;
-		newTexture->Init();
-		newTexture->str = textureData[m];
-		tintMask->texture = newTexture;
+	for (auto base : layerTarget.textureData) {
+		masks[base.first].texture = base.second;
+	}
+	for (auto base : layerTarget.colorData) {
+		masks[base.first].color = base.second;
+	}
+	for (auto base : layerTarget.blendData) {
+		masks[base.first].technique = base.second;
+	}
+	for (auto base : layerTarget.typeData) {
+		masks[base.first].textureType = base.second;
+	}
 
-		UInt32	color = colorData[m];
-		float	alpha = alphaData[m];
+	if (overrides) {
+		auto layer = overrides->m_tintData.find(layerTarget.targetIndex);
+		if (layer != overrides->m_tintData.end())
+		{
+			auto & layerData = layer->second;
 
-		auto & it = overrides.find(m);
-		if (it != overrides.end()) {
-			color = it->second & 0xFFFFFF;
-			alpha = (it->second >> 24) / 255.0;
+			for (auto base : layerData.m_textureMap) {
+				masks[base.first].texture = *base.second;
+			}
+			for (auto base : layerData.m_colorMap) {
+				masks[base.first].color = base.second;
+			}
+			for (auto base : layerData.m_blendMap) {
+				masks[base.first].technique = *base.second;
+			}
+			for (auto base : layerData.m_typeMap) {
+				masks[base.first].textureType = base.second;
+			}
 		}
-
-		tintMask->color.red = (color >> 16) & 0xFF;
-		tintMask->color.green = (color >> 8) & 0xFF;
-		tintMask->color.blue = color & 0xFF;
-		tintMask->color.alpha = 0;
-		tintMask->tintType = TintMask::kMaskType_SkinTone;
-		tintMask->alpha = alpha;
-
-		masks.entries[m] = tintMask;
 	}
 }
 
-void TintMaskInterface::ReleaseTintsFromData(tArray<TintMask*> & masks)
-{
-	// Cleanup tint array
-	for(UInt32 m = 0; m < masks.count; m++) {
-		TintMask * tintMask = NULL;
-		if (masks.GetNthItem(m, tintMask)) {
-			TESTexture* texture = tintMask->texture;
-			if (texture)
-				Heap_Free(texture);
-			delete tintMask;
-		}
-	}
-	Heap_Free(masks.entries);
-}
-
-NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<void(ColorMap*)> overrides)
+NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides)
 {
 	m_firstPerson = isFirstPerson;
 	m_formId = refr->formID;
@@ -90,12 +82,11 @@ NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPer
 	m_addonId = addon->formID;
 	m_object = object;
 	m_overrides = overrides;
-	m_object->IncRef();
 }
 
 void NIOVTaskDeferredMask::Dispose()
 {
-	m_object->DecRef();
+
 }
 
 void NIOVTaskDeferredMask::Run()
@@ -114,128 +105,178 @@ void NIOVTaskDeferredMask::Run()
 	}
 }
 
-void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * rootNode, std::function<void(ColorMap*)> overrides)
+void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * rootNode, std::function<std::shared_ptr<ItemAttributeData>()> overrides)
 {
-	MaskList maskList;
+	LayerTargetList layerList;
 	VisitObjects(rootNode, [&](NiAVObject* object)
 	{
-		ObjectMask mask;
+		LayerTarget mask;
+		mask.targetIndex = 0; // Target the diffuse by default
 		if (mask.object = object->GetAsBSGeometry()) {
 			auto textureData = ni_cast(object->GetExtraData(BSFixedString("MASKT").data), NiStringsExtraData);
 			if (textureData) {
-				mask.layerCount = textureData->m_size;
-				mask.textureData = (const char**)textureData->m_data;
+				for (SInt32 i = 0; i < textureData->m_size; ++i)
+				{
+					mask.textureData[i] = textureData->m_data[i];
+				}
+				
 			}
 			auto colorData = ni_cast(object->GetExtraData(BSFixedString("MASKC").data), NiIntegersExtraData);
 			if (colorData) {
-				mask.colorData = colorData->m_data;
-				if (mask.layerCount != colorData->m_size)
-					mask.layerCount = 0;
+				for (SInt32 i = 0; i < colorData->m_size && i < colorData->m_size; ++i)
+				{
+					mask.colorData[i] = colorData->m_data[i];
+				}
 			}
 
 			auto alphaData = ni_cast(object->GetExtraData(BSFixedString("MASKA").data), NiFloatsExtraData);
 			if (alphaData) {
-				mask.alphaData = alphaData->m_data;
-				if (mask.layerCount != alphaData->m_size)
-					mask.layerCount = 0;
+				for (SInt32 i = 0; i < alphaData->m_size && i < alphaData->m_size; ++i)
+				{
+					mask.alphaData[i] = alphaData->m_data[i];
+				}
 			}
 
-			auto resolutionWData = ni_cast(object->GetExtraData(BSFixedString("MASKR").data), NiIntegerExtraData);
-			if (resolutionWData) {
-				mask.resolutionWData = resolutionWData->m_data;
-				mask.resolutionHData = resolutionWData->m_data;
-			}
-			else {
-				auto resolutionWData = ni_cast(object->GetExtraData(BSFixedString("MASKW").data), NiIntegerExtraData);
-				if (resolutionWData)
-					mask.resolutionWData = resolutionWData->m_data;
-
-				auto resolutionHData = ni_cast(object->GetExtraData(BSFixedString("MASKH").data), NiIntegerExtraData);
-				if (resolutionHData)
-					mask.resolutionHData = resolutionHData->m_data;
-			}
-			
-
-			if (mask.object && mask.layerCount > 0)
-				maskList.push_back(mask);
+			if (mask.object && mask.textureData.size() > 0)
+				layerList.push_back(mask);
 		}
 
 		return false;
 	});
 
-	m_modelMap.ApplyLayers(refr, isFirstPerson, addon, rootNode, [&](BSGeometry* geom, MaskLayerTuple* mask)
+	m_modelMap.ApplyLayers(refr, isFirstPerson, addon, rootNode, [&](NiPointer<BSGeometry> geom, SInt32 targetIndex, TextureLayer* layer)
 	{
-		ObjectMask obj;
+		LayerTarget obj;
 		obj.object = geom;
-		obj.resolutionWData = std::get<0>(*mask);
-		obj.resolutionHData = std::get<1>(*mask);
-		obj.layerCount = std::get<2>(*mask).size();
-		obj.textureData = &std::get<2>(*mask)[0];
-		obj.colorData = &std::get<3>(*mask)[0];
-		obj.alphaData = &std::get<4>(*mask)[0];
-		maskList.push_back(obj);
+		obj.targetIndex = targetIndex;
+		obj.textureData = layer->textures;
+		obj.colorData = layer->colors;
+		obj.alphaData = layer->alphas;
+		obj.blendData = layer->blendModes;
+		obj.typeData = layer->types;
+		layerList.push_back(obj);
 	});
 
-	ColorMap overrideMap;
-	if (overrides && !maskList.empty()) {
-		overrides(&overrideMap);
+	std::shared_ptr<ItemAttributeData> itemOverrideData;
+	if (overrides && !layerList.empty()) {
+		itemOverrideData = overrides();
 	}
 
-	for (auto & mask : maskList)
+	std::unique_ptr<CDXD3DDevice> device;
+	Microsoft::WRL::ComPtr<ID3D11DeviceContext> pDeviceContext = g_renderManager->context;
+	Microsoft::WRL::ComPtr<ID3D11Device> pDevice;
+	pDeviceContext->GetDevice(&pDevice);
+	if (!pDevice) {
+		return;
+	}
+	device = std::make_unique<CDXD3DDevice>(pDevice, pDeviceContext);
+
+	for (auto & layer : layerList)
 	{
-		if(mask.object && mask.textureData && mask.colorData && mask.alphaData)
-		{
-			BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(mask.object->m_spEffectState);
-			if(shaderProperty) {
-				shaderProperty->IncRef();
-				BSLightingShaderProperty * lightingShader = ni_cast(shaderProperty, BSLightingShaderProperty);
-				if(lightingShader) {
-					BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)lightingShader->material;
-					
-					NiTexture * newTarget = NULL;
-					if (m_maskMap.IsCaching())
-						newTarget = m_maskMap.GetRenderTarget(lightingShader);
-					if (!newTarget) {
-						UInt32 width = 0;
-						UInt32 height = 0;
-						if (mask.resolutionWData)
-							width = mask.resolutionWData;
-						if (mask.resolutionHData)
-							height = mask.resolutionHData;
-						else
-							height = mask.resolutionWData;
+		NiPointer<BSShaderProperty> shaderProperty = niptr_cast<BSShaderProperty>(layer.object->m_spEffectState);
+		if(shaderProperty) {
+			BSLightingShaderProperty * lightingShader = ni_cast(shaderProperty, BSLightingShaderProperty);
+			if(lightingShader) {
+				BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)lightingShader->material;
 
-						newTarget = CreateSourceTexture("TintMask");
-						newTarget->rendererData = g_renderManager->CreateRenderTexture(width, height);
-
-						if (newTarget && m_maskMap.IsCaching()) {
-							m_maskMap.AddRenderTargetGroup(lightingShader, newTarget);
-						}
+				NiPointer<NiTexture> sourceTexture;
+				if (material->textureSet)
+				{
+					const char * texturePath = material->textureSet->GetTexturePath(layer.targetIndex);
+					if (!texturePath) {
+						continue;
 					}
-					if(newTarget) {
-						tArray<TintMask*> tintMasks;
-						CreateTintsFromData(tintMasks, mask.layerCount, mask.textureData, mask.colorData, mask.alphaData, overrideMap);
 
-						newTarget->IncRef();
-						if (ApplyMasksToRenderTarget(&tintMasks, newTarget)) {
-							BSLightingShaderMaterialFacegen * tintedMaterial = static_cast<BSLightingShaderMaterialFacegen*>(CreateShaderMaterial(BSLightingShaderMaterialFacegen::kShaderType_FaceGen));
-							CALL_MEMBER_FN(tintedMaterial, CopyFrom)(material);
-							tintedMaterial->renderedTexture = newTarget;
-							CALL_MEMBER_FN(lightingShader, SetFlags)(0x0A, true); // Enable detailmap
-							CALL_MEMBER_FN(lightingShader, SetFlags)(0x15, false); // Disable FaceGen_RGB
-							//material->ReleaseTextures();
-							CALL_MEMBER_FN(lightingShader, SetMaterial)(tintedMaterial, 1); // New material takes texture ownership
-							if (newTarget) // Let the material now take ownership since the old target is destroyed now
-								newTarget->DecRef();
-							CALL_MEMBER_FN(lightingShader, InitializeShader)(mask.object);
-						}
+					LoadTexture(texturePath, 1, sourceTexture, false);
+				}
 
-						newTarget->DecRef();
+				// No source texture at this path, bad texture
+				if (!sourceTexture) {
+					continue;
+				}
 
-						ReleaseTintsFromData(tintMasks);
+				std::shared_ptr<CDXNifTextureRenderer> renderer;
+				if (m_maskMap.IsCaching())
+				{
+					renderer = m_maskMap.GetRenderTarget(lightingShader, layer.targetIndex);
+				}
+				if(!renderer)
+				{
+					renderer = std::make_shared<CDXNifTextureRenderer>();
+					if (!renderer->Init(device.get(), &g_pixelShaders))
+					{
+						continue;
+					}
+
+					if (renderer && m_maskMap.IsCaching()) {
+						m_maskMap.AddRenderTargetGroup(lightingShader, layer.targetIndex, renderer);
 					}
 				}
-				shaderProperty->DecRef();
+
+				std::map<SInt32, CDXNifTextureRenderer::MaskData> tintMasks;
+				CreateTintsFromData(tintMasks, layer, itemOverrideData);
+
+				NiPointer<NiTexture> output;
+				if (renderer->ApplyMasksToTexture(device.get(), sourceTexture, tintMasks, output))
+				{
+					BSLightingShaderMaterial * newMaterial = static_cast<BSLightingShaderMaterial*>(CreateShaderMaterial(material->GetShaderType()));
+					newMaterial->Copy(material);
+
+					NiTexturePtr * targetTexture = GetTextureFromIndex(newMaterial, layer.targetIndex);
+					if (targetTexture) {
+						*targetTexture = output;
+					}
+
+					CALL_MEMBER_FN(lightingShader, SetMaterial)(newMaterial, 1); // New material takes texture ownership
+					CALL_MEMBER_FN(lightingShader, InitializeShader)(layer.object);
+				}
+
+#if 0
+					
+				NiTexture * newTarget = NULL;
+				if (m_maskMap.IsCaching())
+					newTarget = m_maskMap.GetRenderTarget(lightingShader);
+				if (!newTarget) {
+					UInt32 width = 0;
+					UInt32 height = 0;
+					if (mask.resolutionWData)
+						width = mask.resolutionWData;
+					if (mask.resolutionHData)
+						height = mask.resolutionHData;
+					else
+						height = mask.resolutionWData;
+
+					newTarget = CreateSourceTexture("TintMask");
+					newTarget->rendererData = g_renderManager->CreateRenderTexture(width, height);
+
+					if (newTarget && m_maskMap.IsCaching()) {
+						m_maskMap.AddRenderTargetGroup(lightingShader, newTarget);
+					}
+				}
+				if(newTarget) {
+					tArray<TintMask*> tintMasks;
+					CreateTintsFromData(tintMasks, mask.layerCount, mask.textureData, mask.colorData, mask.alphaData, overrideMap);
+
+					newTarget->IncRef();
+					if (ApplyMasksToRenderTarget(&tintMasks, newTarget)) {
+						BSLightingShaderMaterialFacegen * tintedMaterial = static_cast<BSLightingShaderMaterialFacegen*>(CreateShaderMaterial(BSLightingShaderMaterialFacegen::kShaderType_FaceGen));
+						CALL_MEMBER_FN(tintedMaterial, CopyFrom)(material);
+						tintedMaterial->renderedTexture = newTarget;
+						CALL_MEMBER_FN(lightingShader, SetFlags)(0x0A, true); // Enable detailmap
+						CALL_MEMBER_FN(lightingShader, SetFlags)(0x15, false); // Disable FaceGen_RGB
+						//material->ReleaseTextures();
+						CALL_MEMBER_FN(lightingShader, SetMaterial)(tintedMaterial, 1); // New material takes texture ownership
+						if (newTarget) // Let the material now take ownership since the old target is destroyed now
+							newTarget->DecRef();
+						CALL_MEMBER_FN(lightingShader, InitializeShader)(mask.object);
+					}
+
+					newTarget->DecRef();
+
+					ReleaseTintsFromData(tintMasks);
+				}
+
+#endif
 			}
 		}
 	}
@@ -247,64 +288,60 @@ void TintMaskMap::ManageRenderTargetGroups()
 	m_caching = true;
 }
 
-NiTexture * TintMaskMap::GetRenderTarget(BSLightingShaderProperty* key)
+std::shared_ptr<CDXNifTextureRenderer> TintMaskMap::GetRenderTarget(BSLightingShaderProperty* key, SInt32 index)
 {
 	auto & it = m_data.find(key);
-	if (it != m_data.end())
-		return it->second;
+	if (it != m_data.end()) {
+		auto & idx = it->second.find(index);
+		if (idx != it->second.end()) {
+			return idx->second;
+		}
+	}
 
-	return NULL;
+	return nullptr;
 }
 
-void TintMaskMap::AddRenderTargetGroup(BSLightingShaderProperty* key, NiTexture * value)
+void TintMaskMap::AddRenderTargetGroup(BSLightingShaderProperty* key, SInt32 index, std::shared_ptr<CDXNifTextureRenderer> value)
 {
 	SimpleLocker locker(&m_lock);
-	auto & it = m_data.emplace(key, value);
-	if (it.second == true) {
-		key->IncRef();
-		value->IncRef();
-	}
+	m_data[key][index] = value;
 }
 
 void TintMaskMap::ReleaseRenderTargetGroups()
 {
 	SimpleLocker locker(&m_lock);
-	for (auto & it : m_data) {
-		it.first->DecRef();
-		it.second->DecRef();
-	}
 	m_data.clear();
 	m_caching = false;
 }
 
-MaskLayerTuple * MaskDiffuseMap::GetMaskLayers(BSFixedString texture)
+TextureLayer * TextureLayerMap::GetTextureLayer(SKEEFixedString texture)
 {
-	auto & it = find(texture.data);
+	auto & it = find(texture);
 	if (it != end()) {
 		return &it->second;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
-MaskDiffuseMap * MaskTriShapeMap::GetDiffuseMap(BSFixedString triShape)
+TextureLayerMap * MaskTriShapeMap::GetTextureMap(SKEEFixedString triShape)
 {
-	auto & it = find(triShape.data);
+	auto & it = find(triShape);
 	if (it != end()) {
 		return &it->second;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
-MaskLayerTuple * MaskModelMap::GetMask(BSFixedString nif, BSFixedString trishape, BSFixedString diffuse)
+TextureLayer * MaskModelMap::GetMask(SKEEFixedString nif, SKEEFixedString trishape, SKEEFixedString texture)
 {
-	return &m_data[nif.data][trishape.data][diffuse.data];
+	return &m_data[nif][trishape][GetSanitizedPath(texture)];
 }
 
-MaskTriShapeMap * MaskModelMap::GetTriShapeMap(BSFixedString nifPath)
+MaskTriShapeMap * MaskModelMap::GetTriShapeMap(SKEEFixedString nifPath)
 {
-	auto & it = m_data.find(nifPath.data);
+	auto & it = m_data.find(nifPath);
 	if (it != m_data.end()) {
 		return &it->second;
 	}
@@ -312,37 +349,57 @@ MaskTriShapeMap * MaskModelMap::GetTriShapeMap(BSFixedString nifPath)
 	return NULL;
 }
 
-bool ApplyMaskData(MaskTriShapeMap * triShapeMap, NiAVObject * object, const char * nameOverride, std::function<void(BSGeometry*, MaskLayerTuple*)> functor)
+bool ApplyMaskData(MaskTriShapeMap * triShapeMap, NiAVObject * object, const char * nameOverride, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor)
 {
-	if (BSGeometry * geometry = object->GetAsBSGeometry()) {
-		geometry->IncRef();
-		auto textureMap = triShapeMap->GetDiffuseMap(nameOverride ? BSFixedString(nameOverride) : object->m_name);
-		if (textureMap) {
-			NiProperty * shaderProperty = niptr_cast<NiProperty>(geometry->m_spEffectState);
-			if (shaderProperty) {
-				shaderProperty->IncRef();
-				BSLightingShaderProperty * lightingShader = ni_cast(shaderProperty, BSLightingShaderProperty);
-				if (lightingShader) {
-					BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)lightingShader->material;
-					if (material->textureSet) {
-						auto layerList = textureMap->GetMaskLayers(material->textureSet->GetTexturePath(0));
-						if (layerList) {
-							functor(geometry, layerList);
-						}
-					}
-				}
-				shaderProperty->DecRef();
-			}
-			
-			return true;
-		}
-		geometry->DecRef();
+	NiPointer<BSGeometry> geometry = object->GetAsBSGeometry();
+	if (!geometry) {
+		return false;
 	}
 
-	return false;
+	auto textureMap = triShapeMap->GetTextureMap(nameOverride ? nameOverride : object->m_name);
+	if (!textureMap) {
+		return false;
+	}
+
+	NiPointer<NiProperty> shaderProperty = niptr_cast<NiProperty>(geometry->m_spEffectState);
+	if (!shaderProperty) {
+		return false;
+	}
+
+	auto lightingShader = ni_cast(shaderProperty, BSLightingShaderProperty);
+	if (!lightingShader) {
+		return false;
+	}
+
+	auto material = static_cast<BSLightingShaderMaterial*>(lightingShader->material);
+	if (!material) {
+		return false;
+	}
+
+	auto textureSet = material->textureSet;
+	if (!textureSet) {
+		return false;
+	}
+
+	// Pass over all the textures to match with those that exist in the mapping
+	for (UInt32 i = 0; i < 8; ++i)
+	{
+		const char * texture = textureSet->GetTexturePath(i);
+		if (!texture)
+			continue;
+
+		SKEEFixedString texturePath = GetSanitizedPath(texture);
+		auto it = textureMap->find(texturePath);
+		if (it != textureMap->end())
+		{
+			functor(geometry, i, &it->second);
+		}
+	}
+
+	return true;
 }
 
-void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(BSGeometry*, MaskLayerTuple*)> functor)
+void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor)
 {
 	UInt8 gender = 0;
 	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -362,7 +419,7 @@ void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObje
 	UInt32 count = 0;
 	VisitObjects(node, [&](NiAVObject* object)
 	{
-		if (ApplyMaskData(triShapeMap, object, NULL, functor))
+		if (ApplyMaskData(triShapeMap, object, nullptr, functor))
 			count++;
 
 		return false;
@@ -435,51 +492,57 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 		auto object = element->FirstChildElement("object");
 		while (object)
 		{
-			auto objectPath = BSFixedString(object->Attribute("path"));
+			auto objectPath = SKEEFixedString(object->Attribute("path"));
 			auto child = object->FirstChildElement("geometry");
 			while (child)
 			{
 				auto trishapeName = child->Attribute("name");
-				auto trishape = BSFixedString(trishapeName ? trishapeName : "");
-				auto diffuse = BSFixedString(child->Attribute("diffuse"));
-				auto width = child->IntAttribute("width");
-				auto height = child->IntAttribute("height");
-				auto priority = child->IntAttribute("priority");
+				auto trishape = SKEEFixedString(trishapeName ? trishapeName : "");
 
-				if (width && !height)
-					height = width;
-				if (height && !width)
-					width = height;
+				const char * diffuse = child->Attribute("diffuse");
+				const char * texture = child->Attribute("texture");
+				
+				auto layer = m_modelMap.GetMask(objectPath, trishape, texture ? texture : diffuse);
 
-				auto tuple = m_modelMap.GetMask(objectPath, trishape, diffuse);
+				layer->textures.clear();
+				layer->colors.clear();
+				layer->alphas.clear();
 
-				// If the current entry is of higher priorty, skip the new entry
-				auto previousPriority = std::get<5>(*tuple);
-				if (previousPriority > 0 && priority < previousPriority) {
-					child = child->NextSiblingElement("geometry");
-					continue;
-				}
-
-				std::get<0>(*tuple) = width;
-				std::get<1>(*tuple) = height;
-				std::get<2>(*tuple).clear();
-				std::get<3>(*tuple).clear();
-				std::get<4>(*tuple).clear();
-				std::get<5>(*tuple) = priority;
-
+				UInt32 index = 0;
 				auto mask = child->FirstChildElement("mask");
 				while (mask) {
-					auto maskPath = BSFixedString(mask->Attribute("path"));
+					auto maskPath = SKEEFixedString(mask->Attribute("path"));
 					auto color = mask->Attribute("color");
+
 					UInt32 colorValue;
-					sscanf_s(color, "%x", &colorValue);
+					if (color) {
+						sscanf_s(color, "%x", &colorValue);
+					}
+					else {
+						colorValue = 0xFFFFFF;
+					}
+					
 					auto alpha = mask->DoubleAttribute("alpha");
 
-					std::get<2>(*tuple).push_back(maskPath.data);
-					std::get<3>(*tuple).push_back(colorValue);
-					std::get<4>(*tuple).push_back(alpha);
+					const char* blend = mask->Attribute("blend");
+					if (!blend) {
+						blend = "tint";
+					}
+
+					int type = static_cast<int>(CDXNifTextureRenderer::TextureType::Mask);
+					mask->QueryIntAttribute("type", &type);
+
+					int i = index;
+					mask->QueryIntAttribute("index", &i);
+
+					layer->textures[i] = maskPath;
+					layer->colors[i] = colorValue;
+					layer->alphas[i] = alpha;
+					layer->blendModes[i] = blend;
+					layer->types[i] = type;
 
 					mask = mask->NextSiblingElement("mask");
+					index++;
 				}
 
 				child = child->NextSiblingElement("geometry");

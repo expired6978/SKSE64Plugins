@@ -417,21 +417,18 @@ bool NiTransformInterface::VisitNodeTransforms(TESObjectREFR * refr, bool firstP
 	auto & it = transformData.m_data.find(handle); // Find ActorHandle
 	if (it != transformData.m_data.end())
 	{
-		NiNode * root = refr->GetNiRootNode(fp);
+		NiPointer<NiNode> root = refr->GetNiRootNode(fp);
 		if (root) {
-			NiAutoRefCounter rc(root);
 			BSFixedString skeleton = GetRootModelPath(refr, firstPerson, isFemale);
-			NiAVObject * foundNode = root->GetObjectByName(&node.data);
+			NiPointer<NiAVObject> foundNode = root->GetObjectByName(&node.data);
 			if (foundNode) {
-				NiAutoRefCounter rc(foundNode);
 				NiTransform * baseTransform = transformCache.GetBaseTransform(skeleton, node, true);
 				if (!baseTransform) {
 					// Look at extensions
 					VisitObjects(root, [&](NiAVObject * root)
 					{
-						NiExtraData * extraData = root->GetExtraData(BSFixedString("EXTN").data);
+						NiPointer<NiExtraData> extraData = root->GetExtraData(BSFixedString("EXTN").data);
 						if (extraData) {
-							NiAutoRefCounter rc(extraData);
 							NiStringsExtraData * extraSkeletons = ni_cast(extraData, NiStringsExtraData);
 							if (extraSkeletons && (extraSkeletons->m_size % 3) == 0) {
 								for (UInt32 i = 0; i < extraSkeletons->m_size; i+= 3) {
@@ -584,25 +581,23 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 	if (it != transformData.m_data.end())
 	{
 		std::unordered_map<NiAVObject*, NiNode*> nodeMovement;
-		NiNode * lastNode = NULL;
+		NiPointer<NiNode> lastNode = NULL;
 		for (UInt8 i = 0; i <= 1; i++)
 		{
-			NiNode * root = refr->GetNiRootNode(i);
+			NiPointer<NiNode> root = refr->GetNiRootNode(i);
 			if (root == lastNode) // First and Third are the same, skip
 				continue;
 
 			SKEEFixedString skeleton = GetRootModelPath(refr, i >= 1 ? true : false, gender >= 1 ? true : false);
 			if (root)
 			{
-				NiAutoRefCounter rc(root);
 				// Gather up skeleton extensions
 				std::vector<SKEEFixedString> additionalSkeletons;
 				std::set<SKEEFixedString> modified, changed;
 				VisitObjects(root, [&](NiAVObject * root)
 				{
-					NiExtraData * extraData = root->GetExtraData(BSFixedString("EXTN").data);
+					NiPointer<NiExtraData> extraData = root->GetExtraData(BSFixedString("EXTN").data);
 					if (extraData) {
-						NiAutoRefCounter rc(extraData);
 						NiStringsExtraData * extraSkeletons = ni_cast(extraData, NiStringsExtraData);
 						if (extraSkeletons && (extraSkeletons->m_size % 3) == 0) {
 							for (UInt32 i = 0; i < extraSkeletons->m_size; i += 3) {
@@ -699,17 +694,15 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 							}
 						}
 						BSFixedString nodeName = *ait->first;
-						NiAVObject * transformable = root->GetObjectByName(&nodeName.data);
+						NiPointer<NiAVObject> transformable = root->GetObjectByName(&nodeName.data);
 						if (transformable) {
-							NiAutoRefCounter rc(transformable);
 							transformable->m_localTransform = (*baseTransform) * combinedTransform;
 
 							// Collect Node Movements
 							bool noTarget = target == BSFixedString("");
 							if (!noTarget) {
-								NiAVObject * targetNode = root->GetObjectByName(&target.data);
+								NiPointer<NiAVObject> targetNode = root->GetObjectByName(&target.data);
 								if (targetNode) {
-									NiAutoRefCounter rc(targetNode);
 									NiNode * parentNode = targetNode->GetAsNiNode();
 									if (parentNode) {
 										nodeMovement.insert_or_assign(transformable, parentNode);
@@ -725,8 +718,8 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 
 			for (auto & nodePair : nodeMovement)
 			{
-				NiAutoRefCounter rc(nodePair.second);
-				NIOVTaskMoveNode * newTask = new NIOVTaskMoveNode(nodePair.second, nodePair.first);
+				NiPointer<NiNode> rc = nodePair.second;
+				NIOVTaskMoveNode * newTask = new NIOVTaskMoveNode(rc, nodePair.first);
 				if (g_task && !immediate) {
 					g_task->AddTask(newTask);
 				}
@@ -736,7 +729,7 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 				}
 			}
 
-			NIOVTaskUpdateWorldData * newTask = new NIOVTaskUpdateWorldData(root);
+			NIOVTaskUpdateWorldData * newTask = new NIOVTaskUpdateWorldData(root.get());
 			if (g_task && !immediate) {
 				g_task->AddTask(newTask);
 			}

@@ -201,7 +201,7 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 							RegisterString(&itm, args->movie, "name", itemName);
 					}
 
-					ItemAttributeData * itemData = NULL;
+					std::shared_ptr<ItemAttributeData> itemData;
 					if ((item.type & ModifiedItemIdentifier::kTypeRank) == ModifiedItemIdentifier::kTypeRank)
 						itemData = g_itemDataInterface.GetData(item.rankId);
 
@@ -210,10 +210,11 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 					for (UInt32 i = 0; i < 15; i++) {
 						UInt32 color = 0;
 						if (itemData) {
-							auto tintData = itemData->m_tintData;
-							if (tintData) {
-								auto it = tintData->m_colorMap.find(i);
-								if (it != tintData->m_colorMap.end())
+							const auto & layerData = itemData->m_tintData.find(0);
+							if (layerData != itemData->m_tintData.end())
+							{
+								const auto & it = layerData->second.m_colorMap.find(i);
+								if (it != layerData->second.m_colorMap.end())
 									color = it->second;
 							}
 						}
@@ -355,9 +356,9 @@ void SKSEScaleform_SetItemDyeColor::Invoke(Args * args)
 
 	UInt32 uniqueId = g_itemDataInterface.GetItemUniqueID(actor, identifier, true);
 	if (clear)
-		g_itemDataInterface.ClearItemDyeColor(uniqueId, maskIndex);
+		g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, 0, maskIndex);
 	else
-		g_itemDataInterface.SetItemDyeColor(uniqueId, maskIndex, color);
+		g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, maskIndex, color);
 
 	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier));
 }

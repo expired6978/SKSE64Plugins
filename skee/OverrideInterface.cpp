@@ -973,13 +973,12 @@ void OverrideInterface::SetHandleSkinProperties(UInt64 handle, bool immediate)
 			for (SkinRegistration::iterator ait = it->second[gender][fp].begin(); ait != it->second[gender][fp].end(); ++ait) // Loop Armors
 			{
 				NiNode * lastNode = NULL;
-				NiNode * root = refr->GetNiRootNode(fp);
+				NiPointer<NiNode> root = refr->GetNiRootNode(fp);
 				if (root == lastNode) // First and Third are the same, skip
 					continue;
 
 				if (root)
 				{
-					NiAutoRefCounter rc(root);
 					TESForm * pForm = GetSkinForm(actor, ait->first);
 					TESObjectARMO * armor = DYNAMIC_CAST(pForm, TESForm, TESObjectARMO);
 					if (armor) {

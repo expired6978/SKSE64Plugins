@@ -17,6 +17,8 @@
 #include "skse64/NiControllers.h"
 #include "skse64/NiExtraData.h"
 
+#include <regex>
+
 extern SKSETaskInterface				* g_task;
 
 void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
@@ -102,8 +104,8 @@ void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 			case OverrideVariant::kParam_ShaderAlpha:				PackValue<float>(value, value->key, value->index, &material->alpha);					break;
 			case OverrideVariant::kParam_ShaderGlossiness:			PackValue<float>(value, value->key, value->index, &material->glossiness);				break;
 			case OverrideVariant::kParam_ShaderSpecularStrength:	PackValue<float>(value, value->key, value->index, &material->specularStrength);			break;
-			case OverrideVariant::kParam_ShaderLightingEffect1:	PackValue<float>(value, value->key, value->index, &material->lightingEffect1);			break;
-			case OverrideVariant::kParam_ShaderLightingEffect2:	PackValue<float>(value, value->key, value->index, &material->lightingEffect2);			break;
+			case OverrideVariant::kParam_ShaderLightingEffect1:		PackValue<float>(value, value->key, value->index, &material->lightingEffect1);			break;
+			case OverrideVariant::kParam_ShaderLightingEffect2:		PackValue<float>(value, value->key, value->index, &material->lightingEffect2);			break;
 
 				// Special cases
 			case OverrideVariant::kParam_ShaderTexture:
@@ -148,12 +150,9 @@ void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 	}
 }
 
-NIOVTaskUpdateTexture::NIOVTaskUpdateTexture(BSGeometry * geometry, UInt32 index, StringTableItem texture)
+NIOVTaskUpdateTexture::NIOVTaskUpdateTexture(NiPointer<BSGeometry> geometry, UInt32 index, StringTableItem texture)
 {
 	m_geometry = geometry;
-	if (m_geometry)
-		m_geometry->IncRef();
-
 	m_index = index;
 	m_texture = texture;
 }
@@ -173,6 +172,18 @@ void NIOVTaskUpdateTexture::Run()
 		{
 			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
 			if(m_index < BSTextureSet::kNumTextures) {
+
+				// Load the texture requested and then assign it to the material
+				NiPointer<NiTexture> newTexture;
+				LoadTexture(m_texture->c_str(), 1, newTexture, false);
+
+				NiTexturePtr * targetTexture = GetTextureFromIndex(material, m_index);
+				if (targetTexture) {
+					*targetTexture = newTexture;
+				}
+
+				CALL_MEMBER_FN(lightingShader, InitializeShader)(m_geometry);
+#if 0
 				BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
 				for(UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
 				{
@@ -184,6 +195,7 @@ void NIOVTaskUpdateTexture::Run()
 				material->SetTextureSet(newTextureSet);
 				CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
 				CALL_MEMBER_FN(lightingShader, InitializeShader)(m_geometry);
+#endif
 			}
 		}
 	}
@@ -303,6 +315,7 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 					if(immediate)
 					{
 						if(value->index >= 0 && value->index < BSTextureSet::kNumTextures) {
+#if 0
 							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
 							for(UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
 							{
@@ -313,6 +326,15 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 							material->ReleaseTextures();
 							material->SetTextureSet(newTextureSet);
 							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
+#endif
+							NiPointer<NiTexture> newTexture;
+							LoadTexture(texture.c_str(), 1, newTexture, false);
+
+							NiTexturePtr * targetTexture = GetTextureFromIndex(material, value->index);
+							if (targetTexture) {
+								*targetTexture = newTexture;
+							}
+
 							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
 						}
 					} else {
@@ -410,9 +432,17 @@ TESForm* GetSkinForm(Actor* thisActor, UInt32 mask)
 		if(actorBase) {
 			equipped = actorBase->skinForm.skin; // Check ActorBase
 		}
-		TESRace * race = actorBase->race.race;
-		if(!equipped && race) {
-			equipped = race->skin.skin; // Check Race
+		if (!equipped) {
+			// Check the actor's race
+			TESRace * race = thisActor->race;
+			if (!race) {
+				// Check the actor base's race
+				race = actorBase->race.race;
+			}
+
+			if (race) {
+				equipped = race->skin.skin; // Check Race
+			}
 		}
 	}
 
@@ -427,7 +457,7 @@ TESForm* GetWornForm(Actor* thisActor, UInt32 mask)
 		EquipData eqD = pContainerChanges->FindEquipped(matcher);
 		return eqD.pForm;
 	}
-	return NULL;
+	return nullptr;
 }
 
 BSGeometry * GetFirstShaderType(NiAVObject * object, UInt32 shaderType)
@@ -466,7 +496,7 @@ BSGeometry * GetFirstShaderType(NiAVObject * object, UInt32 shaderType)
 		}
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 void VisitGeometry(NiAVObject * parent, GeometryVisitor * visitor)
@@ -558,6 +588,29 @@ void VisitArmorAddon(Actor * actor, TESObjectARMO * armor, TESObjectARMA * arma,
 	}
 }
 
+bool ResolveAnyForm(SKSESerializationInterface * intfc, UInt32 handle, UInt32 * newHandle)
+{
+	if (((handle & 0xFF000000) >> 24) != 0xFF) {
+		// Skip if handle is no longer valid.
+		if (!intfc->ResolveFormId(handle, newHandle)) {
+			return false;
+		}
+	}
+	else { // This will resolve game-created forms
+		TESForm * formCheck = LookupFormByID(handle & 0xFFFFFFFF);
+		if (!formCheck) {
+			return false;
+		}
+		TESObjectREFR * refr = DYNAMIC_CAST(formCheck, TESForm, TESObjectREFR);
+		if (!refr || (refr && (refr->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted)) {
+			return false;
+		}
+		*newHandle = handle;
+	}
+
+	return true;
+}
+
 bool ResolveAnyHandle(SKSESerializationInterface * intfc, UInt64 handle, UInt64 * newHandle)
 {
 	if (((handle & 0xFF000000) >> 24) != 0xFF) {
@@ -579,6 +632,111 @@ bool ResolveAnyHandle(SKSESerializationInterface * intfc, UInt64 handle, UInt64 
 	}
 
 	return true;
+}
+
+SKEEFixedString GetSanitizedPath(const SKEEFixedString & path)
+{
+	std::string fullPath = path;
+
+	fullPath = std::regex_replace(fullPath, std::regex("/+|\\\\+"), "\\"); // Replace multiple slashes or forward slashes with one backslash
+	fullPath = std::regex_replace(fullPath, std::regex("^\\\\+"), ""); // Remove all backslashes from the front
+	fullPath = std::regex_replace(fullPath, std::regex(".*?textures\\\\"), ""); // Remove everything before and including the textures path root
+
+	return fullPath;
+}
+
+NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial * material, UInt32 index)
+{
+	switch (index)
+	{
+	case 0:
+		return &material->texture1;
+		break;
+	case 1:
+		return &material->texture2;
+		break;
+	case 2:
+	{
+		if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen)
+		{
+			return &static_cast<BSLightingShaderMaterialFacegen*>(material)->unkB0;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_GlowMap)
+		{
+			return &static_cast<BSLightingShaderMaterialFacegen*>(material)->unkB0;
+		}
+		else
+		{
+			return &material->texture3;
+		}
+	}
+	break;
+	case 3:
+	{
+		if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen)
+		{
+			return &static_cast<BSLightingShaderMaterialFacegen*>(material)->unkA8;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_Parallax)
+		{
+			return &static_cast<BSLightingShaderMaterialParallax*>(material)->unkA0;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_Parallax || material->GetShaderType() == BSShaderMaterial::kShaderType_ParallaxOcc)
+		{
+			return &static_cast<BSLightingShaderMaterialParallaxOcc*>(material)->unkA0;
+		}
+	}
+	break;
+	case 4:
+	{
+		if (material->GetShaderType() == BSShaderMaterial::kShaderType_Eye)
+		{
+			return &static_cast<BSLightingShaderMaterialEye*>(material)->unkA0;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_EnvironmentMap)
+		{
+			return &static_cast<BSLightingShaderMaterialEnvmap*>(material)->unkA0;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_MultilayerParallax)
+		{
+			return &static_cast<BSLightingShaderMaterialMultiLayerParallax*>(material)->unkA8;
+		}
+	}
+	break;
+	case 5:
+	{
+		if (material->GetShaderType() == BSShaderMaterial::kShaderType_Eye)
+		{
+			return &static_cast<BSLightingShaderMaterialEye*>(material)->unkA8;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_EnvironmentMap)
+		{
+			return &static_cast<BSLightingShaderMaterialEnvmap*>(material)->unkA0;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_MultilayerParallax)
+		{
+			return &static_cast<BSLightingShaderMaterialMultiLayerParallax*>(material)->unkB0;
+		}
+	}
+	break;
+	case 6:
+	{
+		if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen)
+		{
+			return &static_cast<BSLightingShaderMaterialFacegen*>(material)->renderedTexture;
+		}
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_MultilayerParallax)
+		{
+			return &static_cast<BSLightingShaderMaterialMultiLayerParallax*>(material)->unkA0;
+		}
+	}
+	break;
+	case 7:
+		return &material->texture4;
+		break;
+	}
+
+	return nullptr;
 }
 
 #ifdef _DEBUG

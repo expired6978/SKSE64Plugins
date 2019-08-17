@@ -15,6 +15,9 @@ HRESULT CompileShaderFromData(LPCVOID pSrcData, _In_ SIZE_T SrcDataSize, _In_opt
 #if defined( DEBUG ) || defined( _DEBUG )
 	flags |= D3DCOMPILE_DEBUG;
 #endif
+#ifndef _DEBUG
+	flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
 
 	const D3D_SHADER_MACRO defines[] =
 	{

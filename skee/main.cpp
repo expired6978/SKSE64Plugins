@@ -382,7 +382,7 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 			case 'WPEN':	g_overrideInterface.LoadWeaponOverrides(intfc, version, stringTable);	break;
 			case 'SKNR':	g_overrideInterface.LoadSkinOverrides(intfc, version, stringTable);		break;
 			case 'MRPH':	g_bodyMorphInterface.Load(intfc, version, stringTable);					break;
-			case 'ITEE':	g_itemDataInterface.Load(intfc, version);								break;
+			case 'ITEE':	g_itemDataInterface.Load(intfc, version, stringTable);					break;
 			case 'ACTM':	g_transformInterface.Load(intfc, version, stringTable);					break;
 			default:
 				_MESSAGE("unhandled type %08X (%.4s)", type, &type);
@@ -537,6 +537,11 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 				g_bodyMorphInterface.LoadMods();
 			}
+
+
+			GetEventDispatcherList()->uniqueIdChangeDispatcher.AddEventSink(&g_itemDataInterface);
+
+			g_tintMaskInterface.ReadTintData("Data\\SKSE\\Plugins\\NiOverride\\TintData\\", "*.xml");
 
 			g_morphInterface.LoadMods();
 		}

@@ -90,4 +90,5 @@ namespace papyrusNiOverride
 	void SetBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName, float value);
 	float GetBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName);
 	void ClearBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName);
+	void UpdateItemTextureLayers(StaticFunctionTag * base, TESObjectREFR * refr, UInt32 uniqueID);
 }
