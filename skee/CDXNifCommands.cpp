@@ -217,8 +217,6 @@ void CDXNifResetMask::Apply(SInt32 i)
 CRGNTaskUpdateModel::CRGNTaskUpdateModel(BSTriShape * geometry)
 {
 	m_geometry = geometry;
-	if (m_geometry)
-		m_geometry->IncRef();
 }
 
 void CRGNTaskUpdateModel::Run()
@@ -229,8 +227,6 @@ void CRGNTaskUpdateModel::Run()
 
 void CRGNTaskUpdateModel::Dispose()
 {
-	if (m_geometry)
-		m_geometry->DecRef();
 	delete this;
 }
 
@@ -239,14 +235,10 @@ CRGNUITaskAddStroke::CRGNUITaskAddStroke(CDXStroke * stroke, BSTriShape * geomet
 	m_id = id;
 	m_stroke = stroke;
 	m_geometry = geometry;
-	if (m_geometry)
-		m_geometry->IncRef();
 }
 
 void CRGNUITaskAddStroke::Dispose()
 {
-	if (m_geometry)
-		m_geometry->DecRef();
 	delete this;
 }
 
@@ -284,14 +276,10 @@ CRGNUITaskStandardCommand::CRGNUITaskStandardCommand(CDXUndoCommand * cmd, BSTri
 	m_id = id;
 	m_cmd = cmd;
 	m_geometry = geometry;
-	if (m_geometry)
-		m_geometry->IncRef();
 }
 
 void CRGNUITaskStandardCommand::Dispose()
 {
-	if (m_geometry)
-		m_geometry->DecRef();
 	delete this;
 }
 
@@ -439,10 +427,14 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 					NiTransform srcTransform;
 					NiTransform dstTransform;
 
+					SimpleLock * srcLock = nullptr;
+					SimpleLock * dstLock = nullptr;
+
 					BSDynamicTriShape * dstDynamicShape = ni_cast(target, BSDynamicTriShape);
 					if (dstDynamicShape) {
-						dstGeometry = reinterpret_cast<NiPoint3*>(dstDynamicShape->diffBlock);
+						dstGeometry = reinterpret_cast<NiPoint3*>(dstDynamicShape->pDynamicData);
 						dstStride = sizeof(XMFLOAT4);
+						dstLock = &dstDynamicShape->lock;
 						dstTransform = GetGeometryTransform(dstDynamicShape);
 					}
 
@@ -461,7 +453,8 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 
 						BSDynamicTriShape * srcDynamicShape = ni_cast(sourceGeometry, BSDynamicTriShape);
 						if (srcDynamicShape) {
-							srcGeometry = reinterpret_cast<NiPoint3*>(srcDynamicShape->diffBlock);
+							srcGeometry = reinterpret_cast<NiPoint3*>(srcDynamicShape->pDynamicData);
+							srcLock = &srcDynamicShape->lock;
 							srcStride = sizeof(XMFLOAT4);
 						}
 						else {
@@ -471,6 +464,9 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 							srcStride = NiSkinPartition::GetVertexSize(sourceGeometry->vertexDesc);
 						}
 					}
+
+					if (srcLock) srcLock->Lock();
+					if (dstLock) dstLock->Lock();
 
 					if (srcNumVertices == dstNumVertices && srcGeometry && dstGeometry) {
 						CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
@@ -497,6 +493,9 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 
 						m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 					}
+
+					if (srcLock) srcLock->Release();
+					if (dstLock) dstLock->Release();
 				}
 			}
 		}

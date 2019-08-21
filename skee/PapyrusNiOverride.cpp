@@ -1906,6 +1906,8 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->RegisterFunction(
 		new NativeFunction1<StaticFunctionTag, TESForm*, UInt32>("GetOwnerOfUniqueID", "NiOverride", papyrusNiOverride::GetOwnerOfUniqueID, registry));
 
+
+	// DyeManager V1
 	registry->RegisterFunction(
 		new NativeFunction3<StaticFunctionTag, void, UInt32, SInt32, UInt32>("SetItemDyeColor", "NiOverride", papyrusNiOverride::SetItemDyeColor, registry));
 
@@ -1917,6 +1919,48 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 
 	registry->RegisterFunction(
 		new NativeFunction2<StaticFunctionTag, void, TESObjectREFR*, UInt32>("UpdateItemDyeColor", "NiOverride", papyrusNiOverride::UpdateItemDyeColor, registry));
+
+
+	// DyeManager V2
+	registry->RegisterFunction(
+		new NativeFunction4<StaticFunctionTag, void, UInt32, SInt32, SInt32, UInt32>("SetItemTextureLayerColor", "NiOverride", papyrusNiOverride::SetItemTextureLayerColor, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, UInt32, UInt32, SInt32, SInt32>("GetItemTextureLayerColor", "NiOverride", papyrusNiOverride::GetItemTextureLayerColor, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, void, UInt32, SInt32, SInt32>("ClearItemTextureLayerColor", "NiOverride", papyrusNiOverride::ClearItemTextureLayerColor, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction4<StaticFunctionTag, void, UInt32, SInt32, SInt32, UInt32>("SetItemTextureLayerType", "NiOverride", papyrusNiOverride::SetItemTextureLayerType, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, UInt32, UInt32, SInt32, SInt32>("GetItemTextureLayerType", "NiOverride", papyrusNiOverride::GetItemTextureLayerType, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, void, UInt32, SInt32, SInt32>("ClearItemTextureLayerType", "NiOverride", papyrusNiOverride::ClearItemTextureLayerType, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction4<StaticFunctionTag, void, UInt32, SInt32, SInt32, BSFixedString>("SetItemTextureLayerTexture", "NiOverride", papyrusNiOverride::SetItemTextureLayerTexture, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, BSFixedString, UInt32, SInt32, SInt32>("GetItemTextureLayerTexture", "NiOverride", papyrusNiOverride::GetItemTextureLayerTexture, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, void, UInt32, SInt32, SInt32>("ClearItemTextureLayerTexture", "NiOverride", papyrusNiOverride::ClearItemTextureLayerTexture, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction4<StaticFunctionTag, void, UInt32, SInt32, SInt32, BSFixedString>("SetItemTextureLayerBlendMode", "NiOverride", papyrusNiOverride::SetItemTextureLayerBlendMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, BSFixedString, UInt32, SInt32, SInt32>("GetItemTextureLayerBlendMode", "NiOverride", papyrusNiOverride::GetItemTextureLayerBlendMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction3<StaticFunctionTag, void, UInt32, SInt32, SInt32>("ClearItemTextureLayerBlendMode", "NiOverride", papyrusNiOverride::ClearItemTextureLayerBlendMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction2<StaticFunctionTag, void, TESObjectREFR*, UInt32>("UpdateItemTextureLayers", "NiOverride", papyrusNiOverride::UpdateItemTextureLayers, registry));
+
 
 	registry->RegisterFunction(
 		new NativeFunction0<StaticFunctionTag, void>("EnableTintTextureCache", "NiOverride", papyrusNiOverride::EnableTintTextureCache, registry));

@@ -18,6 +18,7 @@
 #include "skse64/NiExtraData.h"
 
 #include <regex>
+#include <algorithm>
 
 extern SKSETaskInterface				* g_task;
 
@@ -150,13 +151,6 @@ void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 	}
 }
 
-NIOVTaskUpdateTexture::NIOVTaskUpdateTexture(NiPointer<BSGeometry> geometry, UInt32 index, StringTableItem texture)
-{
-	m_geometry = geometry;
-	m_index = index;
-	m_texture = texture;
-}
-
 void NIOVTaskUpdateTexture::Run()
 {
 	if(m_geometry)
@@ -172,7 +166,6 @@ void NIOVTaskUpdateTexture::Run()
 		{
 			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
 			if(m_index < BSTextureSet::kNumTextures) {
-
 				// Load the texture requested and then assign it to the material
 				NiPointer<NiTexture> newTexture;
 				LoadTexture(m_texture->c_str(), 1, newTexture, false);
@@ -199,13 +192,6 @@ void NIOVTaskUpdateTexture::Run()
 			}
 		}
 	}
-}
-
-void NIOVTaskUpdateTexture::Dispose()
-{
-	if (m_geometry)
-		m_geometry->DecRef();
-	delete this;
 }
 
 void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediate)
@@ -315,6 +301,7 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 					if(immediate)
 					{
 						if(value->index >= 0 && value->index < BSTextureSet::kNumTextures) {
+
 #if 0
 							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
 							for(UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
@@ -326,7 +313,9 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 							material->ReleaseTextures();
 							material->SetTextureSet(newTextureSet);
 							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
+							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
 #endif
+
 							NiPointer<NiTexture> newTexture;
 							LoadTexture(texture.c_str(), 1, newTexture, false);
 
@@ -640,7 +629,7 @@ SKEEFixedString GetSanitizedPath(const SKEEFixedString & path)
 
 	fullPath = std::regex_replace(fullPath, std::regex("/+|\\\\+"), "\\"); // Replace multiple slashes or forward slashes with one backslash
 	fullPath = std::regex_replace(fullPath, std::regex("^\\\\+"), ""); // Remove all backslashes from the front
-	fullPath = std::regex_replace(fullPath, std::regex(".*?textures\\\\"), ""); // Remove everything before and including the textures path root
+	fullPath = std::regex_replace(fullPath, std::regex(".*?textures\\\\", std::regex_constants::icase), ""); // Remove everything before and including the textures path root
 
 	return fullPath;
 }

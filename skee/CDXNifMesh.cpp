@@ -142,8 +142,9 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 			UInt32 vertexSize = NiSkinPartition::GetVertexSize(geometry->vertexDesc);
 			UInt32 uvOffset = NiSkinPartition::GetVertexAttributeOffset(geometry->vertexDesc, VertexAttribute::VA_TEXCOORD0);
 
+			dynamicTriShape->lock.Lock();
 			for (UInt32 i = 0; i < vertCount; i++) {
-				NiPoint3 * vertex = dynamicTriShape ? reinterpret_cast<NiPoint3*>(&reinterpret_cast<DirectX::XMFLOAT4*>(dynamicTriShape->diffBlock)[i]) : reinterpret_cast<NiPoint3*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData[i * vertexSize]);
+				NiPoint3 * vertex = dynamicTriShape ? reinterpret_cast<NiPoint3*>(&reinterpret_cast<DirectX::XMFLOAT4*>(dynamicTriShape->pDynamicData)[i]) : reinterpret_cast<NiPoint3*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData[i * vertexSize]);
 				NiPoint3 xformed = localTransform * (*vertex);
 				struct UVCoord
 				{
@@ -157,6 +158,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 				pVertices[i].Tex = uv;
 				XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
 			}
+			dynamicTriShape->lock.Release();
 		});
 
 		nifMesh->BuildAdjacency();

@@ -494,14 +494,16 @@ void SKSETaskExportHead::Run()
 					BSDynamicTriShape* xData = (BSDynamicTriShape*)memory;
 					xData->ctor();
 					newTrishape = xData;
-					if (dynamicShape->diffBlock)
+					if (dynamicShape->pDynamicData)
 					{
-						xData->diffBlock = (float*)Heap_Allocate(trishape->numVertices * sizeof(float) * 4);
-						memcpy(xData->diffBlock, dynamicShape->diffBlock, trishape->numVertices * sizeof(float) * 4);
+						dynamicShape->lock.Lock();
+						xData->pDynamicData = (float*)Heap_Allocate(trishape->numVertices * sizeof(float) * 4);
+						memcpy(xData->pDynamicData, dynamicShape->pDynamicData, trishape->numVertices * sizeof(float) * 4);
+						dynamicShape->lock.Release();
 					}
 
-					xData->unk168 = dynamicShape->unk168;
-					xData->unk170 = dynamicShape->unk170;
+					xData->dataSize = dynamicShape->dataSize;
+					xData->frameCount = dynamicShape->frameCount;
 					xData->unk178 = dynamicShape->unk178;
 				}
 				else
@@ -538,7 +540,7 @@ void SKSETaskExportHead::Run()
 					newTrishape->unk118 = trishape->unk118;
 					newTrishape->unk140 = trishape->unk140;
 					newTrishape->vertexDesc = trishape->vertexDesc;
-					newTrishape->unk150 = trishape->unk150;
+					newTrishape->shapeType = trishape->shapeType;
 					newTrishape->unk151 = trishape->unk151;
 					newTrishape->unk152 = trishape->unk152;
 					newTrishape->unk154 = trishape->unk154;

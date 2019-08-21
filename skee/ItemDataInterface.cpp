@@ -734,6 +734,14 @@ bool ItemAttributeData::TintData::Load(SKSESerializationInterface * intfc, UInt3
 
 	for (UInt32 i = 0; i < tintCount; i++)
 	{
+		SInt32 maskIndex = 0;
+		if (!intfc->ReadRecordData(&maskIndex, sizeof(maskIndex)))
+		{
+			_ERROR("%s - Error loading mask index", __FUNCTION__);
+			error = true;
+			return error;
+		}
+
 		UInt8 overrideFlags = 0;
 		if (kVersion >= ItemDataInterface::kSerializationVersion2)
 		{
@@ -743,14 +751,6 @@ bool ItemAttributeData::TintData::Load(SKSESerializationInterface * intfc, UInt3
 				error = true;
 				return error;
 			}
-		}
-
-		SInt32 maskIndex = 0;
-		if (!intfc->ReadRecordData(&maskIndex, sizeof(maskIndex)))
-		{
-			_ERROR("%s - Error loading mask index", __FUNCTION__);
-			error = true;
-			return error;
 		}
 
 		if (kVersion == ItemDataInterface::kSerializationVersion1)

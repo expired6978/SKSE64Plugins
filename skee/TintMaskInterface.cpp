@@ -51,6 +51,9 @@ void TintMaskInterface::CreateTintsFromData(std::map<SInt32, CDXNifTextureRender
 	for (auto base : layerTarget.typeData) {
 		masks[base.first].textureType = base.second;
 	}
+	for (auto base : layerTarget.alphaData) {
+		masks[base.first].color |= (UInt32)(base.second * 255) << 24;
+	}
 
 	if (overrides) {
 		auto layer = overrides->m_tintData.find(layerTarget.targetIndex);
@@ -502,7 +505,7 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 				const char * diffuse = child->Attribute("diffuse");
 				const char * texture = child->Attribute("texture");
 				
-				auto layer = m_modelMap.GetMask(objectPath, trishape, texture ? texture : diffuse);
+				auto layer = m_modelMap.GetMask(objectPath, trishape, texture ? texture : diffuse ? diffuse : "");
 
 				layer->textures.clear();
 				layer->colors.clear();
@@ -511,7 +514,7 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 				UInt32 index = 0;
 				auto mask = child->FirstChildElement("mask");
 				while (mask) {
-					auto maskPath = SKEEFixedString(mask->Attribute("path"));
+					auto path = mask->Attribute("path");
 					auto color = mask->Attribute("color");
 
 					UInt32 colorValue;
@@ -525,9 +528,6 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 					auto alpha = mask->DoubleAttribute("alpha");
 
 					const char* blend = mask->Attribute("blend");
-					if (!blend) {
-						blend = "tint";
-					}
 
 					int type = static_cast<int>(CDXNifTextureRenderer::TextureType::Mask);
 					mask->QueryIntAttribute("type", &type);
@@ -535,10 +535,10 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 					int i = index;
 					mask->QueryIntAttribute("index", &i);
 
-					layer->textures[i] = maskPath;
+					layer->textures[i] = path ? path : "";
 					layer->colors[i] = colorValue;
 					layer->alphas[i] = alpha;
-					layer->blendModes[i] = blend;
+					layer->blendModes[i] = blend ? blend : "";
 					layer->types[i] = type;
 
 					mask = mask->NextSiblingElement("mask");

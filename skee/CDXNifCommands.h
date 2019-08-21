@@ -9,6 +9,7 @@
 
 #include "skse64/GameThreads.h"
 #include "skse64/Hooks_UI.h"
+#include "skse64/NiTypes.h"
 
 class CDXNifMesh;
 
@@ -125,7 +126,7 @@ public:
 	virtual void Dispose();
 
 private:
-	BSTriShape * m_geometry;
+	NiPointer<BSTriShape> m_geometry;
 };
 
 class CRGNUITaskAddStroke : public UIDelegate_v1
@@ -139,7 +140,7 @@ public:
 private:
 	CDXStroke * m_stroke;
 	SInt32	m_id;
-	BSTriShape * m_geometry;
+	NiPointer<BSTriShape> m_geometry;
 };
 
 class CRGNUITaskStandardCommand : public UIDelegate_v1
@@ -153,7 +154,7 @@ public:
 private:
 	CDXUndoCommand * m_cmd;
 	SInt32	m_id;
-	BSTriShape * m_geometry;
+	NiPointer<BSTriShape> m_geometry;
 };
 
 #endif

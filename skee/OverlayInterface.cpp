@@ -118,7 +118,15 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 				alphaProperty = legacyGeometry->m_spPropertyState;
 			}
 
-			newShape = CreateBSTriShape();
+			if (source->shapeType == BSGeometry::kShapeType_Dynamic)
+			{
+				newShape = CreateBSDynamicTriShape();
+			}
+			else
+			{
+				newShape = CreateBSTriShape();
+			}
+			
 			if (newShape) {
 				newShape->m_name = overlayName.data;
 			}
@@ -134,6 +142,18 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			targetShape->m_spEffectState = shaderProperty;
 		if (alphaProperty)
 			targetShape->m_spPropertyState = alphaProperty;
+
+		if (targetShape->shapeType == BSGeometry::kShapeType_Dynamic)
+		{
+			BSDynamicTriShape * sourceShape = static_cast<BSDynamicTriShape*>(source);
+			BSDynamicTriShape * newDynShape = static_cast<BSDynamicTriShape*>(targetShape);
+
+			newDynShape->dataSize = sourceShape->dataSize;
+			newDynShape->frameCount = sourceShape->frameCount;
+			newDynShape->pDynamicData = sourceShape->pDynamicData;
+			newDynShape->unk178 = sourceShape->unk178;
+			newDynShape->unk17C = 0;
+		}
 
 		targetShape->m_localTransform = source->m_localTransform;
 		targetShape->m_spSkinInstance = source->m_spSkinInstance;
