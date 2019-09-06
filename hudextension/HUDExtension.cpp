@@ -8,7 +8,7 @@
 #include <algorithm>
 
 
-double ObjectWidget::GetProperty(UInt32 type)
+double ObjectWidget::GetProperty(UInt32 type) const
 {
 	switch(type)
 	{
@@ -41,6 +41,9 @@ double ObjectWidget::GetProperty(UInt32 type)
 		break;
 	case kPropertyType_MaximumValue:
 		return params[kProperty_MaximumValue].GetNumber();
+		break;
+	case kPropertyType_Level:
+		return params[kProperty_Level].GetNumber();
 		break;
 	}
 
@@ -80,6 +83,9 @@ void ObjectWidget::SetProperty(UInt32 type, double value)
 	case kPropertyType_FillMode:
 		params[kProperty_FillMode].SetNumber(value);
 		break;
+	case kPropertyType_Level:
+		params[kProperty_Level].SetNumber(value);
+		break;
 	}
 }
 
@@ -94,8 +100,8 @@ void ObjectWidget::UpdateProperty(UInt32 type)
 				(flags & kFlag_HideOutOfCombat) == kFlag_HideOutOfCombat || 
 				(flags & kFlag_HideOnDeath) == kFlag_HideOnDeath) {
 				TESForm * form = LookupFormByID(formId);
-				if(form) {
-					TESObjectREFR * reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
+				if(form && form->formType == kFormType_Reference || form->formType == kFormType_Character) {
+					TESObjectREFR * reference = static_cast<TESObjectREFR*>(form);
 					if(reference) {
 						bool isVisible = false;
 						bool isFriendly = false;
@@ -131,6 +137,9 @@ void ObjectWidget::UpdateProperty(UInt32 type)
 	case kPropertyType_Name:
 		UpdateText();
 		break;
+	case kPropertyType_Level:
+		UpdateLevel();
+		break;
 	}
 }
 
@@ -143,7 +152,10 @@ void ObjectWidget::UpdateText()
 {
 	GFxValue textField;
 	object.GetMember("nameField", &textField);
-	textField.SetText(params[kProperty_Name].GetString(), false);
+	if (textField.IsDisplayObject())
+	{
+		textField.SetText(params[kProperty_Name].GetString(), false);
+	}
 }
 
 void ObjectWidget::UpdateValues()
@@ -169,6 +181,11 @@ void ObjectWidget::UpdateColors()
 		update[2] = params[kProperty_FlashFriendlyColor];
 	}
 	object.Invoke("setColors", NULL, update, 3);
+}
+
+void ObjectWidget::UpdateLevel()
+{
+	object.Invoke("setLevel", NULL, &params[kProperty_Level], 1);
 }
 
 void ObjectWidget::UpdateFlags()
@@ -201,8 +218,9 @@ void ObjectWidget::QueryState(TESObjectREFR * reference, bool * isVisible, bool 
 	UInt8 unk1 = 0;
 	if((flags & kFlag_UseLineOfSight) == kFlag_UseLineOfSight)
 		isHidden = !HasLOS((*g_thePlayer), reference, &unk1);
-	Actor * actor = DYNAMIC_CAST(reference, TESObjectREFR, Actor);
-	if(actor) {
+	
+	if(reference && reference->formType == kFormType_Character) {
+		Actor * actor = static_cast<Actor*>(reference);
 		if ((flags & kFlag_UpdatePercent) == kFlag_UpdatePercent) {
 			params[kProperty_CurrentValue].SetNumber(actor->actorValueOwner.GetCurrent(24));
 			params[kProperty_MaximumValue].SetNumber(actor->actorValueOwner.GetMaximum(24));
@@ -251,8 +269,8 @@ void ObjectWidget::QueryState(TESObjectREFR * reference, bool * isVisible, bool 
 void ObjectWidget::UpdateComponent(GFxMovieView * view, float * depth)
 {
 	TESForm * form = LookupFormByID(formId);
-	if(form) {
-		TESObjectREFR * reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
+	if(form && (form->formType == kFormType_Reference || form->formType == kFormType_Character)) {
+		TESObjectREFR * reference = static_cast<TESObjectREFR*>(form);
 		if(reference) {
 			NiPoint3 markerPos;
 			reference->GetMarkerPosition(&markerPos);
@@ -277,29 +295,40 @@ void ObjectWidget::UpdateComponent(GFxMovieView * view, float * depth)
 			bool isFriendly = false;
 			QueryState(reference, &isVisible, &isFriendly);
 
+			UInt32 startFlags = flags;
+
 			if ((g_hudExtension->hudFlags & HUDExtension::kFlags_HideName) == HUDExtension::kFlags_HideName || (flags & ObjectWidget::kFlag_HideName) == ObjectWidget::kFlag_HideName) {
-				params[kProperty_Name].SetString("");
-				UpdateText();
+				displayName[0] = 0;
 			} else {
-				const char * text = CALL_MEMBER_FN(reference, GetReferenceName)();
-				if (params[kProperty_Name].GetString() != text) {
-					params[kProperty_Name].SetString(text);
-					UpdateText();
+				sprintf_s(displayName, "%s", CALL_MEMBER_FN(reference, GetReferenceName)());
+			}
+
+			if (form->formType == kFormType_Character && ((g_hudExtension->hudFlags & HUDExtension::kFlags_ShowLevel) == HUDExtension::kFlags_ShowLevel))
+			{
+				double level = CALL_MEMBER_FN(static_cast<Actor*>(form), GetLevel)();
+				if (params[kProperty_Level].GetType() != GFxValue::kType_Number || params[kProperty_Level].GetNumber() != level)
+				{
+					flags |= ObjectWidget::kFlag_ShowLevel;
+					params[kProperty_Level].SetNumber(level);
+					UpdateFlags();
+					UpdateLevel();
 				}
 			}
+
+			params[kProperty_Name].SetString(displayName);
+			UpdateText();
 
 			if ((flags & ObjectWidget::kFlag_UseHostility) == ObjectWidget::kFlag_UseHostility) {
 				bool nowFriendly = IsFriendly();
 				if (nowFriendly && !isFriendly) { // Turned hostile
 					flags &= ~ObjectWidget::kFlag_Friendly;
-					UpdateFlags();
-					UpdateColors();
 				}
 				else if (!nowFriendly && isFriendly) { // Turned friendly
 					flags |= ObjectWidget::kFlag_Friendly;
-					UpdateFlags();
-					UpdateColors();
 				}
+
+				UpdateFlags();
+				UpdateColors();
 			}
 
 			double scale = min(((100 - z_out * 100) * 10), 50);//(1.0 - z_out) * 100;//min(((100 - z_out * 100) * 10), 50);
@@ -317,7 +346,7 @@ void ObjectWidget::UpdateComponent(GFxMovieView * view, float * depth)
 	}
 }
 
-void ObjectWidgets::AddGFXMeter(GFxMovieView * view, ObjectWidget * objectMeter, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[])
+bool ObjectWidgets::AddGFXMeter(GFxMovieView * view, std::shared_ptr<ObjectWidget> & objectMeter, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[])
 {
 	GFxValue update[11];
 	update[0].SetNumber(objectMeter->formId);
@@ -369,10 +398,16 @@ void ObjectWidgets::AddGFXMeter(GFxMovieView * view, ObjectWidget * objectMeter,
 		update[10].SetUndefined();
 
 	view->Invoke("_root.hudExtension.floatingWidgets.loadWidget", &objectMeter->object, update, 11);
+	if (!objectMeter->object.IsDisplayObject())
+	{
+		return false;
+	}
+
 	objectMeter->object.AddManaged();
+	return true;
 }
 
-void ObjectWidgets::RemoveGFXMeter(GFxMovieView * view, ObjectWidget * objectMeter)
+void ObjectWidgets::RemoveGFXMeter(GFxMovieView * view, std::shared_ptr<ObjectWidget> & objectMeter)
 {
 	if(objectMeter->object.IsManaged()) {
 		GFxValue arg;
@@ -385,34 +420,39 @@ void ObjectWidgets::RemoveGFXMeter(GFxMovieView * view, ObjectWidget * objectMet
 bool ObjectWidgets::AddMeter(GFxMovieView * view, UInt32 formId, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[])
 {
 	bool added = false;
-	ObjectWidget objectMeter;
-	objectMeter.formId = formId;
 	Lock();
-	HealthbarSet::iterator it = m_data.find(objectMeter);
-	if(it == m_data.end()) {
-		objectMeter.flags = flags;
+	auto foundIt = m_data.find(formId);
+	if(foundIt == m_data.end()) {
+		std::shared_ptr<ObjectWidget> objectMeter = std::make_shared<ObjectWidget>(formId);
+		objectMeter->flags = flags;
 		if(current != -1)
-			objectMeter.params[ObjectWidget::kProperty_CurrentValue].SetNumber(current);
+			objectMeter->params[ObjectWidget::kProperty_CurrentValue].SetNumber(current);
 		if (max != -1)
-			objectMeter.params[ObjectWidget::kProperty_MaximumValue].SetNumber(max);
+			objectMeter->params[ObjectWidget::kProperty_MaximumValue].SetNumber(max);
 		if(colors[0] != -1)
-			objectMeter.params[ObjectWidget::kProperty_PrimaryColor].SetNumber(colors[0]);
+			objectMeter->params[ObjectWidget::kProperty_PrimaryColor].SetNumber(colors[0]);
 		if(colors[1] != -1)
-			objectMeter.params[ObjectWidget::kProperty_SecondaryColor].SetNumber(colors[1]);
+			objectMeter->params[ObjectWidget::kProperty_SecondaryColor].SetNumber(colors[1]);
 		if(colors[2] != -1)
-			objectMeter.params[ObjectWidget::kProperty_FlashColor].SetNumber(colors[2]);
+			objectMeter->params[ObjectWidget::kProperty_FlashColor].SetNumber(colors[2]);
 		if (colors[3] != -1)
-			objectMeter.params[ObjectWidget::kProperty_PrimaryFriendlyColor].SetNumber(colors[3]);
+			objectMeter->params[ObjectWidget::kProperty_PrimaryFriendlyColor].SetNumber(colors[3]);
 		if (colors[4] != -1)
-			objectMeter.params[ObjectWidget::kProperty_SecondaryFriendlyColor].SetNumber(colors[4]);
+			objectMeter->params[ObjectWidget::kProperty_SecondaryFriendlyColor].SetNumber(colors[4]);
 		if (colors[5] != -1)
-			objectMeter.params[ObjectWidget::kProperty_FlashFriendlyColor].SetNumber(colors[5]);
+			objectMeter->params[ObjectWidget::kProperty_FlashFriendlyColor].SetNumber(colors[5]);
 		if(fillMode != -1)
-			objectMeter.params[ObjectWidget::kProperty_FillMode].SetNumber(fillMode);
+			objectMeter->params[ObjectWidget::kProperty_FillMode].SetNumber(fillMode);
 
-		AddGFXMeter(view, &objectMeter, current, max, flags, fillMode, colors);
-		m_data.insert(objectMeter);
-		added = true;
+		auto it = m_data.emplace(formId, objectMeter);
+		if (it.second)
+		{
+			added = AddGFXMeter(view, objectMeter, current, max, flags, fillMode, colors);
+			if (!added)
+			{
+				m_data.erase(it.first);
+			}
+		}
 	}
 	Release();
 	return added;
@@ -422,31 +462,27 @@ bool ObjectWidgets::RemoveMeter(GFxMovieView * view, UInt32 formId, UInt32 conte
 {
 	bool removed = false;
 
-	ObjectWidget foundBar;
-	foundBar.formId = formId;
-		
 	Lock();
-	HealthbarSet::iterator it = m_data.find(foundBar);
+	auto it = m_data.find(formId);
 	if(it != m_data.end()) {
-		if ((((it->flags & ObjectWidget::kFlag_RemoveOnDeath) == ObjectWidget::kFlag_RemoveOnDeath && (context & ObjectWidget::kContext_Death) == ObjectWidget::kContext_Death)) ||
-			(((it->flags & ObjectWidget::kFlag_RemoveOutOfCombat) == ObjectWidget::kFlag_RemoveOutOfCombat && (context & ObjectWidget::kContext_LeaveCombat) == ObjectWidget::kContext_LeaveCombat)) ||
+		if ((((it->second->flags & ObjectWidget::kFlag_RemoveOnDeath) == ObjectWidget::kFlag_RemoveOnDeath && (context & ObjectWidget::kContext_Death) == ObjectWidget::kContext_Death)) ||
+			(((it->second->flags & ObjectWidget::kFlag_RemoveOutOfCombat) == ObjectWidget::kFlag_RemoveOutOfCombat && (context & ObjectWidget::kContext_LeaveCombat) == ObjectWidget::kContext_LeaveCombat)) ||
 			context == ObjectWidget::kContext_None) {
-			RemoveGFXMeter(view, const_cast<ObjectWidget*>(&(*it)));
+			RemoveGFXMeter(view, it->second);
 			m_data.erase(it);
 			removed = true;
 		}
 	}
 	Release();
-
 	return removed;
 }
 
 void ObjectWidgets::RemoveAllHealthbars(GFxMovieView * view)
 {
 	Lock();
-	HealthbarSet::iterator it = m_data.begin();
+	auto it = m_data.begin();
 	while(it != m_data.end()) {
-		RemoveGFXMeter(view, const_cast<ObjectWidget*>(&(*it)));
+		RemoveGFXMeter(view, it->second);
 		m_data.erase(it++);
 	}
 	Release();
@@ -454,13 +490,11 @@ void ObjectWidgets::RemoveAllHealthbars(GFxMovieView * view)
 
 double ObjectWidgets::GetMeterProperty(UInt32 formId, UInt32 type)
 {
-	ObjectWidget objectMeter;
-	objectMeter.formId = formId;
 	double value = 0;
 	Lock();
-	HealthbarSet::iterator it = m_data.find(objectMeter);
+	auto it = m_data.find(formId);
 	if(it != m_data.end()) {
-		value = const_cast<ObjectWidget*>(&(*it))->GetProperty(type);
+		value = it->second->GetProperty(type);
 	}
 	Release();
 	return value;
@@ -468,25 +502,20 @@ double ObjectWidgets::GetMeterProperty(UInt32 formId, UInt32 type)
 
 void ObjectWidgets::UpdateMeterProperty(UInt32 formId, UInt32 type)
 {
-	ObjectWidget objectMeter;
-	objectMeter.formId = formId;
 	Lock();
-	HealthbarSet::iterator it = m_data.find(objectMeter);
+	auto it = m_data.find(formId);
 	if(it != m_data.end()) {
-		const_cast<ObjectWidget*>(&(*it))->UpdateProperty(type);
+		it->second->UpdateProperty(type);
 	}
 	Release();
 }
 
 void ObjectWidgets::SetMeterProperty(UInt32 formId, UInt32 type, double value)
 {
-	ObjectWidget objectMeter;
-	objectMeter.formId = formId;
-
 	Lock();
-	HealthbarSet::iterator it = m_data.find(objectMeter);
+	auto it = m_data.find(formId);
 	if(it != m_data.end()) {
-		const_cast<ObjectWidget*>(&(*it))->SetProperty(type, value);
+		it->second->SetProperty(type, value);
 	}
 	Release();
 }
@@ -494,18 +523,17 @@ void ObjectWidgets::SetMeterProperty(UInt32 formId, UInt32 type, double value)
 void ObjectWidgets::UpdateComponents(GFxMovieView * view)
 {
 	Lock();
-
 	GFxValue handleArray;
 	view->CreateArray(&handleArray);
 
-	for(HealthbarSet::iterator it = m_data.begin(); it != m_data.end(); ++it) {
+	for(auto widget : m_data) {
 		float zPos = 0.0;
-		const_cast<ObjectWidget*>(&(*it))->UpdateComponent(view, &zPos);
+		widget.second->UpdateComponent(view, &zPos);
 
 		GFxValue meterData;
 		view->CreateObject(&meterData);
 		GFxValue meterId;
-		meterId.SetNumber(it->formId);
+		meterId.SetNumber(widget.first);
 		GFxValue meterzPos;
 		meterzPos.SetNumber(zPos);
 
@@ -515,7 +543,6 @@ void ObjectWidgets::UpdateComponents(GFxMovieView * view)
 		handleArray.PushBack(&meterData);
 	}
 	view->Invoke("_root.hudExtension.floatingWidgets.sortWidgetDepths", NULL, &handleArray, 1);
-
 	Release();
 }
 

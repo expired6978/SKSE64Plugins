@@ -3,13 +3,12 @@
 #include "skse64/GameMenus.h"
 #include "skse64/Hooks_UI.h"
 
-#include <set>
+#include <unordered_map>
+#include <memory>
 
 class ObjectWidget
 {
 public:
-	bool operator<(const ObjectWidget & rhs) const	{ return formId < rhs.formId; }
-
 	enum Flags
 	{
 		kFlag_None					= 0,
@@ -23,7 +22,8 @@ public:
 		kFlag_Friendly				= (1 << 7),
 		kFlag_UseHostility			= (1 << 8),
 		kFlag_HideOnInvisibility	= (1 << 9),
-		kFlag_HideName				= (1 << 10)
+		kFlag_HideName				= (1 << 10),
+		kFlag_ShowLevel				= (1 << 11)
 	};
 
 	enum FillModes
@@ -47,6 +47,7 @@ public:
 		kPropertyType_FillMode,
 		kPropertyType_StartFlash,
 		kPropertyType_Name,
+		kPropertyType_Level,
 		kPropertyType_NumProperties
 	};
 
@@ -63,6 +64,7 @@ public:
 		kProperty_FlashFriendlyColor,
 		kProperty_FillMode,
 		kProperty_Name,
+		kProperty_Level,
 		kProperty_NumProperties
 	};
 
@@ -74,19 +76,15 @@ public:
 		kContext_Friendly = 4
 	};
 
-	ObjectWidget::ObjectWidget()
-	{
-		flags |= kFlag_RemoveOnDeath | kFlag_RemoveOutOfCombat | kFlag_UpdatePercent | kFlag_UseLineOfSight;
-		for(UInt32 i = 0; i < kProperty_NumProperties; i++)
-			params[i].SetUndefined();
-	}
+	ObjectWidget(UInt32 formId = 0) : formId(formId), flags(kFlag_RemoveOnDeath | kFlag_RemoveOutOfCombat | kFlag_UpdatePercent | kFlag_UseLineOfSight) { }
 
 	UInt32		formId;
 	UInt32		flags;
 	GFxValue	params[kProperty_NumProperties];
 	GFxValue	object;
+	char		displayName[MAX_PATH];
 
-	double GetProperty(UInt32 type);
+	double GetProperty(UInt32 type) const;
 	void SetProperty(UInt32 type, double value);
 	void UpdateProperty(UInt32 type);
 
@@ -99,15 +97,16 @@ public:
 	void UpdateFillMode();
 	void UpdateFlash();
 	void UpdateText();
+	void UpdateLevel();
 	void UpdateComponent(GFxMovieView * view, float * depth);
 };
 
-class ObjectWidgets : public SafeDataHolder<std::set<ObjectWidget>>
+class ObjectWidgets : public SafeDataHolder<std::unordered_map<UInt32, std::shared_ptr<ObjectWidget>>>
 {
-	typedef std::set<ObjectWidget> HealthbarSet;
+	typedef std::unordered_map<UInt32, std::shared_ptr<ObjectWidget>> HealthbarMap;
 public:
-	void AddGFXMeter(GFxMovieView * view, ObjectWidget * objectMeter, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[]);
-	void RemoveGFXMeter(GFxMovieView * view, ObjectWidget * objectMeter);
+	bool AddGFXMeter(GFxMovieView * view, std::shared_ptr<ObjectWidget> & objectMeter, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[]);
+	void RemoveGFXMeter(GFxMovieView * view, std::shared_ptr<ObjectWidget> & objectMeter);
 
 	bool AddMeter(GFxMovieView * view, UInt32 formId, float current, float max, UInt32 flags, UInt32 fillMode, UInt32 colors[]);
 	bool RemoveMeter(GFxMovieView * view, UInt32 formId, UInt32 context);
@@ -146,6 +145,7 @@ public:
 		kFlags_HideNonHostile	= (1 << 3),
 		kFlags_HideAtFull		= (1 << 4),
 		kFlags_HideName			= (1 << 5),
+		kFlags_ShowLevel		= (1 << 6)
 	};
 
 	UInt32 hudFlags;
@@ -158,7 +158,7 @@ private:
 class AddRemoveWidgetTask : public UIDelegate_v1
 {
 public:
-	AddRemoveWidgetTask::AddRemoveWidgetTask(UInt32 formId, float current, float max, UInt32 state, UInt32 context) : m_formId(formId), m_current(current), m_max(max), m_state(state), m_context(context){}
+	AddRemoveWidgetTask(UInt32 formId, float current, float max, UInt32 state, UInt32 context) : m_formId(formId), m_current(current), m_max(max), m_state(state), m_context(context){}
 	virtual void Run();
 	virtual void Dispose()
 	{

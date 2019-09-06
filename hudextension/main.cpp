@@ -47,7 +47,7 @@ public:
 				contextFlags |= ObjectWidget::kContext_Friendly;
 		}
 
-		if (evn->source != (*g_thePlayer))
+		if (evn->source && evn->source != (*g_thePlayer))
 			g_task->AddUITask(new AddRemoveWidgetTask(evn->source->formID, current, max, evn->state, contextFlags));
 		return kEvent_Continue;
 	}
@@ -58,7 +58,7 @@ class DeathEventHandler : public BSTEventSink < TESDeathEvent >
 public:
 	virtual	EventResult ReceiveEvent(TESDeathEvent * evn, EventDispatcher<TESDeathEvent> * dispatcher)
 	{
-		if (evn->source != (*g_thePlayer))
+		if (evn->source && evn->source != (*g_thePlayer))
 			g_task->AddUITask(new AddRemoveWidgetTask(evn->source->formID, 0.0, 0.0, 0, ObjectWidget::kContext_Death));
 		return kEvent_Continue;
 	}
