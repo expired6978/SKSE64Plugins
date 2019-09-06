@@ -10,7 +10,9 @@
 #include "skse64/GameReferences.h"
 #include "skse64/GameStreams.h"
 
-void SkeletonExtender::Attach(TESObjectREFR * refr, NiNode * skeleton, NiAVObject * objectRoot)
+extern bool	g_enableEquippableTransforms;
+
+void SkeletonExtenderInterface::Attach(TESObjectREFR * refr, NiNode * skeleton, NiAVObject * objectRoot)
 {
 	NiStringsExtraData * extraData = ni_cast(FindExtraData(objectRoot, "EXTN"), NiStringsExtraData);
 	if(extraData)
@@ -47,7 +49,7 @@ void SkeletonExtender::Attach(TESObjectREFR * refr, NiNode * skeleton, NiAVObjec
 	}
 }
 
-NiNode * SkeletonExtender::LoadTemplate(NiNode * parent, const char * path)
+NiNode * SkeletonExtenderInterface::LoadTemplate(NiNode * parent, const char * path)
 {
 	NiNode * rootNode = NULL;
 	UInt8 niStreamMemory[0x5B4];
@@ -83,7 +85,7 @@ destroy_stream:
 
 extern NiTransformInterface	g_transformInterface;
 
-void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, NiNode * skeleton, NiAVObject * objectRoot)
+void SkeletonExtenderInterface::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, NiNode * skeleton, NiAVObject * objectRoot)
 {
 	std::set<SKEEFixedString> current_nodes, previous_nodes, diffs, changes, update;
 
@@ -207,7 +209,7 @@ void SkeletonExtender::AddTransforms(TESObjectREFR * refr, bool isFirstPerson, N
 	}
 }
 
-void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonData, bool isFirstPerson, bool isFemale, std::set<SKEEFixedString> & nodes, std::set<SKEEFixedString> & changes)
+void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char * jsonData, bool isFirstPerson, bool isFemale, std::set<SKEEFixedString> & nodes, std::set<SKEEFixedString> & changes)
 {
 	try
 	{
@@ -306,5 +308,15 @@ void SkeletonExtender::ReadTransforms(TESObjectREFR * refr, const char * jsonDat
 	catch (...)
 	{
 		_ERROR("%s - Error - Failed to parse skeleton transform data", __FUNCTION__);
+	}
+}
+
+void SkeletonExtenderInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	Attach(refr, root, object);
+
+	if (g_enableEquippableTransforms)
+	{
+		AddTransforms(refr, isFirstPerson, skeleton, object);
 	}
 }

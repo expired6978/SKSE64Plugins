@@ -72,11 +72,12 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class ActorMorphs : public SafeDataHolder<std::unordered_map<UInt64, BodyMorphData>>
+typedef UInt32 MorphKey;
+class ActorMorphs : public SafeDataHolder<std::unordered_map<MorphKey, BodyMorphData>>
 {
 	friend class BodyMorphInterface;
 public:
-	typedef std::unordered_map<UInt64, BodyMorphData>	MorphMap;
+	typedef std::unordered_map<MorphKey, BodyMorphData>	MorphMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
@@ -303,7 +304,9 @@ typedef std::shared_ptr<BodyGenDataTemplates> BodyGenDataTemplatesPtr;
 
 typedef std::unordered_map<TESNPC*, BodyGenDataTemplatesPtr> BodyGenData;
 
-class BodyMorphInterface : public IBodyMorphInterface
+class BodyMorphInterface 
+	: public IBodyMorphInterface
+	, public IAddonAttachmentInterface
 {
 public:
 	enum
@@ -312,7 +315,8 @@ public:
 		kSerializationVersion1 = 1,
 		kSerializationVersion2 = 2,
 		kSerializationVersion3 = 3,
-		kSerializationVersion = kSerializationVersion3
+		kSerializationVersion4 = 3,
+		kSerializationVersion = kSerializationVersion4
 	};
 	virtual UInt32 GetVersion();
 
@@ -405,4 +409,7 @@ private:
 	friend class NIOVTaskUpdateMorph;
 	friend class NIOVTaskUpdateModelWeight;
 	friend class FaceMorphInterface;
+
+	// Inherited via IAddonAttachmentInterface
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
 };

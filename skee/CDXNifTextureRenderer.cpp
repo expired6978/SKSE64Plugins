@@ -1,6 +1,7 @@
 #include "CDXNifTextureRenderer.h"
 #include "CDXD3DDevice.h"
 #include "CDXTypes.h"
+#include "CDXBSShaderResource.h"
 
 #include "FileUtils.h"
 
@@ -12,25 +13,14 @@
 
 bool CDXNifTextureRenderer::Init(CDXD3DDevice* device, CDXPixelShaderCache * cache)
 {
-	ShaderFileData shaderData;
+	CDXBSShaderResource sourceFile("SKSE/Plugins/NiOverride/Shaders/texture.fx", "TextureVertex");
+	CDXBSShaderResource compiledFile("SKSE/Plugins/NiOverride/Shaders/Compiled/texture.cso");
+	CDXShaderFactory factory;
 
-	const char * shaderPath = "SKSE/Plugins/NiOverride/texture.fx";
-
-	std::vector<char> vsb;
-	BSResourceNiBinaryStream vs(shaderPath);
-	if (!vs.IsValid()) {
-		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPath);
-		return false;
-	}
-	BSFileUtil::ReadAll(&vs, vsb);
-	shaderData.pSourceName = "texture.fx";
-	shaderData.pSrcData = &vsb.at(0);
-	shaderData.SrcDataSize = vsb.size();
-
-	return Initialize(device, shaderData, cache);
+	return Initialize(device, &factory, &sourceFile, &compiledFile, cache);
 }
 
-bool CDXNifTextureRenderer::ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<NiTexture> texture, std::map<SInt32, MaskData> & masks, NiPointer<NiTexture> & output)
+bool CDXNifTextureRenderer::ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<NiTexture> texture, std::map<SInt32, MaskData> & masks, const BSFixedString & name, NiPointer<NiTexture> & output)
 {
 	auto rendererData = texture->rendererData;
 	if (!rendererData)
@@ -96,7 +86,7 @@ bool CDXNifTextureRenderer::ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<
 	RestoreRenderState(device);
 	LeaveCriticalSection(&g_renderManager->lock);
 
-	output = CreateSourceTexture("RuntimeTexture");
+	output = CreateSourceTexture(name);
 	NiTexture::RendererData * sourceData = new NiTexture::RendererData(m_bitmapWidth, m_bitmapHeight);
 	sourceData->texture = m_renderTargetTexture.Get();
 	sourceData->texture->AddRef();

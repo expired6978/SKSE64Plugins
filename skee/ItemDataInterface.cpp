@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <unordered_set>
+#include <iterator>
 
 #include "skse64/GameRTTI.h"
 #include "skse64/GameReferences.h"
@@ -191,10 +193,12 @@ std::shared_ptr<ItemAttributeData> ItemDataInterface::GetExistingData(TESObjectR
 	return NULL;
 }
 
-NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier)
+NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced)
 {
 	m_formId = actor->formID;
 	m_identifier = identifier;
+	m_flags = flags;
+	m_forced = forced;
 }
 
 void NIOVTaskUpdateItemDye::Run()
@@ -205,7 +209,7 @@ void NIOVTaskUpdateItemDye::Run()
 		ModifiedItem foundData;
 		if (ResolveModifiedIdentifier(actor, m_identifier, foundData)) {
 			auto data = foundData.GetAttributeData(actor, false, true, m_identifier.IsSelf());
-			if (!data) {
+			if (!data && !m_forced) {
 				_DMESSAGE("%s - Failed to acquire item attribute data", __FUNCTION__);
 				return;
 			}
@@ -225,10 +229,10 @@ void NIOVTaskUpdateItemDye::Run()
 							VisitObjects(parent, [&](NiAVObject* object)
 							{
 								if (object->GetAsBSGeometry()) {
-									g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, object, [=]()
+									g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, object, data ? [=]()
 									{
 										return data;
-									});
+									} : std::function<std::shared_ptr<ItemAttributeData>()>(), m_flags);
 								}
 								return false;
 							});
@@ -609,10 +613,44 @@ bool ItemDataInterface::EraseByUID(UInt32 uid, UInt32 formId)
 	return false;
 }
 
+void ItemDataInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	UInt32 armorMask = armor->bipedObject.GetSlotMask();
+	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
+	{
+		Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
+		if (actor) {
+			ModifiedItemIdentifier identifier;
+			identifier.SetSlotMask(armorMask);
+			return g_itemDataInterface.GetExistingData(actor, identifier);
+		}
+
+		return std::shared_ptr<ItemAttributeData>();
+	};
+
+	g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, armor, addon, object, overrideFunc));
+}
+
 void ItemDataInterface::Revert()
 {
 	SimpleLocker lock(&m_lock);
+	std::vector<ItemAttribute> copy = m_data;
 	m_data.clear();
+
+	// We need to trigger a dye update after wiping data to reset
+	for (auto & itemAttribute : copy)
+	{
+		TESForm * ownerForm = LookupFormByID(itemAttribute.ownerForm);
+		TESForm * itemForm = LookupFormByID(itemAttribute.formId);
+
+		Actor * actor = DYNAMIC_CAST(ownerForm, TESForm, Actor);
+		TESObjectARMO * armor = DYNAMIC_CAST(itemForm, TESForm, TESObjectARMO);
+		if (actor && armor) {
+			ModifiedItemIdentifier identifier;
+			identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
+			m_loadQueue.push_back(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, true));
+		}
+	}
 	m_nextRank = 1;
 }
 
@@ -922,6 +960,18 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 	UInt32 type, length, version;
 	bool error = false;
 
+	// Resolve formIds from any prior queues (if there are entries here its because Revert queued them)
+	for (auto & task : m_loadQueue)
+	{
+		// If the task was queued from a previous save we need to resolve the actor's formId first
+		UInt32 newItemForm = 0;
+		if (!intfc->ResolveFormId(task->m_formId, &newItemForm)) {
+			_WARNING("%s - actor %08X could not be found, skipping dye update", __FUNCTION__, task->m_formId);
+			continue;
+		}
+		task->m_formId = newItemForm;
+	}
+
 	UInt32 nextRank;
 	if (!intfc->ReadRecordData(&nextRank, sizeof(nextRank)))
 	{
@@ -990,8 +1040,8 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						newOwnerHandle = newOwnerForm;
 
 						UInt32 newItemForm = 0;
-						if (!intfc->ResolveFormId(itemHandle, &newItemForm)) {
-							_WARNING("%s - item %08X could not be found, skipping", __FUNCTION__, itemHandle);
+						if (!intfc->ResolveFormId(itemForm, &newItemForm)) {
+							_WARNING("%s - item %08X could not be found, skipping", __FUNCTION__, itemForm);
 							continue;
 						}
 						newItemHandle = newItemForm;
@@ -1044,7 +1094,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						if (actor && armor) {
 							ModifiedItemIdentifier identifier;
 							identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
-							g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier));
+							m_loadQueue.push_back(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 						}
 					}
 				}
@@ -1057,5 +1107,35 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 		}
 	}
 
+	// Sort task list
+	std::sort(m_loadQueue.begin(), m_loadQueue.end(), [](NIOVTaskUpdateItemDye * a, NIOVTaskUpdateItemDye * b)
+	{
+		if (a->GetActor() == b->GetActor())
+		{
+			return a->GetSlotMask() < b->GetSlotMask();
+		}
+		return a->GetActor() < b->GetActor();
+	});
+
+	std::unordered_set<NIOVTaskUpdateItemDye*> uniqueTasks;
+	std::unique_copy(m_loadQueue.begin(), m_loadQueue.end(), std::inserter(uniqueTasks, uniqueTasks.end()), [](NIOVTaskUpdateItemDye * a, NIOVTaskUpdateItemDye * b)
+	{
+		return a->GetActor() == b->GetActor() && a->GetSlotMask() == b->GetSlotMask();
+	});
+
+	// Push the loads onto the task queue
+	for (auto & task : m_loadQueue)
+	{
+		if (uniqueTasks.find(task) != uniqueTasks.end())
+		{
+			g_task->AddTask(task);
+		}
+		else
+		{
+			task->Dispose();
+		}
+	}
+
+	m_loadQueue.clear();
 	return error;
 }

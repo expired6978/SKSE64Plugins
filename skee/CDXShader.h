@@ -15,7 +15,6 @@ class CDXShader
 public:
 	CDXShader();
 	bool Initialize(const CDXInitParams & initParams);
-	void Release();
 
 	struct VertexBuffer
 	{
@@ -53,9 +52,9 @@ public:
 protected:
 	void OutputShaderErrorMessage(ID3D10Blob* errorMessage, std::stringstream & output);
 
-	ID3D11VertexShader * m_vertexShader;
-	ID3D11PixelShader* m_pixelShader;
-	ID3D11PixelShader* m_wireShader;
+	Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_wireShader;
 #if 0
 	struct WireShaders
 	{
@@ -65,13 +64,13 @@ protected:
 	};
 	WireShaders m_ws;
 #endif
-	ID3D11InputLayout* m_layout;
-	ID3D11SamplerState* m_sampleState;
-	ID3D11RasterizerState* m_solidState;
-	ID3D11RasterizerState* m_wireState;
-	ID3D11Buffer* m_matrixBuffer;
-	ID3D11Buffer* m_transformBuffer;
-	ID3D11Buffer* m_materialBuffer;
+	Microsoft::WRL::ComPtr<ID3D11InputLayout> m_layout;
+	Microsoft::WRL::ComPtr<ID3D11SamplerState> m_sampleState;
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_solidState;
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_wireState;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> m_matrixBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> m_transformBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> m_materialBuffer;
 };
 
 #endif

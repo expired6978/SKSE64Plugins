@@ -23,12 +23,15 @@
 #include "ShaderUtilities.h"
 #include "Utilities.h"
 
+#include <unordered_set>
+
 extern OverlayInterface					g_overlayInterface;
 extern OverrideInterface				g_overrideInterface;
 extern BodyMorphInterface				g_bodyMorphInterface;
 
 extern SKSETaskInterface				* g_task;
 
+extern bool		g_enableFaceOverlays;
 extern bool		g_enableOverlays;
 extern bool		g_playerOnly;
 
@@ -45,6 +48,9 @@ extern bool		g_alphaOverride;
 extern UInt16	g_alphaFlags;
 extern UInt16	g_alphaThreshold;
 extern bool		g_immediateArmor;
+
+
+extern std::unordered_set<void*> g_adjustedBlocks;
 
 UInt32 OverlayInterface::GetVersion()
 {
@@ -150,7 +156,18 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 
 			newDynShape->dataSize = sourceShape->dataSize;
 			newDynShape->frameCount = sourceShape->frameCount;
-			newDynShape->pDynamicData = sourceShape->pDynamicData;
+			if (g_enableFaceOverlays && g_adjustedBlocks.find(sourceShape->pDynamicData) != g_adjustedBlocks.end())
+			{
+				void * ptr = reinterpret_cast<void*>((uintptr_t)sourceShape->pDynamicData - 0x10);
+				InterlockedIncrement((uintptr_t*)ptr);
+				newDynShape->pDynamicData = sourceShape->pDynamicData;
+			}
+			else
+			{
+				newDynShape->pDynamicData = NiAllocate(sourceShape->dataSize);
+				memcpy(newDynShape->pDynamicData, sourceShape->pDynamicData, sourceShape->dataSize);
+			}
+			
 			newDynShape->unk178 = sourceShape->unk178;
 			newDynShape->unk17C = 0;
 		}
@@ -1086,6 +1103,16 @@ bool OverlayInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 	_DMESSAGE("%s Loading Overlays...", __FUNCTION__);
 #endif
 	return overlays.Load(intfc, kVersion);
+}
+
+void OverlayInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	if ((refr == (*g_thePlayer) && g_playerOnly) || !g_playerOnly || HasOverlays(refr))
+	{
+		UInt32 armorMask = armor->bipedObject.GetSlotMask();
+		UInt32 addonMask = addon->biped.GetSlotMask();
+		BuildOverlays(armorMask, addonMask, refr, root, object);
+	}
 }
 
 #ifdef _DEBUG

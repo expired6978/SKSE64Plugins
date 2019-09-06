@@ -440,19 +440,6 @@ protected:
 #endif
 };
 
-class SKSETaskImportHead : public TaskDelegate
-{
-public:
-	virtual void Run();
-	virtual void Dispose() { delete this; }
-
-	SKSETaskImportHead(Actor * actor, BSFixedString nifPath);
-
-private:
-	UInt32			m_formId;
-	BSFixedString	m_nifPath;
-};
-
 class SKSETaskApplyMorphs : public TaskDelegate
 {
 public:

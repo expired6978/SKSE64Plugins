@@ -2,6 +2,9 @@
 
 class TESObjectREFR;
 class NiAVObject;
+class TESObjectARMO;
+class TESObjectARMA;
+class NiNode;
 
 class IPluginInterface
 {
@@ -29,6 +32,12 @@ struct InterfaceExchangeMessage
 	};
 
 	IInterfaceMap * interfaceMap = NULL;
+};
+
+class IAddonAttachmentInterface
+{
+public:
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) = 0;
 };
 
 class IBodyMorphInterface : public IPluginInterface

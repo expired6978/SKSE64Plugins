@@ -809,7 +809,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 			tintMask.tintType = TintMask::kMaskType_SkinTone;
 
 			NiColorA colorResult;
-			CALL_MEMBER_FN(npc, SetSkinFromTint)(&colorResult, &tintMask, 1, 0);
+			CALL_MEMBER_FN(npc, SetSkinFromTint)(&colorResult, &tintMask, true);
 		}
 	}
 
@@ -1689,7 +1689,6 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 				}
 				else if (kVersion >= FaceMorphInterface::kSerializationVersion1)
 				{
-					char * name = NULL;
 					UInt16 nameLength = 0;
 					if (!intfc->ReadRecordData(&nameLength, sizeof(nameLength))) {
 						_MESSAGE("Error loading morph name length");
@@ -1697,14 +1696,14 @@ bool FaceMorphInterface::LoadMorphData(SKSESerializationInterface * intfc, UInt3
 						return true;
 					}
 
-					name = new char[nameLength + 1];
-					if (!intfc->ReadRecordData(name, nameLength)) {
+					std::unique_ptr<char[]> name(new char[nameLength + 1]);
+					if (!intfc->ReadRecordData(name.get(), nameLength)) {
 						_MESSAGE("Error loading morph name");
 						error = true;
 						return true;
 					}
 					name[nameLength] = 0;
-					sculptName = g_stringTable.GetString(name);
+					sculptName = g_stringTable.GetString(name.get());
 				}
 
 				if (!intfc->ReadRecordData(&value, sizeof(value))) {
@@ -1776,14 +1775,14 @@ bool FaceMorphInterface::LoadSculptData(SKSESerializationInterface * intfc, UInt
 						return true;
 					}
 
-					char * name = new char[nameLength + 1];
-					if (!intfc->ReadRecordData(name, nameLength)) {
+					std::unique_ptr<char[]> name(new char[nameLength + 1]);
+					if (!intfc->ReadRecordData(name.get(), nameLength)) {
 						_MESSAGE("Error loading sculpt part name");
 						error = true;
 						return true;
 					}
 					name[nameLength] = 0;
-					sculptName = g_stringTable.GetString(name);
+					sculptName = g_stringTable.GetString(name.get());
 				}
 
 				UInt16 totalDifferences = 0;
@@ -3069,193 +3068,6 @@ void SKSETaskApplyMorphs::Run()
 	BSFaceGenNiNode * faceNode = actor->GetFaceGenNiNode();
 	if (faceNode) {
 		g_morphInterface.ApplyMorphs(actorBase, faceNode);
-		UpdateModelFace(faceNode);
-	}
-}
-
-SKSETaskImportHead::SKSETaskImportHead(Actor * actor, BSFixedString nifPath) : m_nifPath(nifPath)
-{
-	m_formId = actor->formID;
-}
-/*
-class TESNPC_Extn : public TESNPC
-{
-public:
-	MEMBER_FN_PREFIX(TESNPC_Extn);
-	DEFINE_MEMBER_FN(UpdateHead, void, 0x560E00, NiGeometry * geometry);
-};
-
-class BSFaceGenNiNode_Extn : public BSFaceGenNiNode
-{
-public:
-	MEMBER_FN_PREFIX(BSFaceGenNiNode_Extn);
-	DEFINE_MEMBER_FN(UpdateSkin, void, 0x5A83C0, NiAVObject * root, NiAVObject * geometry, UInt32 unk1);
-};
-
-class UnknownClass1
-{
-public:
-	static UnknownClass1 *	GetSingleton(void)
-	{
-		return *((UnknownClass1 **)0x1BA7680);
-	}
-
-	MEMBER_FN_PREFIX(UnknownClass1);
-	DEFINE_MEMBER_FN(Invalidate, void, 0xC78D80, NiAVObject * object);
-	DEFINE_MEMBER_FN(Invalidate2, void, 0xC77EB0, NiAVObject * object, char unk1, char unk2);
-};
-
-typedef UInt32(*_UpdateModelGeometryData)(NiAVObject*, UInt8 * update);
-const _UpdateModelGeometryData UpdateModelGeometryData = (_UpdateModelGeometryData)0x005A9B30;
-
-typedef void (*_InvalidateGeometryData)(NiAVObject* object, NiAVObject* root);
-const _InvalidateGeometryData InvalidateGeometryData = (_InvalidateGeometryData)0x00C6F3B0;
-*/
-
-void SKSETaskImportHead::Run()
-{
-	if (!m_formId)
-		return;
-
-	TESForm * form = LookupFormByID(m_formId);
-	Actor * actor = DYNAMIC_CAST(form, TESForm, Actor);
-	if (!actor)
-		return;
-
-	NiNode * root = actor->GetNiRootNode(0);
-	BSFaceGenNiNode * faceNode = actor->GetFaceGenNiNode();
-	TESNPC * actorBase = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
-	if (!actorBase || !faceNode || !root)
-		return;
-
-	BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
-	if (animationData) {
-		FaceGen::GetSingleton()->isReset = 0;
-		for (UInt32 t = BSFaceGenAnimationData::kKeyframeType_Expression; t <= BSFaceGenAnimationData::kKeyframeType_Phoneme; t++)
-		{
-			BSFaceGenKeyframeMultiple * keyframe = &animationData->keyFrames[t];
-			for (UInt32 i = 0; i < keyframe->count; i++)
-				keyframe->values[i] = 0.0;
-			keyframe->isUpdated = 0;
-		}
-		UpdateModelFace(faceNode);
-	}
-
-	UInt32 numParts = actorBase->numHeadParts;
-	BGSHeadPart ** headParts = actorBase->headparts;
-	if (CALL_MEMBER_FN(actorBase, HasOverlays)()) {
-		numParts = GetNumActorBaseOverlays(actorBase);
-		headParts = GetActorBaseOverlays(actorBase);
-	}
-
-	std::unordered_map<BSFixedString, std::tuple<BGSHeadPart*,BSGeometry*, BSGeometry*>> typeMap;
-	for (UInt32 i = 0; i < numParts; i++)
-	{
-		BGSHeadPart * headPart = headParts[i];
-		for (UInt32 p = 0; p < faceNode->m_children.m_size; p++)
-		{
-			NiAVObject * object = faceNode->m_children.m_data[p];
-			if (object && BSFixedString(object->m_name) == headPart->partName) {
-				BSGeometry * geometry = object->GetAsBSGeometry();
-				if (geometry) {
-					BSGeometry * otherGeometry = NULL;
-					geometry->IncRef();
-					typeMap.emplace(SculptData::GetHostByPart(headPart), std::make_tuple(headPart, geometry, otherGeometry));
-					break;
-				}
-			}
-		}
-	}
-
-	UInt8 niStreamMemory[0x5B4];
-	memset(niStreamMemory, 0, 0x5B4);
-	NiStream * niStream = (NiStream *)niStreamMemory;
-	CALL_MEMBER_FN(niStream, ctor)();
-	
-
-	BSResourceNiBinaryStream binaryStream(m_nifPath.data);
-	if (binaryStream.IsValid()) {
-
-		NiNode * rootNode = NULL;
-		niStream->LoadStream(&binaryStream);
-		if (niStream->m_rootObjects.m_data)
-		{
-			if (niStream->m_rootObjects.m_data[0]) // Get the root node
-				rootNode = niStream->m_rootObjects.m_data[0]->GetAsNiNode();
-			if (rootNode)
-			{
-				VisitObjects(rootNode, [&](NiAVObject* trishape)
-				{
-					NiNode * parent = trishape->m_parent;
-					if (parent && BSFixedString(parent->m_name) == BSFixedString("BSFaceGenNiNodeSkinned")) {
-						BSGeometry * geometry = trishape->GetAsBSGeometry();
-						if (geometry) {
-							std::string name(trishape->m_name);
-							BGSHeadPart * part = GetHeadPartByName(name);
-							if (part) {
-								auto it = typeMap.find(SculptData::GetHostByPart(part));
-								if (it != typeMap.end()) {
-									geometry->IncRef();
-									std::get<2>(it->second) = geometry;
-								}
-							}
-						}
-					}
-					return false;
-				});
-
-			}
-		}
-
-		CALL_MEMBER_FN(niStream, dtor)();
-	}
-
-	for (auto obj : typeMap) {
-		BGSHeadPart * part = std::get<0>(obj.second);
-		BSGeometry * source = std::get<1>(obj.second);
-		BSGeometry * target = std::get<2>(obj.second);
-		if (!part || !source || !target)
-			continue;
-
-#ifdef FIXME_GEOMETRY
-		NiGeometryData * sourceData = niptr_cast<NiGeometryData>(source->m_spModelData);
-		NiGeometryData * targetData = niptr_cast<NiGeometryData>(target->m_spModelData);
-		if (!sourceData || !targetData)
-			continue;
-
-		if (sourceData->m_usVertices == targetData->m_usVertices) {
-			auto sculptHost = g_morphHandler.GetSculptTarget(actorBase);
-			if (sculptHost) {
-				auto sculptData = sculptHost->GetSculptHost(obj.first);
-				if (sculptData) {
-					BSFaceGenBaseMorphExtraData * extraData = (BSFaceGenBaseMorphExtraData *)source->GetExtraData("FOD");
-					if (extraData) {
-						for (UInt32 i = 0; i < sourceData->m_usVertices; i++) {
-							NiPoint3 diff = targetData->m_pkVertex[i] - sourceData->m_pkVertex[i];
-
-							if (abs(diff.x) > 0.001 || abs(diff.y) > 0.001 || abs(diff.z) > 0.001) {
-								extraData->vertexData[i] += diff;
-								sculptData->force_insert(std::make_pair(i, diff));
-							}
-						}
-					}
-				}
-			}
-		}
-#endif
-
-		if (source)
-			source->DecRef();
-		if (target)
-			target->DecRef();
-	}
-
-	UpdateModelFace(faceNode);
-
-	if (animationData) {
-		animationData->overrideFlag = 0;
-		CALL_MEMBER_FN(animationData, Reset)(1.0, 1, 1, 0, 0);
-		FaceGen::GetSingleton()->isReset = 1;
 		UpdateModelFace(faceNode);
 	}
 }

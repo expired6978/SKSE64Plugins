@@ -4,23 +4,21 @@
 #include <d3d11.h>
 #include <set>
 #include <unordered_map>
+#include <functional>
+
+#include "CDXShaderFactory.h"
 
 class CDXCamera;
 class CDXD3DDevice;
-
-struct ShaderFileData
-{
-	LPCVOID pSrcData;
-	SIZE_T SrcDataSize;
-	LPCSTR pSourceName;
-};
 
 struct CDXInitParams
 {
 	CDXD3DDevice * device;
 	CDXCamera * camera;
-	ShaderFileData vertexShader;
-	ShaderFileData pixelShader;
+	CDXShaderFile* vertexShader[2];
+	CDXShaderFile* pixelShader[2];
+	CDXShaderFile* wireShader[2];
+	CDXShaderFactory* factory;
 	int viewportWidth;
 	int viewportHeight;
 };

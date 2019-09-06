@@ -3,28 +3,23 @@
 #include "CDXShader.h"
 #include "CDXShaderCompile.h"
 #include "CDXBrush.h"
+#include "CDXShaderFactory.h"
 
 using namespace DirectX;
 
 CDXBrushMesh::CDXBrushMesh() : CDXMesh()
 {
-	m_vertexShader = nullptr;
-	m_pixelShader = nullptr;
-	m_solidState = nullptr;
-	m_matrixBuffer = nullptr;
-	m_layout = nullptr;
-	m_sphere.m_vertexBuffer = nullptr;
-	m_sphere.m_indexBuffer = nullptr;
+
 }
 
-bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor, XMVECTOR dotColor, const ShaderFileData & vertexShaderData, const ShaderFileData & pixelShaderData)
+bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor, XMVECTOR dotColor, CDXShaderFactory* factory, CDXShaderFile* vertexShader, CDXShaderFile* precompiledVertexShader, CDXShaderFile* pixelShader, CDXShaderFile* precompiledPixelShader)
 {
 	static unsigned int NUM_VERTS = 360 / 5;
 	static const float RADIUS = 1.0f;
 	static const float RADIUS_STEP = 5.0f * (XM_PI / 180.0f);
 
-	ID3DBlob* vertexShaderBuffer = nullptr;
-	ID3DBlob* pixelShaderBuffer = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBuffer;
+	Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBuffer;
 	D3D11_BUFFER_DESC vertexBufferDesc, indexBufferDesc;
 	D3D11_SUBRESOURCE_DATA vertexData, indexData;
 	HRESULT result;
@@ -149,49 +144,6 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 		return false;
 	}
 
-	// Compile the vertex shader code.
-	result = CompileShaderFromData(vertexShaderData.pSrcData, vertexShaderData.SrcDataSize, vertexShaderData.pSourceName, "BrushVShader", "vs_5_0", &vertexShaderBuffer, nullptr);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to compile vertex shader", __FUNCTION__);
-		return false;
-	}
-
-	if (!vertexShaderBuffer)
-	{
-		_ERROR("%s - Failed to acquire vertex shader buffer", __FUNCTION__);
-		return false;
-	}
-
-	// Create the vertex shader from the buffer.
-	result = pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_vertexShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
-		return false;
-	}
-
-	// Compile the pixel shader code.
-	result = CompileShaderFromData(pixelShaderData.pSrcData, pixelShaderData.SrcDataSize, pixelShaderData.pSourceName, "BrushPShader", "ps_5_0", &pixelShaderBuffer, nullptr);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to compile pixel shader", __FUNCTION__);
-		return false;
-	}
-
-	if (!pixelShaderBuffer)
-	{
-		_ERROR("%s - Failed to acquire pixel shader buffer", __FUNCTION__);
-		return false;
-	}
-
-	result = pDevice->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pixelShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create pixel shader", __FUNCTION__);
-		return false;
-	}
-
 	D3D11_INPUT_ELEMENT_DESC polygonLayout[2];
 	polygonLayout[0].SemanticName = "POSITION";
 	polygonLayout[0].SemanticIndex = 0;
@@ -212,20 +164,16 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	// Get a count of the elements in the layout.
 	unsigned int numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
 
-	// Create the vertex input layout.
-	result = pDevice->CreateInputLayout(polygonLayout, numElements, vertexShaderBuffer->GetBufferPointer(),
-		vertexShaderBuffer->GetBufferSize(), &m_layout);
-	if (FAILED(result))
+	// BrushVShader
+	if (!factory->CreateVertexShader(device, vertexShader, precompiledVertexShader, polygonLayout, numElements, m_vertexShader, m_layout))
 	{
-		_ERROR("%s - Failed to create input layout", __FUNCTION__);
 		return false;
 	}
 
-	vertexShaderBuffer->Release();
-	vertexShaderBuffer = nullptr;
-
-	pixelShaderBuffer->Release();
-	pixelShaderBuffer = nullptr;
+	if (!factory->CreatePixelShader(device, pixelShader, precompiledPixelShader, m_pixelShader))
+	{
+		return false;
+	}
 
 	// Setup the raster description which will determine how and what polygons will be drawn.
 	D3D11_RASTERIZER_DESC rasterDesc;
@@ -382,65 +330,36 @@ void CDXBrushMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 
 	auto pDeviceContext = pDevice->GetDeviceContext();
 
+	CDXShader::TransformBuffer xform;
+	xform.transform = XMMatrixTranspose(GetTransform());
+	shader->VSSetTransformBuffer(pDevice, xform);
+
 	// Set the vertex buffer to active in the input assembler so it can be rendered.
-	pDeviceContext->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
+	ID3D11Buffer* vertexBuffer[] = { m_vertexBuffer.Get() };
+	pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
 
 	// Set the index buffer to active in the input assembler so it can be rendered.
-	pDeviceContext->IASetIndexBuffer(m_indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+	pDeviceContext->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pDeviceContext->IASetPrimitiveTopology(m_dashed ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 
-	pDeviceContext->IASetInputLayout(m_layout);
-	pDeviceContext->RSSetState(m_solidState);
-	pDeviceContext->VSSetShader(m_vertexShader, NULL, 0);
-	pDeviceContext->PSSetShader(m_pixelShader, NULL, 0);
+	pDeviceContext->IASetInputLayout(m_layout.Get());
+	pDeviceContext->RSSetState(m_solidState.Get());
+	pDeviceContext->VSSetShader(m_vertexShader.Get(), NULL, 0);
+	pDeviceContext->PSSetShader(m_pixelShader.Get(), NULL, 0);
 
 	pDeviceContext->DrawIndexed(m_indexCount, 0, 0);
 
-	CDXShader::TransformBuffer xform;
-	xform.transform = GetSphereTransform();
+	xform.transform = XMMatrixTranspose(GetSphereTransform());
 	shader->VSSetTransformBuffer(pDevice, xform);
 
-	pDeviceContext->IASetVertexBuffers(0, 1, &m_sphere.m_vertexBuffer, &stride, &offset);
-	pDeviceContext->IASetIndexBuffer(m_sphere.m_indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+	vertexBuffer[0] = m_sphere.m_vertexBuffer.Get();
+	pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
+	pDeviceContext->IASetIndexBuffer(m_sphere.m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 	pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	pDeviceContext->DrawIndexed(m_sphere.m_indices.size(), 0, 0);
-}
-
-void CDXBrushMesh::Release()
-{
-	if (m_vertexShader) {
-		m_vertexShader->Release();
-		m_vertexShader = nullptr;
-	}
-	if (m_pixelShader) {
-		m_pixelShader->Release();
-		m_pixelShader = nullptr;
-	}
-	if (m_solidState) {
-		m_solidState->Release();
-		m_solidState = nullptr;
-	}
-	if (m_matrixBuffer) {
-		m_matrixBuffer->Release();
-		m_matrixBuffer = nullptr;
-	}
-	if (m_layout) {
-		m_layout->Release();
-		m_layout = nullptr;
-	}
-	if (m_sphere.m_vertexBuffer) {
-		m_sphere.m_vertexBuffer->Release();
-		m_sphere.m_vertexBuffer = nullptr;
-	}
-	if (m_sphere.m_indexBuffer) {
-		m_sphere.m_indexBuffer->Release();
-		m_sphere.m_indexBuffer = nullptr;
-	}
-	
-	__super::Release();
 }
 
 bool CDXBrushMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
@@ -471,8 +390,8 @@ bool CDXBrushTranslator::Pick(CDXPickInfo & pickInfo, CDXMesh * mesh, bool isMir
 			CDXMatrix transform1 = XMMatrixAffineTransformation(XMVectorReplicate(scale), XMVectorZero(), rotation, offset);
 			CDXMatrix transform2 = XMMatrixAffineTransformation(XMVectorReplicate(1.0f/16.0f), XMVectorZero(), rotation, offset);
 
-			brush->SetTransform(XMMatrixTranspose(transform1));
-			brush->SetSphereTransform(XMMatrixTranspose(transform2));
+			brush->SetTransform(transform1);
+			brush->SetSphereTransform(transform2);
 			brush->SetVisible(true);
 			return true;
 		}

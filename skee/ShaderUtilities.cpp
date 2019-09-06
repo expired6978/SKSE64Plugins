@@ -362,12 +362,14 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 					// Convert the shaderType to support tints
 					if(material->GetShaderType() != BSShaderMaterial::kShaderType_FaceGenRGBTint && material->GetShaderType() != BSShaderMaterial::kShaderType_HairTint)//if(CALL_MEMBER_FN(lightingShader, HasFlags)(0x0A))
 					{
-						BSLightingShaderMaterialFacegenTint * tintedMaterial = (BSLightingShaderMaterialFacegenTint *)CreateShaderMaterial(BSShaderMaterial::kShaderType_HairTint);
+						BSLightingShaderMaterialFacegenTint * tintedMaterial = CreateFacegenTintMaterial();
 						CALL_MEMBER_FN(tintedMaterial, CopyFrom)(material);
 						CALL_MEMBER_FN(lightingShader, SetFlags)(0x0A, false);
 						CALL_MEMBER_FN(lightingShader, SetFlags)(0x15, true);
 						CALL_MEMBER_FN(lightingShader, SetMaterial)(tintedMaterial, 1);
 						CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
+						tintedMaterial->~BSLightingShaderMaterialFacegenTint();
+						Heap_Free(tintedMaterial);
 					}
 
 					material = (BSLightingShaderMaterial *)shaderProperty->material;

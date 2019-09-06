@@ -26,7 +26,6 @@ public:
 
 	virtual const char* GetName() const { return ""; }
 	virtual void Render(CDXD3DDevice * pDevice, CDXShader * shader);
-	virtual void Release();
 	virtual bool Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo);
 	virtual bool IsEditable() const { return false; }
 	virtual bool IsLocked() const { return true; }
@@ -53,8 +52,8 @@ public:
 	virtual void UnlockVertices(const LockMode type);
 	virtual void UnlockIndices(bool write = false);
 
-	ID3D11Buffer * GetVertexBuffer();
-	ID3D11Buffer * GetIndexBuffer();
+	Microsoft::WRL::ComPtr<ID3D11Buffer> GetVertexBuffer();
+	Microsoft::WRL::ComPtr<ID3D11Buffer> GetIndexBuffer();
 
 	const CDXMatrix & GetTransform() { return m_transform; };
 	void SetTransform(const CDXMatrix & mat) { m_transform = mat; }
@@ -65,7 +64,7 @@ public:
 
 protected:
 	bool					m_visible;
-	ID3D11Buffer		*	m_vertexBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer>	m_vertexBuffer;
 	UInt32					m_vertCount;
 
 	struct ColoredPrimitive
@@ -78,7 +77,7 @@ protected:
 		CDXMeshVert			* m_vertices;
 		ColoredPrimitive	* m_primitive;
 	};
-	ID3D11Buffer		*	m_indexBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer>	m_indexBuffer;
 	UInt32					m_indexCount;
 	CDXMeshIndex		*	m_indices;
 	D3D_PRIMITIVE_TOPOLOGY	m_topology;

@@ -58,6 +58,8 @@ extern SKSETaskInterface * g_task;
 #include "CDXBrushMesh.h"
 #include "CDXUndo.h"
 #include "CDXNifCommands.h"
+#include "CDXShaderFactory.h"
+#include "CDXBSShaderResource.h"
 
 UInt32 colors[] = {
 	0xffffff, 0xff0000, 0x0000ff, 0x00ff00,
@@ -78,6 +80,10 @@ extern float						g_cameraFOV;
 extern SInt32						g_viewWidth;
 extern SInt32						g_viewHeight;
 extern bool							g_enableHeadExport;
+
+extern float	g_sculptOffsetX;
+extern float	g_sculptOffsetY;
+extern float	g_sculptOffsetZ;
 
 void SKSEScaleform_SavePreset::Invoke(Args * args)
 {
@@ -803,11 +809,14 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 
 	g_Device = new CDXD3DDevice(pDevice, pDeviceContext);
 
+	CDXShaderFactory shaderFactory;
+
 	CDXInitParams initParams;
 	initParams.camera = &g_Camera;
 	initParams.device = g_Device;
 	initParams.viewportWidth = g_viewWidth;
 	initParams.viewportHeight = g_viewHeight;
+	initParams.factory = &shaderFactory;
 
 	CDXVec vecEye = DirectX::XMVectorSet(32.0f, 0.0f, 0.0f, 1.0f);
 	CDXVec vecAt = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
@@ -817,30 +826,20 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 	g_Camera.SetPanSpeed(g_panSpeed);
 	g_Camera.Update();
 
-	const char * shaderPaths[] = {
-		"SKSE/Plugins/CharGen/shader.vs",
-		"SKSE/Plugins/CharGen/shader.ps"
-	};
+	CDXBSShaderResource vsShader("SKSE/Plugins/CharGen/Shaders/shader_vs.hlsl", "LightVertexShader");
+	CDXBSShaderResource pvsShader("SKSE/Plugins/CharGen/Shaders/Compiled/shader_vs.cso");
+	initParams.vertexShader[0] = &vsShader;
+	initParams.vertexShader[1] = &pvsShader;
 
-	std::vector<char> vsb, psb;
-	BSResourceNiBinaryStream vs(shaderPaths[0]), ps(shaderPaths[1]);
-	if (!vs.IsValid()) {
-		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPaths[0]);
-		return;
-	}
-	if (!ps.IsValid()) {
-		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPaths[1]);
-		return;
-	}
-	BSFileUtil::ReadAll(&vs, vsb);
-	BSFileUtil::ReadAll(&ps, psb);
+	CDXBSShaderResource psShader("SKSE/Plugins/CharGen/Shaders/shader_ps.hlsl", "LightPixelShader");
+	CDXBSShaderResource ppsShader("SKSE/Plugins/CharGen/Shaders/Compiled/shader_ps.cso");
+	initParams.pixelShader[0] = &psShader;
+	initParams.pixelShader[1] = &ppsShader;
 
-	initParams.vertexShader.pSrcData = &vsb.at(0);
-	initParams.vertexShader.SrcDataSize = vsb.size();
-	initParams.vertexShader.pSourceName = "shader.vs";
-	initParams.pixelShader.pSrcData = &psb.at(0);
-	initParams.pixelShader.SrcDataSize = psb.size();
-	initParams.pixelShader.pSourceName = "shader.ps";
+	CDXBSShaderResource wsShader("SKSE/Plugins/CharGen/Shaders/wireframe_ps.hlsl", "WireframePixelShader");
+	CDXBSShaderResource pwsShader("SKSE/Plugins/CharGen/Shaders/Compiled/wireframe_ps.cso");
+	initParams.wireShader[0] = &wsShader;
+	initParams.wireShader[1] = &pwsShader;
 
 	if (!g_World.Setup(initParams)) {
 		_ERROR("%s - Failed to setup world.", __FUNCTION__);
@@ -940,6 +939,8 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 
 				if (headPart->type != BGSHeadPart::kTypeFace)
 					mesh->SetLocked(true);
+
+				mesh->SetTransform(DirectX::XMMatrixTranslation(g_sculptOffsetX, g_sculptOffsetY, g_sculptOffsetZ));
 
 				g_World.AddMesh(mesh);
 				break;

@@ -10,6 +10,7 @@
 #include "skse64/GameReferences.h"
 #include "skse64/GameExtraData.h"
 
+#include "TintMaskInterface.h"
 #include "ScaleformFunctions.h"
 
 extern SKSETaskInterface	* g_task;
@@ -360,5 +361,5 @@ void SKSEScaleform_SetItemDyeColor::Invoke(Args * args)
 	else
 		g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, maskIndex, color);
 
-	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier));
+	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 }

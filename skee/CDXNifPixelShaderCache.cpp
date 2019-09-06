@@ -1,4 +1,7 @@
 #include "CDXNifPixelShaderCache.h"
+#include "CDXD3DDevice.h"
+#include "CDXBSShaderResource.h"
+
 #include "skse64/GameStreams.h"
 #include "FileUtils.h"
 
@@ -15,24 +18,14 @@ Microsoft::WRL::ComPtr<ID3D11PixelShader> CDXNifPixelShaderCache::GetShader(CDXD
 		return shader;
 	}
 
-	ShaderFileData shaderData;
-
 	char shaderPath[MAX_PATH];
-	sprintf_s(shaderPath, MAX_PATH, "SKSE/Plugins/NiOverride/Shaders/%s.fx", name.c_str());
+	sprintf_s(shaderPath, MAX_PATH, "SKSE/Plugins/NiOverride/Shaders/Effects/%s.fx", name.c_str());
 
-	std::vector<char> vsb;
-	BSResourceNiBinaryStream vs(shaderPath);
-	if (!vs.IsValid()) {
-		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPath);
-		return false;
-	}
-	BSFileUtil::ReadAll(&vs, vsb);
-	shaderData.pSourceName = shaderPath;
-	shaderData.pSrcData = &vsb.at(0);
-	shaderData.SrcDataSize = vsb.size();
+	CDXBSShaderResource shaderFile(shaderPath, name.c_str());
+	sprintf_s(shaderPath, MAX_PATH, "SKSE/Plugins/NiOverride/Shaders/Compiled/Effects/%s.cso", name.c_str());
+	CDXBSShaderResource compiledFile(shaderPath, name.c_str());
 
-	shader = CompileShader(device, name, shaderData);
-	if (shader)
+	if (m_factory->CreatePixelShader(device, &shaderFile, &compiledFile, shader))
 	{
 #ifndef _DEBUG
 		insert_or_assign(name, shader);

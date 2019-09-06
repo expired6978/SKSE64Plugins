@@ -104,6 +104,18 @@ public:
 		kSerializationVersion = kSerializationVersion1
 	};
 	virtual UInt32 GetVersion();
+
+	enum ColorPreset
+	{
+		kPreset_Skin = -2,
+		kPreset_Hair = -1
+	};
+	enum UpdateFlags
+	{
+		kUpdate_Skin = 1,
+		kUpdate_Hair = 1 << 1,
+		kUpdate_All = kUpdate_Skin | kUpdate_Hair
+	};
 	
 	struct LayerTarget
 	{
@@ -117,15 +129,12 @@ public:
 	};
 	typedef std::vector<LayerTarget> LayerTargetList;
 
-	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
+	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides, UInt32 flags);
 	virtual void ManageTints() { m_maskMap.ManageRenderTargetGroups(); }
 	virtual void ReleaseTints() { m_maskMap.ReleaseRenderTargetGroups(); }
 	virtual void Revert() { };
 
-	void CreateTintsFromData(std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides);
-
-	//void ReadTintData();
-	void ReadTintData(LPCTSTR lpFolder, LPCTSTR lpFilePattern);
+	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides, UInt32 & flags);
 	void ParseTintData(LPCTSTR filePath);
 
 	MaskModelMap	m_modelMap;

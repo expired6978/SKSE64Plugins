@@ -1,12 +1,12 @@
-Texture2D diffuse;
-Texture2D normal;
-Texture2D specular;
-Texture2D detail;
-Texture2D tintMask;
+Texture2D diffuse : register(t0);
+Texture2D normal : register(t1);
+Texture2D specular : register(t2);
+Texture2D detail : register(t3);
+Texture2D tintMask : register(t4);
 
 SamplerState Sampler;
 
-cbuffer MaterialBuffer
+cbuffer MaterialBuffer : register(b0)
 {
 	float4	wireColor;
 	float4	tintColor;
@@ -52,8 +52,7 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 
 	if(hasTintMask)
 	{
-		float4 tintMaskColor = tintMask.Sample(Sampler, input.tex);
-		color = tint(color, tintMaskColor);
+		color = tint(color, tintMask.Sample(Sampler, input.tex));
 	}
 	
 	if(tintColor.a > 0)
@@ -64,9 +63,4 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
 	color.rgb *= input.color;
 
 	return color;
-}
-
-float4 WireframePixelShader(PixelInputType input) : SV_TARGET
-{
-	return wireColor;
 }

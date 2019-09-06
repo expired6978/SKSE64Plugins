@@ -26,6 +26,7 @@
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
+#include "SkeletonExtender.h"
 #include "ActorUpdateManager.h"
 
 #include "FaceMorphInterface.h"
@@ -65,6 +66,7 @@ BodyMorphInterface			g_bodyMorphInterface;
 ItemDataInterface			g_itemDataInterface;
 NiTransformInterface		g_transformInterface;
 FaceMorphInterface			g_morphInterface;
+SkeletonExtenderInterface	g_skeletonExtenderInterface;
 ActorUpdateManager			g_actorUpdateManager;
 PartSet	g_partSet;
 
@@ -77,6 +79,7 @@ bool	g_enableBodyGen = true;
 bool	g_enableAutoTransforms = true;
 bool	g_enableHeadExport = true;
 bool	g_enableBodyMorph = true;
+bool	g_enableTintSync = true;
 
 bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
@@ -110,6 +113,7 @@ bool	g_externalHeads = false;
 bool	g_extendedMorphs = true;
 bool	g_allowAllMorphs = true;
 bool	g_disableFaceGenCache = true;
+bool	g_exportSkinToBone = true;
 float	g_sliderMultiplier = 1.0f;
 float	g_sliderInterval = 0.01f;
 UInt32	g_numPresets = 10;
@@ -129,10 +133,13 @@ float		g_panSpeed = 0.01f;
 float		g_cameraFOV = 45.0f;
 SInt32		g_viewWidth = 1024;
 SInt32		g_viewHeight = 1024;
-float		g_backgroundA = 0.0f;
-float		g_backgroundR = 0.0f;
-float		g_backgroundG = 0.0f;
-float		g_backgroundB = 0.0f;
+float		g_sculptBackgroundA = 0.0f;
+float		g_sculptBackgroundR = 0.0f;
+float		g_sculptBackgroundG = 0.0f;
+float		g_sculptBackgroundB = 0.0f;
+float		g_sculptOffsetX = 0.0f;
+float		g_sculptOffsetY = 0.0f;
+float		g_sculptOffsetZ = 0.0f;
 
 extern double g_brushProperties[CDXBrush::kBrushTypes][CDXBrush::kBrushProperties][CDXBrush::kBrushPropertyValues];
 
@@ -541,7 +548,14 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 			GetEventDispatcherList()->uniqueIdChangeDispatcher.AddEventSink(&g_itemDataInterface);
 
-			g_tintMaskInterface.ReadTintData("Data\\SKSE\\Plugins\\NiOverride\\TintData\\", "*.xml");
+			std::vector<SKEEFixedString> tintFiles;
+			FileUtils::GetAllFiles("Data\\SKSE\\Plugins\\NiOverride\\TintData\\", "*.xml", tintFiles);
+			std::sort(tintFiles.begin(), tintFiles.end());
+
+			for (auto tintFile : tintFiles)
+			{
+				g_tintMaskInterface.ParseTintData(tintFile.c_str());
+			}
 
 			g_morphInterface.LoadMods();
 		}
@@ -677,6 +691,13 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_interfaceMap.AddInterface("ItemData", &g_itemDataInterface);
 	g_interfaceMap.AddInterface("TintMask", &g_tintMaskInterface);
 	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
+	g_interfaceMap.AddInterface("ActorUpdateManager", &g_actorUpdateManager);
+
+	g_actorUpdateManager.AddInterface(&g_skeletonExtenderInterface);
+	g_actorUpdateManager.AddInterface(&g_bodyMorphInterface);
+	g_actorUpdateManager.AddInterface(&g_overlayInterface);
+	g_actorUpdateManager.AddInterface(&g_overrideInterface);
+	g_actorUpdateManager.AddInterface(&g_itemDataInterface);
 
 	_DMESSAGE("NetImmerse Override Enabled");
 
@@ -687,6 +708,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableBodyMorph", &g_enableBodyMorph);
 	SKEE64GetConfigValue("Features", "bEnableAutoTransforms", &g_enableAutoTransforms);
 	SKEE64GetConfigValue("Features", "bEnableEquippableTransforms", &g_enableEquippableTransforms);
+	SKEE64GetConfigValue("Features", "bEnableTintSync", &g_enableTintSync);
 
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
 	SKEE64GetConfigValue("Overlays", "bEnableFaceOverlays", &g_enableFaceOverlays);
@@ -771,16 +793,20 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("FaceGen", "bExternalHeads", &g_externalHeads);
 	SKEE64GetConfigValue("FaceGen", "bExtendedMorphs", &g_extendedMorphs);
 	SKEE64GetConfigValue("FaceGen", "bAllowAllMorphs", &g_allowAllMorphs);
+	SKEE64GetConfigValue("FaceGen", "bExportSkinToBone", &g_exportSkinToBone);
 
 	SKEE64GetConfigValue("Sculpting", "fPanSpeed", &g_panSpeed);
 	SKEE64GetConfigValue("Sculpting", "fFOV", &g_cameraFOV);
 	SKEE64GetConfigValue("Sculpting", "iWidth", &g_viewWidth);
 	SKEE64GetConfigValue("Sculpting", "iHeight", &g_viewHeight);
 
-	SKEE64GetConfigValue("Sculpting", "fBackgroundA", &g_backgroundA);
-	SKEE64GetConfigValue("Sculpting", "fBackgroundR", &g_backgroundR);
-	SKEE64GetConfigValue("Sculpting", "fBackgroundG", &g_backgroundG);
-	SKEE64GetConfigValue("Sculpting", "fBackgroundB", &g_backgroundB);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundA", &g_sculptBackgroundA);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundR", &g_sculptBackgroundR);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundG", &g_sculptBackgroundG);
+	SKEE64GetConfigValue("Sculpting", "fBackgroundB", &g_sculptBackgroundB);
+	SKEE64GetConfigValue("Sculpting", "fOffsetX", &g_sculptOffsetX);
+	SKEE64GetConfigValue("Sculpting", "fOffsetY", &g_sculptOffsetY);
+	SKEE64GetConfigValue("Sculpting", "fOffsetZ", &g_sculptOffsetZ);
 
 	std::string types[CDXBrush::kBrushTypes];
 	types[CDXBrush::kBrushType_Mask_Add] = "Brush/MaskAdd/";

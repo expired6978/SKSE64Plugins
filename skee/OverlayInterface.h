@@ -132,7 +132,9 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
 };
 
-class OverlayInterface : public IPluginInterface
+class OverlayInterface
+	: public IPluginInterface
+	, public IAddonAttachmentInterface
 {
 public:
 	enum
@@ -184,4 +186,7 @@ public:
 private:
 	std::string defaultTexture;
 	OverlayHolder overlays;
+
+	// Inherited via IAddonAttachmentInterface
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
 };

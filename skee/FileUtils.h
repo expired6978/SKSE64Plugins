@@ -8,6 +8,7 @@
 #include <locale>
 
 #include "skse64/GameTypes.h"
+#include "StringTable.h"
 
 class TESRace;
 class BGSHeadPart;
@@ -36,6 +37,11 @@ namespace BSFileUtil {
 			ret = fin->Read(&ch, 1);
 		}
 	}
+}
+
+namespace FileUtils
+{
+	void GetAllFiles(LPCTSTR lpFolder, LPCTSTR lpFilePattern, std::vector<SKEEFixedString> & filePaths);
 }
 
 TESRace * GetRaceByName(std::string & raceName);

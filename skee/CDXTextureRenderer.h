@@ -11,7 +11,8 @@ using namespace DirectX;
 
 class CDXPixelShaderCache;
 class CDXD3DDevice;
-struct ShaderFileData;
+class CDXShaderFile;
+class CDXShaderFactory;
 
 class CDXTextureRenderer
 {
@@ -53,8 +54,9 @@ public:
 	};
 
 	CDXTextureRenderer();
+	virtual ~CDXTextureRenderer() { }
 
-	virtual bool Initialize(CDXD3DDevice * device, const ShaderFileData & vertexShader, CDXPixelShaderCache * cache);
+	virtual bool Initialize(CDXD3DDevice * device, CDXShaderFactory * factory, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, CDXPixelShaderCache * cache);
 	virtual void Render(CDXD3DDevice * pDevice, bool clear = true);
 	virtual void Release();
 	virtual bool SetTexture(CDXD3DDevice * device, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> texture, DXGI_FORMAT target);
@@ -68,14 +70,11 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() { return m_renderTargetTexture; }
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetResourceView() { return m_shaderResourceView; };
 
-	bool CreateVertexShader(CDXD3DDevice * device, const ShaderFileData & fileData, const char * technique, D3D11_INPUT_ELEMENT_DESC * polygonLayout, int numElements, Microsoft::WRL::ComPtr<ID3D11VertexShader> & vertexShader, Microsoft::WRL::ComPtr<ID3D11InputLayout> & layout);
 	void AddLayer(const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> & texture, const TextureType & type, const std::string & technique, const XMFLOAT4 & maskColor);
 
 protected:
 	bool InitializeVertices(CDXD3DDevice * device);
-	bool InitializeVertexShader(CDXD3DDevice * device, const ShaderFileData & vertexShader);
-
-	void OutputShaderErrorMessage(Microsoft::WRL::ComPtr<ID3DBlob> & errorMessage, std::stringstream & output);
+	bool InitializeVertexShader(CDXD3DDevice * device, CDXShaderFactory * factory, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile);
 
 	CDXPixelShaderCache * m_shaderCache;
 

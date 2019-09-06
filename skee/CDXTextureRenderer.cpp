@@ -2,6 +2,7 @@
 #include "CDXD3DDevice.h"
 #include "CDXPixelShaderCache.h"
 #include "CDXShaderCompile.h"
+#include "CDXShaderFactory.h"
 #include "CDXTypes.h"
 
 CDXTextureRenderer::CDXTextureRenderer()
@@ -23,7 +24,7 @@ CDXTextureRenderer::CDXTextureRenderer()
 	m_shaderResourceView = nullptr;
 }
 
-bool CDXTextureRenderer::Initialize(CDXD3DDevice * device, const ShaderFileData & vertexShader, CDXPixelShaderCache * cache)
+bool CDXTextureRenderer::Initialize(CDXD3DDevice * device, CDXShaderFactory * factory, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, CDXPixelShaderCache * cache)
 {
 	m_shaderCache = cache;
 
@@ -31,7 +32,7 @@ bool CDXTextureRenderer::Initialize(CDXD3DDevice * device, const ShaderFileData 
 	{
 		return false;
 	}
-	if (!InitializeVertexShader(device, vertexShader))
+	if (!InitializeVertexShader(device, factory, sourceFile, precompiledFile))
 	{
 		return false;
 	}
@@ -152,7 +153,7 @@ bool CDXTextureRenderer::InitializeVertices(CDXD3DDevice * device)
 }
 
 
-bool CDXTextureRenderer::InitializeVertexShader(CDXD3DDevice * device, const ShaderFileData & vertexShader)
+bool CDXTextureRenderer::InitializeVertexShader(CDXD3DDevice * device, CDXShaderFactory * factory, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile)
 {
 	HRESULT result;
 	Microsoft::WRL::ComPtr<ID3D11Device> pDevice = device->GetDevice();
@@ -178,7 +179,7 @@ bool CDXTextureRenderer::InitializeVertexShader(CDXD3DDevice * device, const Sha
 	// Get a count of the elements in the layout.
 	unsigned int numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
 
-	if (!CreateVertexShader(device, vertexShader, "TextureVertex", polygonLayout, numElements, m_vertexShader, m_layout))
+	if (!factory->CreateVertexShader(device, sourceFile, precompiledFile, polygonLayout, numElements, m_vertexShader, m_layout))
 	{
 		return false;
 	}
@@ -247,70 +248,6 @@ bool CDXTextureRenderer::InitializeVertexShader(CDXD3DDevice * device, const Sha
 	}
 
 	return true;
-}
-
-bool CDXTextureRenderer::CreateVertexShader(CDXD3DDevice * device, const ShaderFileData & fileData, const char * technique, D3D11_INPUT_ELEMENT_DESC * polygonLayout, int numElements, Microsoft::WRL::ComPtr<ID3D11VertexShader> & vertexShader, Microsoft::WRL::ComPtr<ID3D11InputLayout> & layout)
-{
-	Microsoft::WRL::ComPtr<ID3D11Device> pDevice = device->GetDevice();
-	Microsoft::WRL::ComPtr<ID3DBlob> errorMessage;
-	Microsoft::WRL::ComPtr<ID3DBlob> shaderBuffer;
-
-	std::stringstream errors;
-
-	// Compile the pixel shader code.
-	HRESULT result = CompileShaderFromData(fileData.pSrcData, fileData.SrcDataSize, fileData.pSourceName, technique, "vs_5_0", &shaderBuffer, &errorMessage);
-	if (FAILED(result))
-	{
-		// If the shader failed to compile it should have writen something to the error message.
-		if (errorMessage)
-		{
-			OutputShaderErrorMessage(errorMessage, errors);
-		}
-
-		_ERROR("%s - Failed to create vertex shader:\n%s", __FUNCTION__, errors.str().c_str());
-		return false;
-	}
-
-	if (!shaderBuffer)
-	{
-		_ERROR("%s - Failed to acquire vertex shader buffer", __FUNCTION__);
-		return false;
-	}
-
-	// Create the vertex shader from the buffer.
-	result = pDevice->CreateVertexShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, &vertexShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
-		return false;
-	}
-
-	// Create the vertex input layout.
-	result = pDevice->CreateInputLayout(polygonLayout, numElements, shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), &layout);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create input layout for vertex shader", __FUNCTION__);
-		return false;
-	}
-
-	return true;
-}
-
-void CDXTextureRenderer::OutputShaderErrorMessage(Microsoft::WRL::ComPtr<ID3DBlob> & errorMessage, std::stringstream & output)
-{
-	// Get a pointer to the error message text buffer.
-	char* compileErrors = (char*)(errorMessage->GetBufferPointer());
-
-	// Get the length of the message.
-	size_t bufferSize = errorMessage->GetBufferSize();
-
-	// Write out the error message.
-	for (size_t i = 0; i < bufferSize; i++)
-	{
-		output << compileErrors[i];
-	}
-
-	errorMessage = nullptr;
 }
 
 void CDXTextureRenderer::Render(CDXD3DDevice * device, bool clear)

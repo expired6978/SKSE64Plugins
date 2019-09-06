@@ -24,12 +24,7 @@ CDXScene::~CDXScene()
 
 void CDXScene::Release()
 {
-	if(m_shader) {
-		m_shader->Release();
-	}
-
 	for(auto it : m_meshes) {
-		it->Release();
 		delete it;
 	}
 
@@ -96,14 +91,7 @@ void CDXScene::Render(CDXCamera * camera, CDXD3DDevice * device)
 
 	m_shader->VSSetShaderBuffer(device, params);
 
-	CDXShader::TransformBuffer xform;
-	xform.transform = XMMatrixIdentity();
-
 	for(auto mesh : m_meshes) {
-		xform.transform = mesh->GetTransform();
-
-		m_shader->VSSetTransformBuffer(device, xform);
-
 		if(mesh->IsVisible()) {
 			mesh->Render(device, m_shader);
 		}

@@ -9,86 +9,12 @@ using namespace DirectX;
 
 CDXShader::CDXShader()
 {
-	m_vertexShader = nullptr;
-	m_pixelShader = nullptr;
-	m_wireShader = nullptr;
-	m_layout = nullptr;
-	m_sampleState = nullptr;
-	m_matrixBuffer = nullptr;
-	m_transformBuffer = nullptr;
-	m_materialBuffer = nullptr;
-	m_solidState = nullptr;
-	m_wireState = nullptr;
-}
 
-void CDXShader::Release()
-{
-	// Release the light constant buffer.
-	if (m_transformBuffer)
-	{
-		m_transformBuffer->Release();
-		m_transformBuffer = nullptr;
-	}
-
-	if (m_materialBuffer)
-	{
-		m_materialBuffer->Release();
-		m_materialBuffer = nullptr;
-	}
-
-	// Release the matrix constant buffer.
-	if (m_matrixBuffer)
-	{
-		m_matrixBuffer->Release();
-		m_matrixBuffer = nullptr;
-	}
-
-	// Release the sampler state.
-	if (m_sampleState)
-	{
-		m_sampleState->Release();
-		m_sampleState = nullptr;
-	}
-
-	// Release the layout.
-	if (m_layout)
-	{
-		m_layout->Release();
-		m_layout = nullptr;
-	}
-
-	// Release the pixel shader.
-	if (m_pixelShader)
-	{
-		m_pixelShader->Release();
-		m_pixelShader = nullptr;
-	}
-
-	// Release the vertex shader.
-	if (m_vertexShader)
-	{
-		m_vertexShader->Release();
-		m_vertexShader = nullptr;
-	}
-
-	if (m_solidState)
-	{
-		m_solidState->Release();
-		m_solidState = nullptr;
-	}
-	if (m_wireState)
-	{
-		m_wireState->Release();
-		m_wireState = nullptr;
-	}
 }
 
 bool CDXShader::Initialize(const CDXInitParams & initParams)
 {
 	HRESULT result;
-	ID3DBlob* errorMessage;
-	ID3DBlob* vertexShaderBuffer;
-	ID3DBlob* pixelShaderBuffer;
 	D3D11_INPUT_ELEMENT_DESC polygonLayout[4];
 	unsigned int numElements;
 	D3D11_SAMPLER_DESC samplerDesc;
@@ -96,88 +22,6 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 
 	auto pDevice = initParams.device->GetDevice();
 
-	// Initialize the pointers this function will use to null.
-	errorMessage = 0;
-	vertexShaderBuffer = 0;
-	pixelShaderBuffer = 0;
-
-	std::stringstream errors;
-
-	// Compile the vertex shader code.
-	result = CompileShaderFromData(initParams.vertexShader.pSrcData, initParams.vertexShader.SrcDataSize, initParams.vertexShader.pSourceName, "LightVertexShader", "vs_5_0", &vertexShaderBuffer, &errorMessage);
-	if (FAILED(result))
-	{
-		// If the shader failed to compile it should have writen something to the error message.
-		if (errorMessage)
-		{
-			OutputShaderErrorMessage(errorMessage, errors);
-		}
-		_ERROR("%s - Failed to compile vertex shader %s", __FUNCTION__, errors.str().c_str());
-		return false;
-	}
-
-	if (!vertexShaderBuffer)
-	{
-		_ERROR("%s - Failed to acquire vertex shader buffer", __FUNCTION__);
-		return false;
-	}
-
-	// Create the vertex shader from the buffer.
-	result = pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_vertexShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
-		return false;
-	}
-
-	// Compile the pixel shader code.
-	result = CompileShaderFromData(initParams.pixelShader.pSrcData, initParams.pixelShader.SrcDataSize, initParams.pixelShader.pSourceName, "LightPixelShader", "ps_5_0", &pixelShaderBuffer, &errorMessage);
-	if (FAILED(result))
-	{
-		// If the shader failed to compile it should have writen something to the error message.
-		if (errorMessage)
-		{
-			OutputShaderErrorMessage(errorMessage, errors);
-		}
-		_ERROR("%s - Failed to compile pixel shader %s", __FUNCTION__, errors.str().c_str());
-		return false;
-	}
-
-	if (!pixelShaderBuffer)
-	{
-		_ERROR("%s - Failed to acquire pixel shader buffer", __FUNCTION__);
-		return false;
-	}
-
-	// Create the vertex shader from the buffer.
-	result = pDevice->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_pixelShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create pixel shader", __FUNCTION__);
-		return false;
-	}
-
-	// Compile the pixel shader code.
-	result = CompileShaderFromData(initParams.pixelShader.pSrcData, initParams.pixelShader.SrcDataSize, initParams.pixelShader.pSourceName, "WireframePixelShader", "ps_5_0", &pixelShaderBuffer, &errorMessage);
-	if (FAILED(result))
-	{
-		// If the shader failed to compile it should have writen something to the error message.
-		if (errorMessage)
-		{
-			OutputShaderErrorMessage(errorMessage, errors);
-		}
-
-		_ERROR("%s - Failed to compile wireframe shader %s", __FUNCTION__, errors.str().c_str());
-		return false;
-	}
-
-	// Create the vertex shader from the buffer.
-	result = pDevice->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_wireShader);
-	if (FAILED(result))
-	{
-		_ERROR("%s - Failed to create wireframe shader", __FUNCTION__);
-		return false;
-	}
 #if 0
 	{
 		// Compile the vertex shader code.
@@ -279,21 +123,23 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	// Get a count of the elements in the layout.
 	numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
 
-	// Create the vertex input layout.
-	result = pDevice->CreateInputLayout(polygonLayout, numElements, vertexShaderBuffer->GetBufferPointer(),
-		vertexShaderBuffer->GetBufferSize(), &m_layout);
-	if (FAILED(result))
+	// LightVertexShader
+	if (!initParams.factory->CreateVertexShader(initParams.device, initParams.vertexShader[0], initParams.vertexShader[1], polygonLayout, numElements, m_vertexShader, m_layout))
 	{
-		_ERROR("%s - Failed to create input layout", __FUNCTION__);
 		return false;
 	}
 
-	// Release the vertex shader buffer and pixel shader buffer since they are no longer needed.
-	vertexShaderBuffer->Release();
-	vertexShaderBuffer = 0;
+	// LightPixelShader
+	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.pixelShader[0], initParams.pixelShader[1], m_pixelShader))
+	{
+		return false;
+	}
 
-	pixelShaderBuffer->Release();
-	pixelShaderBuffer = 0;
+	// WireframePixelShader
+	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.wireShader[0], initParams.wireShader[1], m_wireShader))
+	{
+		return false;
+	}
 
 	// Create a texture sampler state description.
 	samplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
@@ -393,29 +239,6 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	return true;
 }
 
-void CDXShader::OutputShaderErrorMessage(ID3D10Blob* errorMessage, std::stringstream & output)
-{
-	char* compileErrors;
-	size_t bufferSize, i;
-
-	// Get a pointer to the error message text buffer.
-	compileErrors = (char*)(errorMessage->GetBufferPointer());
-
-	// Get the length of the message.
-	bufferSize = errorMessage->GetBufferSize();
-
-	// Write out the error message.
-	for (i = 0; i<bufferSize; i++)
-	{
-		output << compileErrors[i];
-	}
-
-	// Release the error message.
-	errorMessage->Release();
-	errorMessage = 0;
-}
-
-
 bool CDXShader::VSSetShaderBuffer(CDXD3DDevice * device, VertexBuffer & params)
 {
 	HRESULT result;
@@ -425,7 +248,7 @@ bool CDXShader::VSSetShaderBuffer(CDXD3DDevice * device, VertexBuffer & params)
 	auto pDeviceContext = device->GetDeviceContext();
 
 	// Lock the matrix constant buffer so it can be written to.
-	result = pDeviceContext->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	result = pDeviceContext->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to map matrix buffer", __FUNCTION__);
@@ -443,8 +266,10 @@ bool CDXShader::VSSetShaderBuffer(CDXD3DDevice * device, VertexBuffer & params)
 	*dataPtr = params;
 
 	// Unlock the matrix constant buffer.
-	pDeviceContext->Unmap(m_matrixBuffer, 0);
-	pDeviceContext->VSSetConstantBuffers(0, 1, &m_matrixBuffer);
+	pDeviceContext->Unmap(m_matrixBuffer.Get(), 0);
+
+	ID3D11Buffer* buffers[] = { m_matrixBuffer.Get() };
+	pDeviceContext->VSSetConstantBuffers(0, 1, buffers);
 	return true;
 }
 
@@ -457,7 +282,7 @@ bool CDXShader::VSSetTransformBuffer(CDXD3DDevice * device, TransformBuffer & pa
 	auto pDeviceContext = device->GetDeviceContext();
 
 	// Lock the matrix constant buffer so it can be written to.
-	result = pDeviceContext->Map(m_transformBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	result = pDeviceContext->Map(m_transformBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to map transform buffer", __FUNCTION__);
@@ -470,8 +295,10 @@ bool CDXShader::VSSetTransformBuffer(CDXD3DDevice * device, TransformBuffer & pa
 	*dataPtr = params;
 
 	// Unlock the matrix constant buffer.
-	pDeviceContext->Unmap(m_transformBuffer, 0);
-	pDeviceContext->VSSetConstantBuffers(1, 1, &m_transformBuffer);
+	pDeviceContext->Unmap(m_transformBuffer.Get(), 0);
+
+	ID3D11Buffer* buffers[] = { m_transformBuffer.Get() };
+	pDeviceContext->VSSetConstantBuffers(1, 1, buffers);
 	return true;
 }
 
@@ -484,7 +311,7 @@ bool CDXShader::PSSetMaterialBuffers(CDXD3DDevice * device, MaterialBuffer & par
 	auto pDeviceContext = device->GetDeviceContext();
 
 	// Lock the light constant buffer so it can be written to.
-	result = pDeviceContext->Map(m_materialBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	result = pDeviceContext->Map(m_materialBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to map material buffer", __FUNCTION__);
@@ -498,8 +325,10 @@ bool CDXShader::PSSetMaterialBuffers(CDXD3DDevice * device, MaterialBuffer & par
 	*dataPtr = params;
 
 	// Unlock the constant buffer.
-	pDeviceContext->Unmap(m_materialBuffer, 0);
-	pDeviceContext->PSSetConstantBuffers(0, 1, &m_materialBuffer);
+	pDeviceContext->Unmap(m_materialBuffer.Get(), 0);
+
+	ID3D11Buffer* buffers[] = { m_materialBuffer.Get() };
+	pDeviceContext->PSSetConstantBuffers(0, 1, buffers);
 	return true;
 }
 
@@ -507,15 +336,15 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 {
 	auto pDeviceContext = device->GetDeviceContext();
 	// Set the vertex input layout.
-	pDeviceContext->IASetInputLayout(m_layout);
+	pDeviceContext->IASetInputLayout(m_layout.Get());
 
 	// Set the vertex and pixel shaders that will be used to render this triangle.
 	
 	CDXShader::MaterialBuffer mat;
 
-	ID3D11RasterizerState * state = m_solidState;
-	ID3D11VertexShader * vshader = m_vertexShader;
-	ID3D11PixelShader * pshader = m_pixelShader;
+	ID3D11RasterizerState * state = m_solidState.Get();
+	ID3D11VertexShader * vshader = m_vertexShader.Get();
+	ID3D11PixelShader * pshader = m_pixelShader.Get();
 	ID3D11BlendState * blendingState = material->GetBlendingState(device);
 
 	float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -528,8 +357,8 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 		mat.tintColor = XMFLOAT4(0, 0, 0, 0);
 		mat.wireColor = material->GetWireframeColor();
 		mat.alphaThreshold = material->GetAlphaBlending() ? 0.0f : material->GetAlphaThreshold() / 255.0f;
-		state = m_wireState;
-		pshader = m_wireShader;
+		state = m_wireState.Get();
+		pshader = m_wireShader.Get();
 	}
 	else
 	{
@@ -560,5 +389,7 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 	pDeviceContext->PSSetShaderResources(0, 5, material->GetTextures());
 
 	// Set the sampler state in the pixel shader.
-	pDeviceContext->PSSetSamplers(0, 1, &m_sampleState);
+
+	ID3D11SamplerState * samplers[] = { m_sampleState.Get() };
+	pDeviceContext->PSSetSamplers(0, 1, samplers);
 }

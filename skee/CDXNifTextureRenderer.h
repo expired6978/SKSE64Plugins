@@ -2,6 +2,7 @@
 
 #include "CDXTextureRenderer.h"
 #include "CDXRenderState.h"
+#include "CDXShaderFactory.h"
 
 #include "skse64/GameTypes.h"
 #include "skse64/NiTypes.h"
@@ -18,6 +19,7 @@ class CDXNifTextureRenderer : public CDXTextureRenderer, public CDXRenderState
 {
 public:
 	bool Init(CDXD3DDevice* device, CDXPixelShaderCache * cache);
+	virtual ~CDXNifTextureRenderer() { }
 
 	struct MaskData
 	{
@@ -27,7 +29,7 @@ public:
 		UInt8 textureType = 1;
 	};
 
-	bool ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<NiTexture> texture, std::map<SInt32, MaskData> & masks, NiPointer<NiTexture> & output);
+	bool ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<NiTexture> texture, std::map<SInt32, MaskData> & masks, const BSFixedString & name, NiPointer<NiTexture> & output);
 
 private:
 	std::vector<NiPointer<NiTexture>> m_textures;

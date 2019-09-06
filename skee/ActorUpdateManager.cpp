@@ -7,6 +7,7 @@
 #include "OverrideInterface.h"
 #include "BodyMorphInterface.h"
 #include "OverlayInterface.h"
+#include "IPluginInterface.h"
 
 #include "Utilities.h"
 
@@ -61,4 +62,32 @@ EventResult ActorUpdateManager::ReceiveEvent(TESInitScriptEvent * evn, EventDisp
 		}
 	}
 	return kEvent_Continue;
+}
+
+void ActorUpdateManager::AddInterface(IAddonAttachmentInterface* observer)
+{
+	auto it = std::find_if(m_observers.begin(), m_observers.end(), [&](const IAddonAttachmentInterface* ob)
+	{
+		return ob == observer;
+	});
+	if (it == m_observers.end())
+	{
+		m_observers.push_back(observer);
+	}
+}
+
+void ActorUpdateManager::RemoveInterface(IAddonAttachmentInterface* observer)
+{
+	m_observers.erase(std::remove_if(m_observers.begin(), m_observers.end(), [&](const IAddonAttachmentInterface* ob)
+	{
+		return ob == observer;
+	}), m_observers.end());
+}
+
+void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	for (auto observer : m_observers)
+	{
+		observer->OnAttach(refr, armor, addon, object, isFirstPerson, skeleton, root);
+	}
 }

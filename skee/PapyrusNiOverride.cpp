@@ -939,7 +939,7 @@ namespace papyrusNiOverride
 		if (Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor)) {
 			ModifiedItemIdentifier identifier;
 			identifier.SetRankID(uniqueID);
-			g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier));
+			g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 		}
 	}
 

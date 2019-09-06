@@ -257,6 +257,27 @@
     <ClCompile Include="PluginInterface.cpp">
       <Filter>interfaces</Filter>
     </ClCompile>
+    <ClCompile Include="CDXTextureRenderer.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifTextureRenderer.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXRenderState.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXPixelShaderCache.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXNifPixelShaderCache.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXShaderFactory.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="CDXBSShaderResource.cpp">
+      <Filter>renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
@@ -318,6 +339,18 @@
     </Filter>
     <Filter Include="scaleform\functions">
       <UniqueIdentifier>{386572e3-f3b3-4998-847b-1f680bb2d95b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{ca3beb9c-0071-4074-b2c1-099af17b30a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders\NiOverride">
+      <UniqueIdentifier>{baf279a6-0ee1-4f45-9514-032f96933cd9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders\CharGen">
+      <UniqueIdentifier>{23a53430-e562-40c9-9f27-561842606e1e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders\NiOverride\Effects">
+      <UniqueIdentifier>{c355f50d-c27a-4353-b31b-17f66f54b5ed}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -591,5 +624,88 @@
     <ClInclude Include="IPluginInterface.h">
       <Filter>interfaces</Filter>
     </ClInclude>
+    <ClInclude Include="CDXTextureRenderer.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifTextureRenderer.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXRenderState.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXPixelShaderCache.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXNifPixelShaderCache.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXShaderFactory.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="CDXBSShaderResource.h">
+      <Filter>renderer</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\NiOverride\Effects\Normal.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Overlay.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\RNM.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\SoftLight.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Tint.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Color.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\ColorBurn.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\ColorDodge.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Darken.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Grayscale.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Lighten.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\LinearBurn.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\LinearDodge.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\LinearLight.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\texture.fx">
+      <Filter>shaders\NiOverride</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CharGen\brush_ps.hlsl">
+      <Filter>shaders\CharGen</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CharGen\brush_vs.hlsl">
+      <Filter>shaders\CharGen</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CharGen\shader_ps.hlsl">
+      <Filter>shaders\CharGen</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CharGen\shader_vs.hlsl">
+      <Filter>shaders\CharGen</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CharGen\wireframe_ps.hlsl">
+      <Filter>shaders\CharGen</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

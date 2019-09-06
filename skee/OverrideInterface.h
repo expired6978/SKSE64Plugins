@@ -222,7 +222,9 @@ public:
 	friend class OverrideInterface;
 };
 
-class OverrideInterface : public IPluginInterface
+class OverrideInterface
+	: public IPluginInterface
+	, public IAddonAttachmentInterface
 {
 public:
 	enum
@@ -343,4 +345,7 @@ private:
 	NodeRegistrationMapHolder nodeData;
 	WeaponRegistrationMapHolder weaponData;
 	SkinRegistrationMapHolder skinData;
+
+	// Inherited via IAddonAttachmentInterface
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
 };

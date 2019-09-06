@@ -9,13 +9,15 @@
 #include "CDXTypes.h"
 
 class CDXD3DDevice;
+class CDXShaderFactory;
 
 class CDXPixelShaderCache : protected std::unordered_map<std::string, Microsoft::WRL::ComPtr<ID3D11PixelShader>>
 {
 public:
-	virtual Microsoft::WRL::ComPtr<ID3D11PixelShader> GetShader(CDXD3DDevice* device, const std::string & name);
-	virtual Microsoft::WRL::ComPtr<ID3D11PixelShader> CompileShader(CDXD3DDevice* device, const std::string & name, const ShaderFileData & fileData);
+	explicit CDXPixelShaderCache(CDXShaderFactory * factory) : m_factory(factory) { }
 
-private:
-	void OutputShaderErrorMessage(Microsoft::WRL::ComPtr<ID3DBlob> & errorMessage, std::stringstream & output);
+	virtual Microsoft::WRL::ComPtr<ID3D11PixelShader> GetShader(CDXD3DDevice* device, const std::string & name);
+
+protected:
+	CDXShaderFactory * m_factory;
 };

@@ -3,6 +3,7 @@
 struct SKSESerializationInterface;
 class Actor;
 class ItemAttributeData;
+class NIOVTaskUpdateItemDye;
 
 #include "skse64/GameThreads.h"
 #include "skse64/GameExtraData.h"
@@ -61,8 +62,8 @@ struct ModifiedItemIdentifier
 	UInt32			weaponSlot = 0;
 	UInt32			slotMask = 0;
 	UInt32			rankId = 0;
-	TESForm			* form = NULL;
-	BaseExtraList	* extraData = NULL;
+	TESForm			* form = nullptr;
+	BaseExtraList	* extraData = nullptr;
 
 	void SetRankID(UInt32 _rank)
 	{
@@ -164,10 +165,11 @@ struct ItemAttribute
 	std::shared_ptr<ItemAttributeData> data;
 };
 
-class ItemDataInterface : 
-	public SafeDataHolder<std::vector<ItemAttribute>>, 
-	public IPluginInterface, 
-	public BSTEventSink <TESUniqueIDChangeEvent>
+class ItemDataInterface 
+	: public SafeDataHolder<std::vector<ItemAttribute>>
+	, public IPluginInterface
+	, public BSTEventSink <TESUniqueIDChangeEvent>
+	, public IAddonAttachmentInterface
 {
 public:
 	typedef std::vector<ItemAttribute> Data;
@@ -224,6 +226,12 @@ public:
 	void UseRankID() { m_nextRank++; }
 	UInt32 GetNextRankID() const { return m_nextRank; }
 	UInt32	m_nextRank = 1;
+
+private:
+	std::vector<NIOVTaskUpdateItemDye*> m_loadQueue;
+
+	// Inherited via IAddonAttachmentInterface
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
 };
 
 class DyeMap : public SafeDataHolder<std::unordered_map<UInt32, UInt32>>
@@ -241,13 +249,20 @@ public:
 class NIOVTaskUpdateItemDye : public TaskDelegate
 {
 public:
-	NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier);
+	NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced);
 	virtual void Run();
 	virtual void Dispose() {
 		delete this;
 	};
 
+	UInt32 GetActor() const { return m_formId; }
+	UInt32 GetSlotMask() const { return m_identifier.slotMask; }
+
 private:
 	UInt32 m_formId;
 	ModifiedItemIdentifier m_identifier;
+	UInt32 m_flags;
+	bool m_forced;
+
+	friend class ItemDataInterface;
 };

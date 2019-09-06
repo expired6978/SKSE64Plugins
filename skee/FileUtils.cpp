@@ -2,6 +2,7 @@
 
 #include <unordered_set>
 #include <queue>
+#include <Shlwapi.h>
 
 #include "skse64/GameStreams.h"
 #include "skse64/GameData.h"
@@ -63,6 +64,50 @@ bool ReadLine(BSResourceNiBinaryStream* fin, std::string* str)
 		return true;
 	}
 	return false;
+}
+}
+
+namespace FileUtils
+{
+void GetAllFiles(LPCTSTR lpFolder, LPCTSTR lpFilePattern, std::vector<SKEEFixedString> & filePaths)
+{
+	TCHAR szFullPattern[MAX_PATH];
+	WIN32_FIND_DATA FindFileData;
+	HANDLE hFindFile;
+	// first we are going to process any subdirectories
+	PathCombine(szFullPattern, lpFolder, "*");
+	hFindFile = FindFirstFile(szFullPattern, &FindFileData);
+	if (hFindFile != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			{
+				// found a subdirectory; recurse into it
+				PathCombine(szFullPattern, lpFolder, FindFileData.cFileName);
+				if (FindFileData.cFileName[0] == '.')
+					continue;
+				GetAllFiles(szFullPattern, lpFilePattern, filePaths);
+			}
+		} while (FindNextFile(hFindFile, &FindFileData));
+		FindClose(hFindFile);
+	}
+	// now we are going to look for the matching files
+	PathCombine(szFullPattern, lpFolder, lpFilePattern);
+	hFindFile = FindFirstFile(szFullPattern, &FindFileData);
+	if (hFindFile != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if (!(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			{
+				// found a file; do something with it
+				PathCombine(szFullPattern, lpFolder, FindFileData.cFileName);
+				filePaths.push_back(szFullPattern);
+			}
+		} while (FindNextFile(hFindFile, &FindFileData));
+		FindClose(hFindFile);
+	}
 }
 }
 
@@ -206,13 +251,22 @@ void VisitLeveledCharacter(TESLevCharacter * character, std::function<void(TESNP
 
 void ForEachMod(std::function<void(ModInfo *)> functor)
 {
-	for (UInt32 i = 0; i < (*g_dataHandler)->modList.loadedMods.count; i++)
+	class ActiveModVisitor
 	{
-		functor((*g_dataHandler)->modList.loadedMods[i]);
-	}
+	public:
+		ActiveModVisitor(std::function<void(ModInfo *)> fn) : m_function(fn) { }
 
-	for (UInt32 i = 0; i < (*g_dataHandler)->modList.loadedCCMods.count; i++)
-	{
-		functor((*g_dataHandler)->modList.loadedCCMods[i]);
-	}
+		bool Accept(ModInfo* modInfo)
+		{
+			if (modInfo->IsActive())
+			{
+				m_function(modInfo);
+			}
+			return true;
+		}
+
+		std::function<void(ModInfo *)> m_function;
+	};
+
+	(*g_dataHandler)->modList.modInfoList.Visit(ActiveModVisitor(functor));
 }

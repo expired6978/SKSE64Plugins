@@ -15,6 +15,7 @@
 #include "SKEEHooks.h"
 #include "PapyrusNiOverride.h"
 
+#include "ActorUpdateManager.h"
 #include "OverlayInterface.h"
 #include "OverrideInterface.h"
 #include "BodyMorphInterface.h"
@@ -44,8 +45,10 @@ extern TintMaskInterface	g_tintMaskInterface;
 extern BodyMorphInterface	g_bodyMorphInterface;
 extern OverlayInterface		g_overlayInterface;
 extern OverrideInterface	g_overrideInterface;
+extern ActorUpdateManager	g_actorUpdateManager;
 
 extern bool					g_enableFaceOverlays;
+extern bool					g_enableTintSync;
 extern UInt32				g_numFaceOverlays;
 
 extern bool					g_playerOnly;
@@ -305,55 +308,8 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 		return;
 	}
 
-	SkeletonExtender::Attach(refr, boneTree, resultNode);
-
-#ifdef _DEBUG
-	_ERROR("%s - Applying Vertex Diffs on Reference (%08X) ArmorAddon (%08X) of Armor (%08X)", __FUNCTION__, refr->formID, params->addon->formID, params->armor->formID);
-#endif
-
-	// Apply no v-diffs if theres no morphs at all
 	NiPointer<NiAVObject> node = resultNode;
-	if (g_bodyMorphInterface.HasMorphs(refr)) {
-		g_bodyMorphInterface.ApplyVertexDiff(refr, resultNode, true);
-	}
-
-	if (g_enableEquippableTransforms)
-	{
-		SkeletonExtender::AddTransforms(refr, isFirstPerson, isFirstPerson ? node1P : node3P, resultNode);
-	}
-
-	if ((refr == (*g_thePlayer) && g_playerOnly) || !g_playerOnly || g_overlayInterface.HasOverlays(refr))
-	{
-		UInt32 armorMask = params->armor->bipedObject.GetSlotMask();
-		UInt32 addonMask = params->addon->biped.GetSlotMask();
-		g_overlayInterface.BuildOverlays(armorMask, addonMask, refr, boneTree, resultNode);
-	}
-
-	{
-		g_overrideInterface.ApplyOverrides(refr, params->armor, params->addon, resultNode, g_immediateArmor);
-	}
-
-	{
-		UInt32 armorMask = params->armor->bipedObject.GetSlotMask();
-		UInt32 addonMask = params->addon->biped.GetSlotMask();
-		g_overrideInterface.ApplySkinOverrides(refr, isFirstPerson, params->armor, params->addon, armorMask & addonMask, resultNode, g_immediateArmor);
-	}
-
-	UInt32 armorMask = params->armor->bipedObject.GetSlotMask();
-
-	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
-	{
-		Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
-		if (actor) {
-			ModifiedItemIdentifier identifier;
-			identifier.SetSlotMask(armorMask);
-			return g_itemDataInterface.GetExistingData(actor, identifier);
-		}
-
-		return std::shared_ptr<ItemAttributeData>();
-	};
-
-	g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, params->armor, params->addon, resultNode, overrideFunc));
+	g_actorUpdateManager.OnAttach(refr, params->armor, params->addon, node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
 }
 
 void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate)
@@ -987,6 +943,118 @@ void DoubleMorphCallback_Hook(RaceSexMenu * menu, float newValue, UInt32 sliderI
 	DoubleMorphCallback(menu, newValue, sliderId);
 }
 
+// This tracking container is because I only verified two locations of allocation
+// in the case somehow it is allocated elsewhere without the hook the destructor wont
+// crash the game and instead free the original pointer
+ICriticalSection g_cs;
+std::unordered_set<void*> g_adjustedBlocks;
+
+void * NiAllocate_Hooked(size_t size)
+{
+	IScopedCriticalSection scs(&g_cs);
+	void* ptr = NiAllocate(size + 0x10);
+	*((uintptr_t*)ptr) = 1;
+	*((uintptr_t*)ptr+1) = 0;
+	void* adjusted = reinterpret_cast<void*>((uintptr_t)ptr + 0x10);
+	g_adjustedBlocks.emplace(adjusted);
+	return adjusted;
+}
+
+void NiFree_Hooked(void* ptr)
+{
+	IScopedCriticalSection scs(&g_cs);
+	if (g_adjustedBlocks.find(ptr) != g_adjustedBlocks.end())
+	{
+		ptr = reinterpret_cast<void*>((uintptr_t)ptr - 0x10);
+		if (InterlockedDecrement((uintptr_t*)ptr) == 0)
+		{
+			NiFree(ptr);
+		}
+	}
+	else
+	{
+		NiFree(ptr);
+	}
+}
+
+void UpdateModelColor_Recursive(NiAVObject * object, NiColor *& color, UInt32 shaderType)
+{
+	BSGeometry* geometry = object->GetAsBSGeometry();
+	if (geometry)
+	{
+		BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+		if (shaderProperty && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
+		{
+			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
+			if (material && material->GetShaderType() == shaderType)
+			{
+				if (material->GetShaderType() == BSLightingShaderMaterial::kShaderType_FaceGenRGBTint)
+				{
+					BSLightingShaderMaterialFacegenTint* tintMaterial = (BSLightingShaderMaterialFacegenTint *)shaderProperty->material;
+					tintMaterial->tintColor.r = color->r;
+					tintMaterial->tintColor.g = color->g;
+					tintMaterial->tintColor.b = color->b;
+				}
+				else if (material->GetShaderType() == BSLightingShaderMaterial::kShaderType_HairTint)
+				{
+					BSLightingShaderMaterialHairTint* tintMaterial = (BSLightingShaderMaterialHairTint *)shaderProperty->material;
+					tintMaterial->tintColor.r = color->r;
+					tintMaterial->tintColor.g = color->g;
+					tintMaterial->tintColor.b = color->b;
+				}
+			}
+		}
+	}
+	else
+	{
+		NiNode * node = object->GetAsNiNode();
+		if (node)
+		{
+			for (UInt32 i = 0; i < node->m_children.m_emptyRunStart; i++)
+			{
+				NiAVObject * object = node->m_children.m_data[i];
+				if (object) {
+					UpdateModelColor_Recursive(object, color, shaderType);
+				}
+			}
+		}
+	}
+}
+
+void UpdateModelSkin_Hooked(NiAVObject * object, NiColor *& color)
+{
+	if (*g_thePlayer && ((*g_thePlayer)->GetNiRootNode(0) == object || (*g_thePlayer)->GetNiRootNode(1) == object))
+	{
+		UInt32 mask = 1;
+		for (UInt32 i = 0; i < 32; ++i)
+		{
+			ModifiedItemIdentifier identifier;
+			identifier.SetSlotMask(mask);
+			g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_Skin, true));
+			mask <<= 1;
+		}
+	}
+
+	UpdateModelColor_Recursive(object, color, BSLightingShaderMaterial::kShaderType_FaceGenRGBTint);
+}
+
+void UpdateModelHair_Hooked(NiAVObject * object, NiColor *& color)
+{
+	if (*g_thePlayer && ((*g_thePlayer)->GetNiRootNode(0) == object || (*g_thePlayer)->GetNiRootNode(1) == object))
+	{
+		UInt32 mask = 1;
+		for (UInt32 i = 0; i < 32; ++i)
+		{
+			ModifiedItemIdentifier identifier;
+			identifier.SetSlotMask(mask);
+			g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_Hair, true));
+			mask <<= 1;
+		}
+	}
+
+	UpdateModelColor_Recursive(object, color, BSLightingShaderMaterial::kShaderType_HairTint);
+}
+
 bool InstallSKEEHooks()
 {
 #ifdef FIXME
@@ -1048,12 +1116,6 @@ bool InstallSKEEHooks()
 		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 		return false;
 	}
-
-	RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
-	g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
-
-	RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00364FF0 + 0x33E);
-	g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
@@ -1188,6 +1250,32 @@ bool InstallSKEEHooks()
 	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC1C0 + 0x79);
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
+	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount
+	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
+	if(g_enableFaceOverlays)
+	{
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C71A50 + 0x92);
+		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
+
+		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C71A50 + 0x8B);
+		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
+
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C71DA0 + 0x76);
+		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
+
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C727B0 + 0x2F);
+		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
+
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
+		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
+
+		// RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00364FF0 + 0x33E);
+		// g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
+
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00363000 + 0x1DF);
+		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
+	}
+
 	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC78 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
@@ -1227,6 +1315,13 @@ bool InstallSKEEHooks()
 
 		g_branchTrampoline.Write6Branch(ArmorAddon_Target.GetUIntPtr(), uintptr_t(code.getCode()));
 	}
+
+	if (g_enableTintSync)
+	{
+		g_branchTrampoline.Write6Branch(UpdateModelSkin.GetUIntPtr(), (uintptr_t)UpdateModelSkin_Hooked);
+		g_branchTrampoline.Write6Branch(UpdateModelHair.GetUIntPtr(), (uintptr_t)UpdateModelHair_Hooked);
+	}
+
 
 	return true;
 }

@@ -22,12 +22,17 @@
 #include "FileUtils.h"
 #include "Utilities.h"
 
+#include "CDXShaderCompile.h"
+#include "CDXBSShaderResource.h"
+
 #include <d3d11_3.h>
 
-extern float	g_backgroundA;
-extern float	g_backgroundR;
-extern float	g_backgroundG;
-extern float	g_backgroundB;
+using namespace DirectX;
+
+extern float	g_sculptBackgroundA;
+extern float	g_sculptBackgroundR;
+extern float	g_sculptBackgroundG;
+extern float	g_sculptBackgroundB;
 
 CDXNifScene::CDXNifScene() : CDXEditableScene()
 {
@@ -68,30 +73,32 @@ bool CDXNifScene::Setup(const CDXInitParams & initParams)
 		return false;
 	}
 
-	ShaderFileData brushShader;
-
-	const char * shaderPath = "SKSE/Plugins/CharGen/brush.hlsl";
-
-	std::vector<char> vsb;
-	BSResourceNiBinaryStream vs(shaderPath);
-	if (!vs.IsValid()) {
-		_ERROR("%s - Failed to read %s", __FUNCTION__, shaderPath);
-		return false;
-	}
-	BSFileUtil::ReadAll(&vs, vsb);
-	brushShader.pSourceName = "brush.hlsl";
-	brushShader.pSrcData = &vsb.at(0);
-	brushShader.SrcDataSize = vsb.size();
+	CDXBSShaderResource vsBrush("SKSE/Plugins/CharGen/Shaders/brush_vs.hlsl", "BrushVShader");
+	CDXBSShaderResource pcvsBrush("SKSE/Plugins/CharGen/Shaders/Compiled/brush_vs.cso");
+	CDXBSShaderResource psBrush("SKSE/Plugins/CharGen/Shaders/brush_ps.hlsl", "BrushPShader");
+	CDXBSShaderResource pcpsBrush("SKSE/Plugins/CharGen/Shaders/Compiled/brush_ps.cso");
 
 	CDXBrushMesh * bMesh = new CDXBrushMesh;
-	bMesh->Create(initParams.device, false, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f), brushShader, brushShader);
-	bMesh->SetVisible(false);
+	if (bMesh->Create(initParams.device, false, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f), initParams.factory, &vsBrush, &pcvsBrush, &psBrush, &pcpsBrush))
+	{
+		bMesh->SetVisible(false);
+		AddMesh(bMesh);
+	}
+	else
+	{
+		delete bMesh;
+	}
+	
 	CDXBrushMesh * bmMesh = new CDXBrushMesh;
-	bmMesh->Create(initParams.device, true, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 1.0f, 1.0f), brushShader, brushShader);
-	bmMesh->SetVisible(false);
-
-	AddMesh(bMesh);
-	AddMesh(bmMesh);
+	if (bmMesh->Create(initParams.device, true, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 1.0f, 1.0f), initParams.factory, &vsBrush, &pcvsBrush, &psBrush, &pcpsBrush))
+	{
+		bmMesh->SetVisible(false);
+		AddMesh(bmMesh);
+	}
+	else
+	{
+		delete bmMesh;
+	}
 
 	bool ret = CDXEditableScene::Setup(initParams);
 	if (!ret) {
@@ -311,10 +318,10 @@ void CDXNifScene::Begin(CDXCamera * camera, CDXD3DDevice * device)
 
 	float color[4];
 	// Setup the color to clear the buffer to.
-	color[0] = g_backgroundR;
-	color[1] = g_backgroundG;
-	color[2] = g_backgroundB;
-	color[3] = g_backgroundA;
+	color[0] = g_sculptBackgroundR;
+	color[1] = g_sculptBackgroundG;
+	color[2] = g_sculptBackgroundB;
+	color[3] = g_sculptBackgroundA;
 
 	// Clear the back buffer.
 	deviceContext->ClearRenderTargetView(m_renderTargetView, color);

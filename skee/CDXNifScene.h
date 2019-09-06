@@ -39,6 +39,8 @@ public:
 
 	void ReleaseImport();
 
+	void SetWorldOffset(CDXVec offset);
+
 
 protected:
 	Actor*						m_actor;

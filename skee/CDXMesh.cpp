@@ -21,29 +21,12 @@ CDXMesh::CDXMesh()
 
 CDXMesh::~CDXMesh()
 {
-	
-}
-
-void CDXMesh::Release()
-{
-	m_vertCount = 0;
-	m_indexCount = 0;
-	m_visible = false;
-	if (m_vertexBuffer) {
-		m_vertexBuffer->Release();
-		m_vertexBuffer = nullptr;
-	}
-	if (m_indexBuffer) {
-		m_indexBuffer->Release();
-		m_indexBuffer = nullptr;
-	}
-	if(m_material) {
+	if (m_material) {
 		m_material->Release();
 		delete m_material;
 		m_material = nullptr;
 	}
 
-	// Release the arrays now that the vertex and index buffers have been created and loaded.
 	delete[] m_vertices;
 	m_vertices = 0;
 
@@ -82,14 +65,14 @@ bool CDXMesh::IsVisible()
 	return m_visible;
 }
 
-ID3D11Buffer* CDXMesh::GetVertexBuffer()
+Microsoft::WRL::ComPtr<ID3D11Buffer> CDXMesh::GetVertexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
 	return m_vertexBuffer;
 }
-ID3D11Buffer* CDXMesh::GetIndexBuffer()
+Microsoft::WRL::ComPtr<ID3D11Buffer> CDXMesh::GetIndexBuffer()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -195,7 +178,7 @@ CDXMeshVert * CDXMesh::LockVertices(const LockMode type)
 	{
 		D3D11_MAPPED_SUBRESOURCE vertResource;
 		CDXMeshVert* pVertices = nullptr;
-		HRESULT res = m_pDevice->GetDeviceContext()->Map(m_vertexBuffer, 0, (D3D11_MAP)type, 0, &vertResource);
+		HRESULT res = m_pDevice->GetDeviceContext()->Map(m_vertexBuffer.Get(), 0, (D3D11_MAP)type, 0, &vertResource);
 		if (res == S_OK)
 		{
 			return static_cast<CDXMeshVert*>(vertResource.pData);
@@ -214,14 +197,14 @@ void CDXMesh::UnlockVertices(const LockMode type)
 {
 	if (type == LockMode::WRITE)
 	{
-		m_pDevice->GetDeviceContext()->Unmap(m_vertexBuffer, 0);
+		m_pDevice->GetDeviceContext()->Unmap(m_vertexBuffer.Get(), 0);
 	}
 }
 
 void CDXMesh::UnlockIndices(bool write)
 {
 	if(write)
-		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer, 0, nullptr, m_indices, 0, 0);
+		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer.Get(), 0, nullptr, m_indices, 0, 0);
 }
 
 bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
@@ -241,9 +224,9 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 	// Edges = Face * 3
 	for(UInt32 e = 0; e < m_indexCount; e += 3)
 	{
-		CDXVec v0 = XMLoadFloat3(&pVertices[pIndices[e + 0]].Position);
-		CDXVec v1 = XMLoadFloat3(&pVertices[pIndices[e + 1]].Position);
-		CDXVec v2 = XMLoadFloat3(&pVertices[pIndices[e + 2]].Position);
+		CDXVec v0 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 0]].Position), m_transform);
+		CDXVec v1 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 1]].Position), m_transform);
+		CDXVec v2 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 2]].Position), m_transform);
 
 		// Calculate the norm of the face
 		CDXVec fNormal = XMVectorZero();
@@ -399,11 +382,16 @@ void CDXMesh::Render(CDXD3DDevice * device, CDXShader * shader)
 
 	auto pDeviceContext = device->GetDeviceContext();
 
+	CDXShader::TransformBuffer xform;
+	xform.transform = DirectX::XMMatrixTranspose(GetTransform());
+	shader->VSSetTransformBuffer(device, xform);
+
 	// Set the vertex buffer to active in the input assembler so it can be rendered.
-	pDeviceContext->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
+	ID3D11Buffer* vertexBuffer[] = { m_vertexBuffer.Get() };
+	pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
 
 	// Set the index buffer to active in the input assembler so it can be rendered.
-	pDeviceContext->IASetIndexBuffer(m_indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+	pDeviceContext->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
 	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
 	pDeviceContext->IASetPrimitiveTopology(m_topology);

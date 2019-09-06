@@ -29,6 +29,8 @@
 #include "BodyMorphInterface.h"
 #include "OverlayInterface.h"
 
+#include "FileUtils.h"
+
 extern FaceMorphInterface g_morphInterface;
 extern bool			g_externalHeads;
 extern bool			g_enableHeadExport;
@@ -137,7 +139,7 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 		tintMask.tintType = TintMask::kMaskType_SkinTone;
 
 		NiColorA colorResult;
-		CALL_MEMBER_FN(npc, SetSkinFromTint)(&colorResult, &tintMask, 1, 0);
+		CALL_MEMBER_FN(npc, SetSkinFromTint)(&colorResult, &tintMask, true);
 	}
 
 	// Queue a node update
@@ -259,14 +261,10 @@ namespace papyrusCharGen
 			return -1;
 		}
 
-		char * modName = NULL;
-		UInt8 modIndex = npc->formID >> 24;
-		UInt32 modForm = (npc->formID & 0xFFFFFF);
-		DataHandler * dataHandler = DataHandler::GetSingleton();
-		if (dataHandler) {
-			ModInfo * modInfo = dataHandler->modList.modInfoList.GetNthItem(modIndex);
-			if (modInfo)
-				modName = modInfo->name;
+		ModInfo * modInfo = GetModInfoByFormID(npc->formID);
+		if (!modInfo) {
+			_ERROR("%s - failed to find mod for %08X.", __FUNCTION__, npc->formID);
+			return false;
 		}
 
 		enum
@@ -276,7 +274,7 @@ namespace papyrusCharGen
 		};
 		
 		char tempPath[MAX_PATH];
-		sprintf_s(tempPath, "Data\\Meshes\\Actors\\Character\\FaceGenData\\FaceGeom\\%s\\%08X.nif", modName, modForm);
+		sprintf_s(tempPath, "Data\\Meshes\\Actors\\Character\\FaceGenData\\FaceGeom\\%s\\%08X.nif", modInfo->name, modInfo->IsLight() ? (npc->formID & 0xFFF) : (npc->formID & 0xFFFFFF));
 		if (!DeleteFile(tempPath)) {
 			UInt32 lastError = GetLastError();
 			switch (lastError) {
@@ -293,7 +291,7 @@ namespace papyrusCharGen
 		else
 			ret |= kReturnDeletedNif;
 
-		sprintf_s(tempPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modName, modForm);
+		sprintf_s(tempPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modInfo->name, modInfo->IsLight() ? (npc->formID & 0xFFF) : (npc->formID & 0xFFFFFF));
 		if (!DeleteFile(tempPath)) {
 			UInt32 lastError = GetLastError();
 			switch (lastError) {
@@ -401,23 +399,19 @@ namespace papyrusCharGen
 			return false;
 		}
 
-		char * modName = NULL;
-		UInt8 modIndex = npc->formID >> 24;
-		UInt32 modForm = (npc->formID & 0xFFFFFF);
-		DataHandler * dataHandler = DataHandler::GetSingleton();
-		if (dataHandler) {
-			ModInfo * modInfo = dataHandler->modList.modInfoList.GetNthItem(modIndex);
-			if (modInfo)
-				modName = modInfo->name;
+		ModInfo * modInfo = GetModInfoByFormID(npc->formID);
+		if (!modInfo) {
+			_ERROR("%s - failed to find mod for %08X.", __FUNCTION__, npc->formID);
+			return false;
 		}
 
 		char sourcePath[MAX_PATH];
 		char destPath[MAX_PATH];
 		sprintf_s(sourcePath, "Data\\Meshes\\CharGen\\Exported\\%s.nif", fileName.data);
-		sprintf_s(destPath, "Data\\Meshes\\Actors\\Character\\FaceGenData\\FaceGeom\\%s\\%08X.nif", modName, modForm);
+		sprintf_s(destPath, "Data\\Meshes\\Actors\\Character\\FaceGenData\\FaceGeom\\%s\\%08X.nif", modInfo->name, modInfo->IsLight() ? (npc->formID & 0xFFF) : (npc->formID & 0xFFFFFF));
 		CopyFile(sourcePath, destPath, false);
 		sprintf_s(sourcePath, "Data\\Textures\\CharGen\\Exported\\%s.dds", fileName.data);
-		sprintf_s(destPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modName, modForm);
+		sprintf_s(destPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modInfo->name, modInfo->IsLight() ? (npc->formID & 0xFFF) : (npc->formID & 0xFFFFFF));
 		CopyFile(sourcePath, destPath, false);
 
 		ApplyPreset(actor, race, npc, presetData, (FaceMorphInterface::ApplyTypes)flags);

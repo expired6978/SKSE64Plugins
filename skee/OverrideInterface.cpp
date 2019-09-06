@@ -2636,3 +2636,14 @@ void OverrideInterface::DumpMap()
 	}
 }
 #endif
+
+extern bool	g_immediateArmor;
+
+void OverrideInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	ApplyOverrides(refr, armor, addon, object, g_immediateArmor);
+
+	UInt32 armorMask = armor->bipedObject.GetSlotMask();
+	UInt32 addonMask = addon->biped.GetSlotMask();
+	ApplySkinOverrides(refr, isFirstPerson, armor, addon, armorMask & addonMask, object, g_immediateArmor);
+}

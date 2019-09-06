@@ -24,6 +24,8 @@
 #include <d3d11_4.h>
 #include <DirectXTex.h>
 
+extern bool g_exportSkinToBone;
+
 bool SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
 {
 	HRESULT res = 0;
@@ -477,6 +479,16 @@ void SKSETaskExportHead::Run()
 							newSkinInstance->m_ppkBones[i] = nullptr;
 						}
 					}
+
+					if (!g_exportSkinToBone)
+					{
+						for (UInt32 i = 0; i < newSkinData->m_uiBones; i++)
+						{
+							newSkinData->m_pkBoneData[i].m_kSkinToBone.rot.Identity();
+							newSkinData->m_pkBoneData[i].m_kSkinToBone.pos = NiPoint3(0.0f, 0.0f, 0.0f);
+							newSkinData->m_pkBoneData[i].m_kSkinToBone.scale = 1.0f;
+						}
+					}
 				}
 			}
 
@@ -489,16 +501,13 @@ void SKSETaskExportHead::Run()
 				BSDynamicTriShape * dynamicShape = ni_cast(trishape, BSDynamicTriShape);
 				if (dynamicShape)
 				{
-					void* memory = Heap_Allocate(sizeof(BSDynamicTriShape));
-					memset(memory, 0, sizeof(BSDynamicTriShape));
-					BSDynamicTriShape* xData = (BSDynamicTriShape*)memory;
-					xData->ctor();
+					BSDynamicTriShape* xData = CreateBSDynamicTriShape();
 					newTrishape = xData;
 					if (dynamicShape->pDynamicData)
 					{
 						dynamicShape->lock.Lock();
-						xData->pDynamicData = (float*)Heap_Allocate(trishape->numVertices * sizeof(float) * 4);
-						memcpy(xData->pDynamicData, dynamicShape->pDynamicData, trishape->numVertices * sizeof(float) * 4);
+						xData->pDynamicData = NiAllocate(trishape->numVertices * sizeof(__m128));
+						memcpy(xData->pDynamicData, dynamicShape->pDynamicData, trishape->numVertices * sizeof(__m128));
 						dynamicShape->lock.Release();
 					}
 
