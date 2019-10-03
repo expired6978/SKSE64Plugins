@@ -613,6 +613,16 @@ bool ItemDataInterface::EraseByUID(UInt32 uid, UInt32 formId)
 	return false;
 }
 
+void ItemDataInterface::UpdateInventoryItemDye(UInt32 rankId, TESObjectARMO * armor, NiAVObject * rootNode)
+{
+	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
+	{
+		return rankId ? g_itemDataInterface.GetData(rankId) : std::shared_ptr<ItemAttributeData>();
+	};
+
+	g_task->AddTask(new NIOVTaskDeferredMask((*g_thePlayer), false, armor, nullptr, rootNode, overrideFunc));
+}
+
 void ItemDataInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
 {
 	UInt32 armorMask = armor->bipedObject.GetSlotMask();

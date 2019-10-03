@@ -9,7 +9,7 @@ class CDXShaderFile;
 class CDXBrushMesh : public CDXMesh
 {
 public:
-	CDXBrushMesh();
+	CDXBrushMesh() : m_dashed(false), m_drawPoint(true), m_drawRadius(true), CDXMesh() { };
 
 	bool Create(CDXD3DDevice * pDevice, bool dashed, DirectX::XMVECTOR ringColor, DirectX::XMVECTOR dotColor, CDXShaderFactory* factory, CDXShaderFile* pixelShader, CDXShaderFile* precompiledPixelShader, CDXShaderFile* vertexShader, CDXShaderFile* precompiledVertexShader);
 
@@ -18,6 +18,8 @@ public:
 
 	const CDXMatrix & GetSphereTransform() { return m_sphere.m_transform; };
 	void SetSphereTransform(const CDXMatrix & mat) { m_sphere.m_transform = mat; }
+	void SetDrawPoint(bool draw) { m_drawPoint = draw; }
+	void SetDrawRadius(bool draw) { m_drawRadius = draw; }
 
 protected:
 	struct Sphere
@@ -39,6 +41,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> m_layout;
 	Sphere m_sphere;
 	bool m_dashed;
+	bool m_drawPoint;
+	bool m_drawRadius;
 };
 
 class CDXBrushTranslator : public CDXPicker

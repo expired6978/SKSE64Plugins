@@ -41,35 +41,6 @@ extern NiTransformInterface				g_transformInterface;
 extern BodyMorphInterface				g_bodyMorphInterface;
 extern OverlayInterface					g_overlayInterface;
 
-class SKSETaskExportTintMask : public TaskDelegate
-{
-	virtual void Run()
-	{
-		BSFaceGenNiNode * faceNode = (*g_thePlayer)->GetFaceGenNiNode();
-		if(faceNode) {
-			// Save the mesh
-			std::string ddsPath(m_filePath.data);
-			IFileStream::MakeAllDirs(ddsPath.c_str());
-			ddsPath.append(m_fileName.data);
-			ddsPath.append(".dds");
-
-			PlayerCharacter * player = (*g_thePlayer);
-			ExportTintMaskDDS(player, ddsPath.c_str());
-		}
-	}
-
-	virtual void Dispose()
-	{
-		delete this;
-	}
-
-public:
-	SKSETaskExportTintMask::SKSETaskExportTintMask(BSFixedString filePath, BSFixedString fileName) : m_filePath(filePath), m_fileName(fileName) {};
-
-	BSFixedString	m_filePath;
-	BSFixedString	m_fileName;
-};
-
 void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr presetData, FaceMorphInterface::ApplyTypes applyType)
 {
 	CALL_MEMBER_FN(actor, SetRace)(race, actor == (*g_thePlayer));

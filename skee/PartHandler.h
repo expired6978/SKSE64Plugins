@@ -14,7 +14,7 @@ typedef std::vector<BGSHeadPart*> HeadPartList;
 class PartEntry
 {
 public:
-	BGSHeadPart * defaultPart;
+	BGSHeadPart * defaultPart = nullptr;
 	HeadPartList partList;
 };
 

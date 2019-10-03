@@ -126,8 +126,8 @@ NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPer
 {
 	m_firstPerson = isFirstPerson;
 	m_formId = refr->formID;
-	m_armorId = armor->formID;
-	m_addonId = addon->formID;
+	m_armorId = armor ? armor->formID : 0;
+	m_addonId = addon ? addon->formID : 0;
 	m_object = object;
 	m_overrides = overrides;
 }
@@ -141,13 +141,13 @@ void NIOVTaskDeferredMask::Run()
 {
 	TESForm * refrForm = LookupFormByID(m_formId);
 	TESForm * armorForm = LookupFormByID(m_armorId);
-	TESForm * addonForm = LookupFormByID(m_addonId);
-	if (refrForm && armorForm && addonForm) {
+	TESForm * addonForm = m_addonId ? LookupFormByID(m_addonId) : nullptr;
+	if (refrForm && armorForm) {
 		TESObjectREFR * refr = DYNAMIC_CAST(refrForm, TESForm, TESObjectREFR);
 		TESObjectARMO * armor = DYNAMIC_CAST(armorForm, TESForm, TESObjectARMO);
-		TESObjectARMA * addon = DYNAMIC_CAST(addonForm, TESForm, TESObjectARMA);
+		TESObjectARMA * addon = addonForm ? DYNAMIC_CAST(addonForm, TESForm, TESObjectARMA) : nullptr;
 
-		if (refr && armor && addon) {
+		if (refr && armor) {
 			g_tintMaskInterface.ApplyMasks(refr, m_firstPerson, armor, addon, m_object, m_overrides, TintMaskInterface::kUpdate_All);
 		}
 	}
@@ -192,7 +192,7 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 		return false;
 	});
 
-	m_modelMap.ApplyLayers(refr, isFirstPerson, addon, rootNode, [&](NiPointer<BSGeometry> geom, SInt32 targetIndex, TextureLayer* layer)
+	m_modelMap.ApplyLayers(refr, isFirstPerson, armor, addon, rootNode, [&](NiPointer<BSGeometry> geom, SInt32 targetIndex, TextureLayer* layer)
 	{
 		LayerTarget obj;
 		obj.object = geom;
@@ -271,7 +271,7 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 				}
 
 				char path[512];
-				_snprintf_s(path, 512, "RT [%08X][%08X][%08X](%s)", refr->formID, armor->formID, addon->formID, layer.object->m_name);
+				_snprintf_s(path, 512, "RT [%08X][%08X][%08X](%s)", refr->formID, armor->formID, addon ? addon->formID : 0, layer.object->m_name);
 
 				NiPointer<NiTexture> output;
 				if (renderer->ApplyMasksToTexture(device.get(), sourceTexture, tintMasks, path, output))
@@ -466,7 +466,29 @@ bool ApplyMaskData(MaskTriShapeMap * triShapeMap, NiAVObject * object, const cha
 	return true;
 }
 
-void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor)
+SKEEFixedString MaskModelMap::GetModelPath(UInt8 gender, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * arma)
+{
+	SKEEFixedString modelPath;
+	if (arma) {
+		modelPath = arma->models[isFirstPerson == true ? 1 : 0][gender].GetModelName();
+		if (isFirstPerson && modelPath.length() == 0) { // If first person was not found, try third person
+			modelPath = arma->models[0][gender].GetModelName();
+			if (modelPath.length() == 0) { // If gender not found, try male
+				modelPath = arma->models[0][0].GetModelName();
+			}
+		}
+	}
+	else if (armor) {
+		modelPath = armor->bipedModel.textureSwap[gender].GetModelName();
+		if (modelPath.length() == 0) { // If gender not found, try male
+			modelPath = armor->bipedModel.textureSwap[0].GetModelName();
+		}
+	}
+
+	return modelPath;
+}
+
+void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor)
 {
 	UInt8 gender = 0;
 	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -476,11 +498,7 @@ void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObje
 	SimpleLocker locker(&m_lock);
 
 	// Special case if the addon has no 1p model, use the 3p model
-	SKEEFixedString modelPath = arma->models[isFirstPerson == true ? 1 : 0][gender].GetModelName();
-	if (isFirstPerson && modelPath.length() == 0) {
-		modelPath = arma->models[0][gender].GetModelName();
-	}
-
+	SKEEFixedString modelPath = GetModelPath(gender, isFirstPerson, armor, arma);
 	auto triShapeMap = GetTriShapeMap(modelPath);
 	if (!triShapeMap) {
 		return;
@@ -497,6 +515,64 @@ void MaskModelMap::ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObje
 
 	if (count == 0)
 		ApplyMaskData(triShapeMap, node, "", functor);
+}
+
+bool TintMaskInterface::IsDyeable(TESObjectARMO * armor)
+{
+	SimpleLocker locker(&m_dyeableLock);
+
+	auto it = m_dyeable.find(armor->formID);
+	if (it != m_dyeable.end())
+	{
+		return it->second;
+	}
+	else
+	{
+		// This could be expensive so lets just cache items we've seen
+		for (UInt8 g = 0; g <= 1; ++g)
+		{
+			for (UInt8 fp = 0; fp <= 1; ++fp)
+			{
+				for (UInt32 i = 0; i < armor->armorAddons.count; i++)
+				{
+					TESObjectARMA * arma = nullptr;
+					if (armor->armorAddons.GetNthItem(i, arma) && arma)
+					{
+						SKEEFixedString modelPath = m_modelMap.GetModelPath(g, fp == 1, armor, arma);
+						if (m_modelMap.GetTriShapeMap(modelPath))
+						{
+							m_dyeable.emplace(armor->formID, true);
+							return true;
+						}
+					}
+				}
+			}
+		}
+
+		m_dyeable.emplace(armor->formID, false);
+	}
+
+	return false;
+}
+
+void TintMaskInterface::LoadMods()
+{
+	m_dyeableLock.Lock();
+	m_dyeable.clear();
+	m_dyeableLock.Release();
+	m_modelMap.Lock();
+	m_modelMap.m_data.clear();
+	
+	std::vector<SKEEFixedString> tintFiles;
+	FileUtils::GetAllFiles("Data\\SKSE\\Plugins\\NiOverride\\TintData\\", "*.xml", tintFiles);
+	std::sort(tintFiles.begin(), tintFiles.end());
+
+	for (auto tintFile : tintFiles)
+	{
+		ParseTintData(tintFile.c_str());
+	}
+
+	m_modelMap.Release();
 }
 
 void TintMaskInterface::ParseTintData(LPCTSTR filePath)

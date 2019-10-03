@@ -15,6 +15,7 @@
 
 extern SKSETaskInterface	* g_task;
 extern ItemDataInterface	g_itemDataInterface;
+extern TintMaskInterface	g_tintMaskInterface;
 extern DyeMap			g_dyeMap;
 
 class DyeableItemCollector
@@ -60,7 +61,7 @@ public:
 					itemData.slotMask = armor->bipedObject.GetSlotMask();
 				}
 
-				if (itemData.type != ModifiedItemIdentifier::kTypeNone) {
+				if (itemData.type != ModifiedItemIdentifier::kTypeNone && g_tintMaskInterface.IsDyeable(armor)) {
 					itemData.form = pEntryData->type;
 					itemData.extraData = pExtraDataList;
 					m_found.push_back(itemData);

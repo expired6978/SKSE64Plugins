@@ -23,11 +23,23 @@ class SKSETaskExportHead : public TaskDelegate
 	virtual void Dispose() { delete this; }
 
 public:
-	SKSETaskExportHead::SKSETaskExportHead(Actor * actor, BSFixedString nifPath, BSFixedString ddsPath);
+	SKSETaskExportHead(Actor * actor, BSFixedString nifPath, BSFixedString ddsPath);
 
 	UInt32			m_formId;
 	BSFixedString	m_nifPath;
 	BSFixedString	m_ddsPath;
+};
+
+class SKSETaskExportTintMask : public TaskDelegate
+{
+	virtual void Run();
+	virtual void Dispose() { delete this; }
+
+public:
+	SKSETaskExportTintMask(BSFixedString filePath, BSFixedString fileName) : m_filePath(filePath), m_fileName(fileName) {};
+
+	BSFixedString	m_filePath;
+	BSFixedString	m_fileName;
 };
 
 class SKSETaskRefreshTintMask : public TaskDelegate

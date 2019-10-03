@@ -33,6 +33,8 @@ extern float	g_sculptBackgroundA;
 extern float	g_sculptBackgroundR;
 extern float	g_sculptBackgroundG;
 extern float	g_sculptBackgroundB;
+extern bool		g_sculptDrawBrushPoint;
+extern bool		g_sculptDrawBrushRadius;
 
 CDXNifScene::CDXNifScene() : CDXEditableScene()
 {
@@ -81,6 +83,8 @@ bool CDXNifScene::Setup(const CDXInitParams & initParams)
 	CDXBrushMesh * bMesh = new CDXBrushMesh;
 	if (bMesh->Create(initParams.device, false, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f), initParams.factory, &vsBrush, &pcvsBrush, &psBrush, &pcpsBrush))
 	{
+		bMesh->SetDrawPoint(g_sculptDrawBrushPoint);
+		bMesh->SetDrawRadius(g_sculptDrawBrushRadius);
 		bMesh->SetVisible(false);
 		AddMesh(bMesh);
 	}
@@ -92,6 +96,8 @@ bool CDXNifScene::Setup(const CDXInitParams & initParams)
 	CDXBrushMesh * bmMesh = new CDXBrushMesh;
 	if (bmMesh->Create(initParams.device, true, DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f), DirectX::XMVectorSet(1.0f, 0.0f, 1.0f, 1.0f), initParams.factory, &vsBrush, &pcvsBrush, &psBrush, &pcpsBrush))
 	{
+		bmMesh->SetDrawPoint(g_sculptDrawBrushPoint);
+		bmMesh->SetDrawRadius(g_sculptDrawBrushRadius);
 		bmMesh->SetVisible(false);
 		AddMesh(bmMesh);
 	}

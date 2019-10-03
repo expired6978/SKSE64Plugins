@@ -90,7 +90,8 @@ class MaskModelMap : public SafeDataHolder<MaskModelContainer>
 public:
 	TextureLayer * GetMask(SKEEFixedString nif, SKEEFixedString trishape, SKEEFixedString diffuse);
 
-	void ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor);
+	SKEEFixedString GetModelPath(UInt8 gender, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * arma);
+	void ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor);
 	MaskTriShapeMap * GetTriShapeMap(SKEEFixedString nifPath);
 };
 
@@ -116,11 +117,16 @@ public:
 		kUpdate_Hair = 1 << 1,
 		kUpdate_All = kUpdate_Skin | kUpdate_Hair
 	};
-	
+	enum TargetFlags
+	{
+		kTarget_EmissiveColor = 1,
+	};
+
 	struct LayerTarget
 	{
 		NiPointer<BSGeometry>			object;
 		UInt32							targetIndex;
+		UInt32							targetFlags;
 		LayerTextureMap					textureData;
 		LayerColorMap					colorData;
 		LayerAlphaMap					alphaData;
@@ -134,17 +140,24 @@ public:
 	virtual void ReleaseTints() { m_maskMap.ReleaseRenderTargetGroups(); }
 	virtual void Revert() { };
 
+	virtual bool IsDyeable(TESObjectARMO * armor);
+
+	virtual void LoadMods();
+
 	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides, UInt32 & flags);
 	void ParseTintData(LPCTSTR filePath);
 
 	MaskModelMap	m_modelMap;
 	TintMaskMap		m_maskMap;
+
+	SimpleLock						m_dyeableLock;
+	std::unordered_map<UInt32, bool> m_dyeable;
 };
 
 class NIOVTaskDeferredMask : public TaskDelegate
 {
 public:
-	NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
+	NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
 
 	virtual void Run();
 	virtual void Dispose();

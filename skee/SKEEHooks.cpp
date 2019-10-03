@@ -4,6 +4,7 @@
 
 #include "skse64/GameData.h"
 #include "skse64/GameRTTI.h"
+#include "skse64/ObScript.h"
 
 #include "skse64/NiExtraData.h"
 #include "skse64/NiNodes.h"
@@ -21,12 +22,14 @@
 #include "BodyMorphInterface.h"
 #include "TintMaskInterface.h"
 #include "ItemDataInterface.h"
+#include "NiTransformInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
 
 #include "SkeletonExtender.h"
 #include "ShaderUtilities.h"
+#include "NifUtils.h"
 
 #include <vector>
 
@@ -46,9 +49,11 @@ extern BodyMorphInterface	g_bodyMorphInterface;
 extern OverlayInterface		g_overlayInterface;
 extern OverrideInterface	g_overrideInterface;
 extern ActorUpdateManager	g_actorUpdateManager;
+extern NiTransformInterface	g_transformInterface;
 
 extern bool					g_enableFaceOverlays;
 extern bool					g_enableTintSync;
+extern bool					g_enableTintInventory;
 extern UInt32				g_numFaceOverlays;
 
 extern bool					g_playerOnly;
@@ -70,6 +75,8 @@ extern UInt32				g_customDataMax;
 extern bool					g_externalHeads;
 extern bool					g_extendedMorphs;
 extern bool					g_allowAllMorphs;
+extern bool					g_allowAnyRacePart;
+extern bool					g_allowAnyGenderPart;
 
 RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAC70);
 
@@ -98,6 +105,16 @@ RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E7F0);
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
 RelocAddr<_UpdateHeadState> UpdateHeadState(0x00362E90);
+
+typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x00888730);
+_SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
+
+typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x00888290);
+
+typedef void*(*_GetHeadParts)(void * unk1, void * unk2);
+RelocAddr <_GetHeadParts> GetHeadParts(0x00165660);
 
 void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObject * resultNode1, NiAVObject * resultNode2, UInt32 firstPerson)
 {
@@ -606,63 +623,71 @@ public:
 };
 #endif
 
-void DataHandler_Hooked::GetValidPlayableHeadParts_Hooked(UInt32 unk1, void * unk2)
+void * GetHeadParts_Hooked(void * unk1, void * unk2)
 {
-#ifdef _DEBUG_HOOK
-	_DMESSAGE("Reverting Parts:");
-	DumpPartVisitor dumpVisitor;
-	g_partSet.Visit(dumpVisitor);
-#endif
-
-	g_partSet.Revert(); // Cleanup HeadPart List before loading new ones
-
-	CALL_MEMBER_FN(this, GetValidPlayableHeadParts)(unk1, unk2);
-}
-
-// Pre-filtered by ValidRace and Gender
-UInt8 BGSHeadPart_Hooked::IsPlayablePart_Hooked()
-{
-	UInt8 ret = CALL_MEMBER_FN(this, IsPlayablePart)();
-
-#ifdef _DEBUG_HOOK
-	_DMESSAGE("IsPlayablePart_Hooked - Reading Part: %08X : %s", this->formID, this->partName.data);
-#endif
-
-	if (this->type >= BGSHeadPart::kNumTypes) {
-		if ((this->partFlags & BGSHeadPart::kFlagExtraPart) == 0) { // Skip Extra Parts
-			if (strcmp(this->model.GetModelName(), "") == 0)
-				g_partSet.SetDefaultPart(this->type, this);
-			else
-				g_partSet.AddPart(this->type, this);
-		}
-		return false; // Prevents hanging if the HeadPart is marked as Playable
-	}
-	else if ((this->partFlags & BGSHeadPart::kFlagExtraPart) == 0 && ret)
+	class RaceVisitor : public BGSListForm::Visitor
 	{
-		// Sets the default part of this type
-		if (g_partSet.GetDefaultPart(this->type) == NULL) {
-			auto playeRace = (*g_thePlayer)->race;
-			if (playeRace) {
-				TESNPC * npc = DYNAMIC_CAST((*g_thePlayer)->baseForm, TESForm, TESNPC);
-				UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
+	public:
+		explicit RaceVisitor(TESRace * race) : m_race(race) { }
+		virtual bool Accept(TESForm * form)
+		{
+			return form == m_race;
+		};
 
-				auto chargenData = playeRace->chargenData[gender];
-				if (chargenData) {
-					auto headParts = chargenData->headParts;
-					if (headParts) {
-						for (UInt32 i = 0; i < headParts->count; i++) {
-							BGSHeadPart * part;
-							headParts->GetNthItem(i, part);
-							if (part->type == this->type)
-								g_partSet.SetDefaultPart(part->type, part);
+	protected:
+		TESRace * m_race;
+	};
+
+	void * ret = GetHeadParts(unk1, unk2);
+	g_partSet.Revert();
+
+	TESNPC * npc = DYNAMIC_CAST((*g_thePlayer)->baseForm, TESForm, TESNPC);
+	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
+	bool isFemale = gender == 1;
+
+	for (SInt32 i = 0; i < (*g_dataHandler)->headParts.count; ++i)
+	{
+		BGSHeadPart* headPart = nullptr;
+		(*g_dataHandler)->headParts.GetNthItem(i, headPart);
+
+		bool isPlayable = headPart->partFlags & BGSHeadPart::kFlagPlayable;
+		bool isValidForRace = g_allowAnyRacePart || (headPart->validRaces ? headPart->validRaces->Visit(RaceVisitor((*g_thePlayer)->race)) : false);
+		bool isValidForGender = g_allowAnyGenderPart || (isFemale ? (headPart->partFlags & BGSHeadPart::kFlagFemale) == BGSHeadPart::kFlagFemale : (headPart->partFlags & BGSHeadPart::kFlagMale) == BGSHeadPart::kFlagMale);
+
+		if (isPlayable && isValidForRace && isValidForGender)
+		{
+			if (headPart->type >= BGSHeadPart::kNumTypes) {
+				if ((headPart->partFlags & BGSHeadPart::kFlagExtraPart) == 0) { // Skip Extra Parts
+					if (strcmp(headPart->model.GetModelName(), "") == 0)
+						g_partSet.SetDefaultPart(headPart->type, headPart);
+					else
+						g_partSet.AddPart(headPart->type, headPart);
+				}
+			}
+			else if ((headPart->partFlags & BGSHeadPart::kFlagExtraPart) == 0 && isPlayable)
+			{
+				// maps the pre-existing part to this type
+				g_partSet.AddPart(headPart->type, headPart);
+
+				if (g_partSet.GetDefaultPart(headPart->type) == nullptr) {
+					auto playerRace = (*g_thePlayer)->race;
+					if (playerRace) {
+						auto chargenData = playerRace->chargenData[gender];
+						if (chargenData) {
+							auto headParts = chargenData->headParts;
+							if (headParts) {
+								for (UInt32 i = 0; i < headParts->count; i++) {
+									BGSHeadPart * part;
+									headParts->GetNthItem(i, part);
+									if (part->type == headPart->type)
+										g_partSet.SetDefaultPart(part->type, part);
+								}
+							}
 						}
 					}
 				}
 			}
 		}
-
-		// maps the pre-existing part to this type
-		g_partSet.AddPart(this->type, this);
 	}
 
 	return ret;
@@ -963,11 +988,13 @@ void * NiAllocate_Hooked(size_t size)
 void NiFree_Hooked(void* ptr)
 {
 	IScopedCriticalSection scs(&g_cs);
-	if (g_adjustedBlocks.find(ptr) != g_adjustedBlocks.end())
+	auto it = g_adjustedBlocks.find(ptr);
+	if (it != g_adjustedBlocks.end())
 	{
 		ptr = reinterpret_cast<void*>((uintptr_t)ptr - 0x10);
 		if (InterlockedDecrement((uintptr_t*)ptr) == 0)
 		{
+			g_adjustedBlocks.erase(it);
 			NiFree(ptr);
 		}
 	}
@@ -1055,6 +1082,159 @@ void UpdateModelHair_Hooked(NiAVObject * object, NiColor *& color)
 	UpdateModelColor_Recursive(object, color, BSLightingShaderMaterial::kShaderType_HairTint);
 }
 
+void SetInventoryItemModel_Hooked(Inventory3DManager * inventoryManager, TESForm * baseForm, BaseExtraList * baseExtraList)
+{
+	SetInventoryItemModel_Original(inventoryManager, baseForm, baseExtraList);
+
+	if (baseForm && baseForm->formType == TESObjectARMO::kTypeID) {
+		TESObjectARMO* armor = DYNAMIC_CAST(baseForm, TESForm, TESObjectARMO);
+		if (armor) {
+			UInt32 rankId = 0; // Rank 0 will reset if applicable
+			if (baseExtraList) {
+				BSReadLocker locker(&baseExtraList->m_lock);
+				auto rankData = static_cast<ExtraRank*>(baseExtraList->GetByType(kExtraData_Rank));
+				if (rankData) {
+					rankId = rankData->rank;
+				}
+			}
+
+			NiNode * rootNode = nullptr;
+			for (UInt32 i = 0; i < inventoryManager->meshCount; ++i)
+			{
+				if (inventoryManager->itemData[i].form1 == baseForm)
+				{
+					rootNode = inventoryManager->itemData[i].node;
+					break;
+				}
+			}
+
+			if (rootNode) {
+				g_itemDataInterface.UpdateInventoryItemDye(rankId, armor, rootNode);
+			}
+		}
+	}
+}
+
+void SetNewInventoryItemModel_Hooked(Inventory3DManager * inventoryManager, TESForm * form1, TESForm * form2, NiNode ** node)
+{
+	SetNewInventoryItemModel(inventoryManager, form1, form2, node);
+
+	if (form1 && form1->formID == TESObjectARMO::kTypeID && *node) {
+		TESObjectARMO* armor = DYNAMIC_CAST(form1, TESForm, TESObjectARMO);
+		if (armor) {
+			BaseExtraList& baseExtraList = inventoryManager->baseExtraList;
+			BSReadLocker locker(&baseExtraList.m_lock);
+
+			UInt32 rankId = 0; // Rank 0 will reset if applicable
+			auto rankData = static_cast<ExtraRank*>(baseExtraList.GetByType(kExtraData_Rank));
+			if (rankData) {
+				rankId = rankData->rank;
+			}
+
+			g_itemDataInterface.UpdateInventoryItemDye(rankId, armor, *node);
+		}
+	}
+}
+
+bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESObjectREFR * thisObj, TESObjectREFR* containingObj, Script* scriptObj, ScriptLocals* locals, double& result, UInt32& opcodeOffsetPtr)
+{
+	char buffer[MAX_PATH];
+	memset(buffer, 0, MAX_PATH);
+	char buffer2[MAX_PATH];
+	memset(buffer2, 0, MAX_PATH);
+
+	if (!ObjScript_ExtractArgs(paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, locals, buffer, buffer2))
+	{
+		return false;
+	}
+
+	if (_strnicmp(buffer, "reload", MAX_PATH) == 0)
+	{
+		if (_strnicmp(buffer, "tints", MAX_PATH) == 0)
+		{
+			g_tintMaskInterface.LoadMods();
+		}
+	}
+	else if (_strnicmp(buffer, "erase", MAX_PATH) == 0)
+	{
+		if (_strnicmp(buffer, "bodymorph", MAX_PATH) == 0)
+		{
+			if (thisObj)
+			{
+				g_bodyMorphInterface.ClearMorphs(thisObj);
+				g_bodyMorphInterface.UpdateModelWeight(thisObj);
+			}
+			else
+			{
+				Console_Print("Erasing BodyMorphs requires a console target");
+			}
+		}
+		else if (_strnicmp(buffer, "transforms", MAX_PATH) == 0)
+		{
+			if (thisObj)
+			{
+				g_transformInterface.RemoveAllReferenceTransforms(thisObj);
+				g_transformInterface.UpdateNodeAllTransforms(thisObj);
+			}
+			else
+			{
+				Console_Print("Erasing transforms requires a console target");
+			}
+		}
+	}
+	else if (_strnicmp(buffer, "preset-save", MAX_PATH) == 0)
+	{
+		char slotPath[MAX_PATH];
+		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", buffer2);
+		char tintPath[MAX_PATH];
+		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
+
+		g_morphInterface.SaveJsonPreset(slotPath);
+
+		g_task->AddTask(new SKSETaskExportTintMask(tintPath, buffer2));
+	}
+	else if (_strnicmp(buffer, "preset-load", MAX_PATH) == 0)
+	{
+		if (!thisObj) {
+			Console_Print("Applying a preset requires a console target");
+			return false;
+		}
+		if (thisObj->formType != Character::kTypeID) {
+			Console_Print("Console target must be an actor");
+			return false;
+		}
+		Actor* actor = static_cast<Actor*>(thisObj);
+		TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
+		if (!npc) {
+			Console_Print("Failed to acquire ActorBase for specified reference");
+			return false;
+		}
+
+		char slotPath[MAX_PATH];
+		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", buffer2);
+		char tintPath[MAX_PATH];
+		sprintf_s(tintPath, "Textures\\CharGen\\Exported\\%s.dds", buffer2);
+
+		auto presetData = std::make_shared<PresetData>();
+		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
+		if (loadError) {
+			Console_Print("Failed to load preset at %s", slotPath);
+			return false;
+		}
+
+		presetData->tintTexture = tintPath;
+		g_morphInterface.AssignPreset(npc, presetData);
+		g_morphInterface.ApplyPresetData(actor, presetData, true, FaceMorphInterface::ApplyTypes::kPresetApplyAll);
+
+		// Queue a node update
+		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
+	}
+	
+	return true;
+}
+
+
+
 bool InstallSKEEHooks()
 {
 #ifdef FIXME
@@ -1116,6 +1296,9 @@ bool InstallSKEEHooks()
 		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 		return false;
 	}
+
+	RelocAddr <uintptr_t> GetHeadParts_Target(0x008B5E20 + 0x212);
+	g_branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
@@ -1322,6 +1505,68 @@ bool InstallSKEEHooks()
 		g_branchTrampoline.Write6Branch(UpdateModelHair.GetUIntPtr(), (uintptr_t)UpdateModelHair_Hooked);
 	}
 
+	if (g_enableTintInventory)
+	{
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008887E0 + 0x1BA);
+		{
+			struct TintInventoryItem_Code : Xbyak::CodeGenerator {
+				TintInventoryItem_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)
+				{
+					Xbyak::Label retnLabel;
+					Xbyak::Label funcLabel;
+
+					push(rbx);
+					sub(rsp, 0x20);
+
+					jmp(ptr[rip + retnLabel]);
+
+					L(retnLabel);
+					dq(SetInventoryItemModel.GetUIntPtr() + 6);
+				}
+			};
+
+			void * codeBuf = g_localTrampoline.StartAlloc();
+			TintInventoryItem_Code code(codeBuf);
+			g_localTrampoline.EndAlloc(code.getCurr());
+
+			SetInventoryItemModel_Original = (_SetInventoryItemModel)codeBuf;
+
+			g_branchTrampoline.Write6Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
+
+			g_branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
+		}
+	}
+
+	ObScriptCommand * hijackedCommand = nullptr;
+	for (ObScriptCommand * iter = g_firstConsoleCommand; iter->opcode < kObScript_NumConsoleCommands + kObScript_ConsoleOpBase; ++iter)
+	{
+		if (!strcmp(iter->longName, "JobListTool"))
+		{
+			hijackedCommand = iter;
+			break;
+		}
+	}
+	if (hijackedCommand)
+	{
+		static ObScriptParam params[2];
+		params[0].typeID = ObScriptParam::kType_String;
+		params[0].typeStr = "String";
+		params[0].isOptional = 0;
+		params[1].typeID = ObScriptParam::kType_String;
+		params[1].typeStr = "String (optional)";
+		params[1].isOptional = 1;
+
+		ObScriptCommand cmd = *hijackedCommand;
+		cmd.longName = "skee";
+		cmd.shortName = "skee";
+		cmd.helpText = "skee <reload|erase> <tints|bodymorph>";
+		cmd.needsParent = 0;
+		cmd.numParams = 2;
+		cmd.params = params;
+		cmd.execute = SKEE_Execute;
+		cmd.flags = 0;
+		SafeWriteBuf((uintptr_t)hijackedCommand, &cmd, sizeof(cmd));
+	}
 
 	return true;
 }

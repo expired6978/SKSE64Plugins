@@ -151,6 +151,7 @@
     <ClCompile Include="..\skse64\NiSerialization.cpp" />
     <ClCompile Include="..\skse64\NiTextures.cpp" />
     <ClCompile Include="..\skse64\NiTypes.cpp" />
+    <ClCompile Include="..\skse64\ObScript.cpp" />
     <ClCompile Include="..\skse64\PapyrusArgs.cpp" />
     <ClCompile Include="..\skse64\PapyrusInterfaces.cpp" />
     <ClCompile Include="..\skse64\PapyrusNativeFunctions.cpp" />
@@ -246,6 +247,7 @@
     <ClInclude Include="..\skse64\NiSerialization.h" />
     <ClInclude Include="..\skse64\NiTextures.h" />
     <ClInclude Include="..\skse64\NiTypes.h" />
+    <ClInclude Include="..\skse64\ObScript.h" />
     <ClInclude Include="..\skse64\PapyrusArgs.h" />
     <ClInclude Include="..\skse64\PapyrusInterfaces.h" />
     <ClInclude Include="..\skse64\PapyrusNativeFunctions.h" />

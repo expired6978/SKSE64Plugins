@@ -57,7 +57,8 @@ void CDXMesh::SetVisible(bool visible)
 #endif
 	m_visible = visible;
 }
-bool CDXMesh::IsVisible()
+
+bool CDXMesh::IsVisible() const
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);

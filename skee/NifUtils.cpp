@@ -726,3 +726,18 @@ void GetTriangleIndices(NiTriStripsData * strips, UInt16 i, UInt16 v0, UInt16 v1
 
 	v2 = pusStripLists[i + 2];
 }
+
+void SKSETaskExportTintMask::Run()
+{
+	BSFaceGenNiNode * faceNode = (*g_thePlayer)->GetFaceGenNiNode();
+	if (faceNode) {
+		// Save the mesh
+		std::string ddsPath(m_filePath.data);
+		IFileStream::MakeAllDirs(ddsPath.c_str());
+		ddsPath.append(m_fileName.data);
+		ddsPath.append(".dds");
+
+		PlayerCharacter * player = (*g_thePlayer);
+		ExportTintMaskDDS(player, ddsPath.c_str());
+	}
+}

@@ -29,6 +29,7 @@
 #include "SKEEHooks.h"
 
 #include "StringTable.h"
+#include "ShaderUtilities.h"
 
 #include "OverrideVariant.h"
 #include "OverrideInterface.h"
@@ -51,6 +52,7 @@ extern PartSet	g_partSet;
 extern FaceMorphInterface g_morphInterface;
 extern std::string g_raceTemplate;
 extern bool	g_extendedMorphs;
+extern bool g_allowAllMorphs;
 
 extern SKSEMessagingInterface	* g_messaging;
 extern PluginHandle	g_pluginHandle;
@@ -558,20 +560,18 @@ void FaceMorphInterface::LoadMods()
 		{
 			if (dataHandler->races.GetNthItem(i, race)) {
 
-#ifdef FIXME
 				if (g_allowAllMorphs) {
 					for (UInt32 i = 0; i <= 1; i++) {
 						if (race->chargenData[i]) {
 							for (UInt32 t = 0; t < FacePresetList::kNumPresets; t++) {
-								const char * gameSetting = FacePresetList::GetSingleton()->presets[t].data->gameSettingName;
 								race->chargenData[i]->presetFlags[t][0] = 0xFFFFFFFF;
 								race->chargenData[i]->presetFlags[t][1] = 0xFFFFFFFF;
-								race->chargenData[i]->totalPresets[t] = GetGameSettingInt(gameSetting);
+								race->chargenData[i]->totalPresets[t] = FacePresetList::GetSingleton()->presets[t].gameSetting->data.s32;
 							}
 						}
 					}
 				}
-#endif
+
 				if ((race->data.raceFlags & TESRace::kRace_FaceGenHead) == TESRace::kRace_FaceGenHead)
 					m_raceMap.CreateDefaultMap(race);
 			}
@@ -700,11 +700,23 @@ void FaceMorphInterface::ApplyPreset(TESNPC * npc, BSFaceGenNiNode * faceNode, B
 						BSLightingShaderProperty * lightingShader = (BSLightingShaderProperty *)shaderProperty;
 						BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
 						if (headPart->type == BGSHeadPart::kTypeFace) {
-							for (auto & texture : presetData->faceTextures)
-								material->textureSet->SetTexturePath(texture.index, texture.name.AsBSFixedString().c_str());
-							material->textureSet->SetTexturePath(6, presetData->tintTexture.data);
-							material->ReleaseTextures();
-							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
+
+							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
+							for (UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
+							{
+								newTextureSet->SetTexturePath(i, material->textureSet->GetTexturePath(i));
+							}
+							newTextureSet->SetTexturePath(6, presetData->tintTexture.data);
+							material->SetTextureSet(newTextureSet);
+
+							NiPointer<NiTexture> newTexture;
+							LoadTexture(presetData->tintTexture.data, 1, newTexture, false);
+
+							NiTexturePtr * targetTexture = GetTextureFromIndex(material, 6);
+							if (targetTexture) {
+								*targetTexture = newTexture;
+							}
+
 							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
 						}
 						else if (material->GetShaderType() == BSLightingShaderMaterial::kShaderType_HairTint) {
@@ -1366,7 +1378,7 @@ void FaceMorphInterface::ApplyMorph(TESNPC * npc, BGSHeadPart * headPart, BSFace
 					sprintf_s(buffer, MAX_PATH, "%s%d", slider->lowerBound.c_str(), (UInt32)it->second);
 					BSFixedString morphName(buffer);
 #ifdef _DEBUG_MORPH
-					_DMESSAGE("Applying Single Preset %s value %f", morphName.data, it->value);
+					_DMESSAGE("Applying Single Preset %s value %f to %s", morphName.data, it->second, headPart->partName.data);
 #endif
 					CALL_MEMBER_FN(FaceGen::GetSingleton(), ApplyMorph)(faceNode, headPart, &morphName, 1.0);
 				}
@@ -1386,7 +1398,7 @@ void FaceMorphInterface::ApplyMorph(TESNPC * npc, BGSHeadPart * headPart, BSFace
 					relative = difference;
 				}
 #ifdef _DEBUG_MORPH
-				_DMESSAGE("Applying Single Slider %s value %f", morphName.data, it->value);
+				_DMESSAGE("Applying Single Slider %s value %f to %s", morphName.data, it->second, headPart->partName.data);
 #endif
 				CALL_MEMBER_FN(FaceGen::GetSingleton(), ApplyMorph)(faceNode, headPart, &morphName, relative);
 			}
@@ -1397,8 +1409,6 @@ void FaceMorphInterface::ApplyMorph(TESNPC * npc, BGSHeadPart * headPart, BSFace
 void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 {
 	char buffer[MAX_PATH];
-	
-	
 	auto sculptTarget = GetSculptTarget(npc, false);
 	if (sculptTarget) {
 		VisitObjects(faceNode, [&](NiAVObject* object)
@@ -1440,11 +1450,11 @@ void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 				if(it->second != 0) { // There should be no zero morph for presets
 					memset(buffer, 0, MAX_PATH);
 					sprintf_s(buffer, MAX_PATH, "%s%d", slider->lowerBound.c_str(), (UInt32)it->second);
-					BSFixedString morphName(buffer);
+					SKEEFixedString morphName(buffer);
 #ifdef _DEBUG_MORPH
-					_DMESSAGE("Applying Full Preset %s value %f", morphName.data, it->value);
+					_DMESSAGE("Applying Full Preset %s value %f to all parts", morphName.c_str(), it->second);
 #endif
-					SetMorph(npc, faceNode, morphName.data, 1.0);
+					SetMorph(npc, faceNode, morphName, 1.0);
 				}
 			} else {
 				auto morphName = slider->lowerBound;
@@ -1463,7 +1473,7 @@ void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 				}
 
 #ifdef _DEBUG_MORPH
-				_DMESSAGE("Applying Full Slider %s value %f", morphName.data, it->value);
+				_DMESSAGE("Applying Full Slider %s value %f to all parts", morphName.c_str(), it->second);
 #endif
 				SetMorph(npc, faceNode, morphName, relative);
 			}
@@ -1474,7 +1484,7 @@ void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 void FaceMorphInterface::SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const SKEEFixedString & name, float relative)
 {
 #ifdef _DEBUG_MORPH
-	_DMESSAGE("Applying Morph %s", name);
+	_DMESSAGE("Applying Morph %s to all parts", name);
 #endif
 	BSFixedString morphName(name.c_str());
 	FaceGenApplyMorph(FaceGen::GetSingleton(), faceNode, npc, &morphName, relative);

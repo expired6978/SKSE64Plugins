@@ -33,7 +33,7 @@ public:
 	virtual bool ShowWireframe() const { return false; }
 
 	void SetVisible(bool visible);
-	bool IsVisible();
+	virtual bool IsVisible() const;
 
 	void SetMaterial(CDXMaterial * material);
 	CDXMaterial * GetMaterial();
@@ -86,7 +86,7 @@ protected:
 	CDXD3DDevice		*	m_pDevice;
 
 #ifdef CDX_MUTEX
-	std::mutex				m_mutex;
+	mutable std::mutex		m_mutex;
 #endif
 };
 

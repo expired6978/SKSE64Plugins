@@ -166,6 +166,15 @@ void NIOVTaskUpdateTexture::Run()
 		{
 			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
 			if(m_index < BSTextureSet::kNumTextures) {
+				// Need to update the texture path of the BSTextureSet
+				BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
+				for (UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
+				{
+					newTextureSet->SetTexturePath(i, material->textureSet->GetTexturePath(i));
+				}
+				newTextureSet->SetTexturePath(m_index, m_texture->AsBSFixedString().c_str());
+				material->SetTextureSet(newTextureSet);
+
 				// Load the texture requested and then assign it to the material
 				NiPointer<NiTexture> newTexture;
 				LoadTexture(m_texture->c_str(), 1, newTexture, false);
@@ -315,6 +324,14 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
 							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
 #endif
+							// Need to update the texture path of the BSTextureSet
+							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
+							for (UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
+							{
+								newTextureSet->SetTexturePath(i, material->textureSet->GetTexturePath(i));
+							}
+							newTextureSet->SetTexturePath(value->index, texture.AsBSFixedString().c_str());
+							material->SetTextureSet(newTextureSet);
 
 							NiPointer<NiTexture> newTexture;
 							LoadTexture(texture.c_str(), 1, newTexture, false);

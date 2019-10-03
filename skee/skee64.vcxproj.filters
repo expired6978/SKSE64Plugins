@@ -278,6 +278,9 @@
     <ClCompile Include="CDXBSShaderResource.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
+    <ClCompile Include="..\skse64\ObScript.cpp">
+      <Filter>api\game</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
@@ -644,6 +647,9 @@
     </ClInclude>
     <ClInclude Include="CDXBSShaderResource.h">
       <Filter>renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\skse64\ObScript.h">
+      <Filter>api\game</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -2072,16 +2072,21 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 
 	if (g_enableBodyMorph)
 	{
-		m_data.insert_or_assign(newFormId, morphMap);
-
 		TESObjectREFR * refr = (TESObjectREFR *)LookupFormByID(newFormId);
+		if (refr && (refr->formType == kFormType_Reference || refr->formType == kFormType_Character))
+		{
+			m_data.insert_or_assign(newFormId, morphMap);
 
 #ifdef _DEBUG
-		if (refr)
 			_DMESSAGE("%s - Loaded MorphSet Handle %08llX actor %s", __FUNCTION__, newFormId, CALL_MEMBER_FN(refr, GetReferenceName)());
 #endif
 
-		g_bodyMorphInterface.UpdateModelWeight(refr);
+			g_bodyMorphInterface.UpdateModelWeight(refr);
+		}
+		else
+		{
+			_WARNING("%s - Discarding morphs for %08llX form is not an actor", __FUNCTION__, newFormId);
+		}
 	}
 
 	return error;

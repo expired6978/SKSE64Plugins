@@ -218,6 +218,8 @@ public:
 	bool EraseByRank(UInt32 rankId);
 	bool EraseByUID(UInt32 uid, UInt32 formId);
 
+	void UpdateInventoryItemDye(UInt32 rankId, TESObjectARMO * armor, NiAVObject * rootNode);
+
 	enum
 	{
 		kInvalidRank = 0

@@ -123,7 +123,7 @@ namespace papyrusNiOverride
 
 	bool HasOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt32 key, UInt32 index)
 	{
-		if(key > OverrideVariant::kKeyMax)
+		if(!refr || key > OverrideVariant::kKeyMax)
 			return false;
 
 		if(!OverrideVariant::IsIndexValid(key))
@@ -136,6 +136,9 @@ namespace papyrusNiOverride
 
 	bool HasArmorAddonNode(StaticFunctionTag* base, TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, bool debug)
 	{
+		if (!refr)
+			return false;
+
 		return g_overrideInterface.HasArmorAddonNode(refr, firstPerson, armor, addon, nodeName, debug);
 	}
 
@@ -344,6 +347,9 @@ namespace papyrusNiOverride
 
 	bool HasWeaponNode(StaticFunctionTag* base, TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, bool debug)
 	{
+		if (!refr)
+			return false;
+
 		return g_overrideInterface.HasWeaponNode(refr, firstPerson, weapon, nodeName, debug);
 	}
 
@@ -718,46 +724,73 @@ namespace papyrusNiOverride
 
 	bool HasBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName)
 	{
+		if (!refr)
+			return false;
+
 		return g_bodyMorphInterface.HasBodyMorph(refr, morphName, keyName);
 	}
 
 	void SetBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName, float value)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.SetMorph(refr, morphName, keyName, value);
 	}
 
 	float GetBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName)
 	{
+		if (!refr)
+			return 0.0f;
+
 		return g_bodyMorphInterface.GetMorph(refr, morphName, keyName);
 	}
 
 	void ClearBodyMorph(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName, BSFixedString keyName)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.ClearMorph(refr, morphName, keyName);
 	}
 
 	bool HasBodyMorphKey(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString keyName)
 	{
+		if (!refr)
+			return false;
+
 		return g_bodyMorphInterface.HasBodyMorphKey(refr, keyName);
 	}
 
 	void ClearBodyMorphKeys(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString keyName)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.ClearBodyMorphKeys(refr, keyName);
 	}
 
 	bool HasBodyMorphName(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName)
 	{
+		if (!refr)
+			return false;
+
 		return g_bodyMorphInterface.HasBodyMorphName(refr, morphName);
 	}
 
 	void ClearBodyMorphNames(StaticFunctionTag* base, TESObjectREFR * refr, BSFixedString morphName)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.ClearBodyMorphNames(refr, morphName);
 	}
 
 	void ClearMorphs(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.ClearMorphs(refr);
 	}
 
@@ -785,6 +818,9 @@ namespace papyrusNiOverride
 
 	void ForEachMorphedReference(StaticFunctionTag* base, BSFixedString eventName, TESForm * receiver)
 	{
+		if (!receiver)
+			return;
+
 		class Visitor : public BodyMorphInterface::ActorVisitor
 		{
 		public:
@@ -806,6 +842,9 @@ namespace papyrusNiOverride
 
 	void UpdateModelWeight(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
+		if (!refr)
+			return;
+
 		g_bodyMorphInterface.UpdateModelWeight(refr);
 	}
 

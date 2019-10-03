@@ -7,11 +7,6 @@
 
 using namespace DirectX;
 
-CDXBrushMesh::CDXBrushMesh() : CDXMesh()
-{
-
-}
-
 bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor, XMVECTOR dotColor, CDXShaderFactory* factory, CDXShaderFile* vertexShader, CDXShaderFile* precompiledVertexShader, CDXShaderFile* pixelShader, CDXShaderFile* precompiledPixelShader)
 {
 	static unsigned int NUM_VERTS = 360 / 5;
@@ -330,36 +325,39 @@ void CDXBrushMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 
 	auto pDeviceContext = pDevice->GetDeviceContext();
 
-	CDXShader::TransformBuffer xform;
-	xform.transform = XMMatrixTranspose(GetTransform());
-	shader->VSSetTransformBuffer(pDevice, xform);
-
-	// Set the vertex buffer to active in the input assembler so it can be rendered.
-	ID3D11Buffer* vertexBuffer[] = { m_vertexBuffer.Get() };
-	pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
-
-	// Set the index buffer to active in the input assembler so it can be rendered.
-	pDeviceContext->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-
-	// Set the type of primitive that should be rendered from this vertex buffer, in this case triangles.
-	pDeviceContext->IASetPrimitiveTopology(m_dashed ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-
 	pDeviceContext->IASetInputLayout(m_layout.Get());
 	pDeviceContext->RSSetState(m_solidState.Get());
 	pDeviceContext->VSSetShader(m_vertexShader.Get(), NULL, 0);
 	pDeviceContext->PSSetShader(m_pixelShader.Get(), NULL, 0);
 
-	pDeviceContext->DrawIndexed(m_indexCount, 0, 0);
+	CDXShader::TransformBuffer xform;
 
-	xform.transform = XMMatrixTranspose(GetSphereTransform());
-	shader->VSSetTransformBuffer(pDevice, xform);
+	ID3D11Buffer* vertexBuffer[] = { nullptr };
+	if (m_drawRadius)
+	{
+		xform.transform = XMMatrixTranspose(GetTransform());
+		shader->VSSetTransformBuffer(pDevice, xform);
 
-	vertexBuffer[0] = m_sphere.m_vertexBuffer.Get();
-	pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
-	pDeviceContext->IASetIndexBuffer(m_sphere.m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-	pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		vertexBuffer[0] = m_vertexBuffer.Get();
+		pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
+		pDeviceContext->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+		pDeviceContext->IASetPrimitiveTopology(m_dashed ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+		pDeviceContext->DrawIndexed(m_indexCount, 0, 0);
+	}
 
-	pDeviceContext->DrawIndexed(m_sphere.m_indices.size(), 0, 0);
+	if (m_drawPoint)
+	{
+		xform.transform = XMMatrixTranspose(GetSphereTransform());
+		shader->VSSetTransformBuffer(pDevice, xform);
+
+		vertexBuffer[0] = m_sphere.m_vertexBuffer.Get();
+		pDeviceContext->IASetVertexBuffers(0, 1, vertexBuffer, &stride, &offset);
+		pDeviceContext->IASetIndexBuffer(m_sphere.m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+		pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		pDeviceContext->DrawIndexed(m_sphere.m_indices.size(), 0, 0);
+	}
+	
 }
 
 bool CDXBrushMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
