@@ -220,6 +220,7 @@ template <> void UnpackValue <SKEEFixedString>(SKEEFixedString * dst, OverrideVa
 		*dst = *src->str;
 		break;
 		default:
+		*dst = "";
 		break;
 	}
 }
@@ -229,9 +230,13 @@ template <> void UnpackValue <BSFixedString>(BSFixedString * dst, OverrideVarian
 	switch (src->type)
 	{
 	case OverrideVariant::kType_String:
-		*dst = *src->str;
-		break;
+	{
+		auto str = src->str;
+		*dst = str ? str->c_str() : "";
+	}
+	break;
 	default:
+		*dst = "";
 		break;
 	}
 }

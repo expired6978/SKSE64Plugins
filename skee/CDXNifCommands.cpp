@@ -471,10 +471,10 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 					if (srcNumVertices == dstNumVertices && srcGeometry && dstGeometry) {
 						CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
 
-						for (UInt32 i = 0; i < srcNumVertices; i++) {
+						CDXColor color;
+						XMStoreFloat3(&color, COLOR_SELECTED);
 
-							CDXColor color;
-							XMStoreFloat3(&color, COLOR_SELECTED);
+						for (UInt32 i = 0; i < srcNumVertices; i++) {
 
 							// Skip masked vertices
 							if (XMVector3Equal(XMLoadFloat3(&pVertices[i].Color), XMLoadFloat3(&color)))

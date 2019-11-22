@@ -226,16 +226,10 @@ void NIOVTaskUpdateItemDye::Run()
 					if (armor->armorAddons.GetNthItem(i, arma)) {
 						VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiAVObject * rootNode, NiAVObject * parent)
 						{
-							VisitObjects(parent, [&](NiAVObject* object)
+							g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, parent, data ? [=]()
 							{
-								if (object->GetAsBSGeometry()) {
-									g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, object, data ? [=]()
-									{
-										return data;
-									} : std::function<std::shared_ptr<ItemAttributeData>()>(), m_flags);
-								}
-								return false;
-							});
+								return data;
+							} : std::function<std::shared_ptr<ItemAttributeData>()>(), m_flags);
 						});
 					}
 				}

@@ -7,6 +7,8 @@
 
 using namespace DirectX;
 
+#define USE_GEOMETRY_WIREFRAME
+
 CDXShader::CDXShader()
 {
 
@@ -21,70 +23,6 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	D3D11_BUFFER_DESC bufferDesc;
 
 	auto pDevice = initParams.device->GetDevice();
-
-#if 0
-	{
-		// Compile the vertex shader code.
-		result = CompileShader(L"./light.gs", "VS", "vs_5_0", &vertexShaderBuffer, &errorMessage);
-		if (FAILED(result))
-		{
-			// If the shader failed to compile it should have writen something to the error message.
-			if (errorMessage)
-			{
-				OutputShaderErrorMessage(errorMessage, errors);
-			}
-			return false;
-		}
-
-		// Create the vertex shader from the buffer.
-		result = pDevice->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(), vertexShaderBuffer->GetBufferSize(), NULL, &m_ws.vs);
-		if (FAILED(result))
-		{
-			return false;
-		}
-
-
-		// Compile the pixel shader code.
-		result = CompileShader(L"./light.gs", "PSSolidWire", "ps_5_0", &pixelShaderBuffer, &errorMessage);
-		if (FAILED(result))
-		{
-			// If the shader failed to compile it should have writen something to the error message.
-			if (errorMessage)
-			{
-				OutputShaderErrorMessage(errorMessage, errors);
-			}
-
-			return false;
-		}
-
-		// Create the vertex shader from the buffer.
-		result = pDevice->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_ws.ps);
-		if (FAILED(result))
-		{
-			return false;
-		}
-
-		// Compile the pixel shader code.
-		result = CompileShader(L"./light.gs", "GSSolidWire", "gs_5_0", &pixelShaderBuffer, &errorMessage);
-		if (FAILED(result))
-		{
-			// If the shader failed to compile it should have writen something to the error message.
-			if (errorMessage)
-			{
-				OutputShaderErrorMessage(errorMessage, errors);
-			}
-
-			return false;
-		}
-
-		// Create the vertex shader from the buffer.
-		result = pDevice->CreateGeometryShader(pixelShaderBuffer->GetBufferPointer(), pixelShaderBuffer->GetBufferSize(), NULL, &m_ws.gs);
-		if (FAILED(result))
-		{
-			return false;
-		}
-	}
-#endif
 
 	// Create the vertex input layout description.
 	// This setup needs to match the VertexType stucture in the ModelClass and in the shader.
@@ -124,19 +62,31 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
 
 	// LightVertexShader
-	if (!initParams.factory->CreateVertexShader(initParams.device, initParams.vertexShader[0], initParams.vertexShader[1], polygonLayout, numElements, m_vertexShader, m_layout))
+	if (!initParams.factory->CreateVertexShader(initParams.device, initParams.vShader[0], initParams.vShader[1], polygonLayout, numElements, m_vertexShader, m_layout))
 	{
 		return false;
 	}
 
 	// LightPixelShader
-	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.pixelShader[0], initParams.pixelShader[1], m_pixelShader))
+	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.pShader[0], initParams.pShader[1], m_pixelShader))
+	{
+		return false;
+	}
+
+	// WireframeVertexShader
+	if (!initParams.factory->CreateVertexShader(initParams.device, initParams.wvShader[0], initParams.wvShader[1], polygonLayout, numElements, m_wvShader, m_layout))
+	{
+		return false;
+	}
+
+	// WireframeGeometryShader
+	if (!initParams.factory->CreateGeometryShader(initParams.device, initParams.wgShader[0], initParams.wgShader[1], m_wgShader))
 	{
 		return false;
 	}
 
 	// WireframePixelShader
-	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.wireShader[0], initParams.wireShader[1], m_wireShader))
+	if (!initParams.factory->CreatePixelShader(initParams.device, initParams.wpShader[0], initParams.wpShader[1], m_wpShader))
 	{
 		return false;
 	}
@@ -223,18 +173,85 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 		return false;
 	}
 
+#ifdef USE_GEOMETRY_WIREFRAME
+	rasterDesc.FillMode = D3D11_FILL_SOLID;
+	rasterDesc.CullMode = D3D11_CULL_NONE;
+	rasterDesc.FrontCounterClockwise = FALSE;
+	rasterDesc.DepthBias = D3D11_DEFAULT_DEPTH_BIAS;
+	rasterDesc.DepthBiasClamp = D3D11_DEFAULT_DEPTH_BIAS_CLAMP;
+	rasterDesc.SlopeScaledDepthBias = D3D11_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+	rasterDesc.DepthClipEnable = TRUE;
+	rasterDesc.ScissorEnable = FALSE;
+	rasterDesc.MultisampleEnable = TRUE;
+	rasterDesc.AntialiasedLineEnable = TRUE;
+#else
 	rasterDesc.MultisampleEnable = true;
 	rasterDesc.AntialiasedLineEnable = true;
 	rasterDesc.DepthClipEnable = false;
 	rasterDesc.DepthBias = -1000;
 	rasterDesc.CullMode = D3D11_CULL_NONE;
 	rasterDesc.FillMode = D3D11_FILL_WIREFRAME;
+#endif
+
+
 	result = pDevice->CreateRasterizerState(&rasterDesc, &m_wireState);
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create wire rasterizer state", __FUNCTION__);
 		return false;
 	}
+
+#ifdef USE_GEOMETRY_WIREFRAME
+	D3D11_DEPTH_STENCIL_DESC depthDesc;
+	depthDesc.DepthEnable = true;
+	depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+	depthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+
+	depthDesc.StencilEnable = FALSE;
+	depthDesc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+	depthDesc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+
+	// Stencil operations if pixel is front-facing.
+	depthDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+	// Stencil operations if pixel is back-facing.
+	depthDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+	pDevice->CreateDepthStencilState(&depthDesc, &m_depthSS);
+	if (FAILED(result))
+	{
+		_ERROR("%s - Failed to create depth stencil state", __FUNCTION__);
+		return false;
+	}
+
+	D3D11_BLEND_DESC blendStateDescription;
+	// Clear the blend state description.
+	ZeroMemory(&blendStateDescription, sizeof(D3D11_BLEND_DESC));
+
+	// Create an alpha enabled blend state description.
+	blendStateDescription.RenderTarget[0].BlendEnable = TRUE;
+	blendStateDescription.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blendStateDescription.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	blendStateDescription.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	blendStateDescription.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+	blendStateDescription.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+	blendStateDescription.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blendStateDescription.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	// Create the blend state using the description.
+	result = pDevice->CreateBlendState(&blendStateDescription, &m_wireBlendState);
+	if (FAILED(result))
+	{
+		_ERROR("%s - Failed to create wire blend state", __FUNCTION__);
+		return nullptr;
+	}
+#endif
 
 	return true;
 }
@@ -270,6 +287,7 @@ bool CDXShader::VSSetShaderBuffer(CDXD3DDevice * device, VertexBuffer & params)
 
 	ID3D11Buffer* buffers[] = { m_matrixBuffer.Get() };
 	pDeviceContext->VSSetConstantBuffers(0, 1, buffers);
+	pDeviceContext->GSSetConstantBuffers(0, 1, buffers);
 	return true;
 }
 
@@ -339,12 +357,18 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 	pDeviceContext->IASetInputLayout(m_layout.Get());
 
 	// Set the vertex and pixel shaders that will be used to render this triangle.
+#ifdef USE_GEOMETRY_WIREFRAME
+	if (!m_baseSS) {
+		pDeviceContext->OMGetDepthStencilState(&m_baseSS, &m_baseRef);
+	}
+#endif
 	
 	CDXShader::MaterialBuffer mat;
 
-	ID3D11RasterizerState * state = m_solidState.Get();
-	ID3D11VertexShader * vshader = m_vertexShader.Get();
-	ID3D11PixelShader * pshader = m_pixelShader.Get();
+	ID3D11RasterizerState* state = m_solidState.Get();
+	ID3D11VertexShader* vshader = m_vertexShader.Get();
+	ID3D11PixelShader* pshader = m_pixelShader.Get();
+	ID3D11GeometryShader* gshader = nullptr;
 	ID3D11BlendState * blendingState = material->GetBlendingState(device);
 
 	float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -358,7 +382,22 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 		mat.wireColor = material->GetWireframeColor();
 		mat.alphaThreshold = material->GetAlphaBlending() ? 0.0f : material->GetAlphaThreshold() / 255.0f;
 		state = m_wireState.Get();
-		pshader = m_wireShader.Get();
+		pshader = m_wpShader.Get();
+#ifdef USE_GEOMETRY_WIREFRAME
+		vshader = m_wvShader.Get();
+		gshader = m_wgShader.Get();
+#endif
+
+		if (m_wireBlendState)
+		{
+			blendingState = m_wireBlendState.Get();
+		}
+		
+
+		if (m_depthSS)
+		{
+			pDeviceContext->OMSetDepthStencilState(m_depthSS.Get(), 0);
+		}
 	}
 	else
 	{
@@ -369,6 +408,10 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 		mat.tintColor = material->GetTintColor();
 		mat.wireColor = XMFLOAT4(0, 0, 0, 0);
 		mat.alphaThreshold = material->GetAlphaBlending() ? 0.0f : material->GetAlphaThreshold() / 255.0f;
+
+#ifdef USE_GEOMETRY_WIREFRAME
+		pDeviceContext->OMSetDepthStencilState(m_baseSS.Get(), m_baseRef);
+#endif
 	}
 
 	PSSetMaterialBuffers(device, mat);
@@ -381,9 +424,12 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 	pDeviceContext->VSGetShader(&vs, nullptr, nullptr);
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> ps;
 	pDeviceContext->PSGetShader(&ps, nullptr, nullptr);
+	Microsoft::WRL::ComPtr<ID3D11GeometryShader> gs;
+	pDeviceContext->GSGetShader(&gs, nullptr, nullptr);
 
 	if(vs.Get() != vshader) pDeviceContext->VSSetShader(vshader, nullptr, 0);
 	if(ps.Get() != pshader) pDeviceContext->PSSetShader(pshader, nullptr, 0);
+	if(gs.Get() != gshader) pDeviceContext->GSSetShader(gshader, nullptr, 0);
 
 	// Set shader texture resource in the pixel shader.
 	pDeviceContext->PSSetShaderResources(0, 5, material->GetTextures());

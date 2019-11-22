@@ -87,7 +87,7 @@ _RegenerateHead RegenerateHead_Original = nullptr;
 RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01DEA030);
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x01596850);
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x01596840);
 
 // DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
 RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856E10);
@@ -242,23 +242,15 @@ UInt32 * g_unk2 = (UInt32*)0x001310588;
 
 #endif
 
-struct ArmorAddonStack
+NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, UInt64 unk3_4, AddonTreeParameters * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)
 {
-	AddonTreeParameters * params;	// 00
-	UInt64			unk08;		// 08
-	UInt32			unk10;		// 10
-	UInt32			unk14;		// 14
-};
-
-NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, ArmorAddonStack * stackInfo, UInt32 unk4, UInt64 unk5, UInt64 unk6)
-{
-	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, stackInfo->unk10, unk4, unk5, unk6);
+	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, unk3_4 >> 32, unk3_4 & 0xFFFFFFFF, unk5, unk6, unk7);
 
 	NiPointer<TESObjectREFR> reference;
 	UInt32 handle = addonInfo->handle;
 	LookupREFRByHandle(handle, reference);
 	if (reference)
-		InstallArmorAddonHook(reference, stackInfo->params, addonInfo->boneTree, retVal);
+		InstallArmorAddonHook(reference, params, addonInfo->boneTree, retVal);
 
 	return retVal;
 }
@@ -453,66 +445,6 @@ SInt32 UpdateHeadState_Disabled_Hooked(TESNPC * npc, Actor * actor, UInt32 unk1)
 	return ret;
 }
 
-#ifdef FIXME
-SInt32 TESNPC_Hooked::CreateHeadState_Hooked(Actor * actor, UInt32 unk1)
-{
-	SInt32 ret = CALL_MEMBER_FN(this, UpdateHeadState)(actor, unk1);
-	try {
-		__asm {
-			pushad
-			mov		al, g_immediateFace
-			push	eax
-			push	1
-			mov		eax, actor
-			push	eax
-			call	InstallFaceOverlayHook
-			popad
-		}
-	}
-	catch (...) {
-		if (actor)
-			_MESSAGE("%s - unexpected error while updating face overlay for actor %08X", __FUNCTION__, actor->formID);
-	}
-	return ret;
-}
-
-SInt32 TESNPC_Hooked::UpdateHeadState_Hooked(Actor * actor, UInt32 unk1)
-{
-	SInt32 ret = CALL_MEMBER_FN(this, UpdateHeadState)(actor, unk1);
-	try {
-		__asm {
-			pushad
-			mov		al, g_immediateFace
-			push	eax
-			push	0
-			mov		eax, actor
-			push	eax
-			call	InstallFaceOverlayHook
-			popad
-		}
-	}
-	catch (...) {
-		if (actor)
-			_MESSAGE("%s - unexpected error while updating face overlay for actor %08X", __FUNCTION__, actor->formID);
-	}
-	return ret;
-}
-#endif
-
-#ifdef FIXME
-void SkyrimVM_Hooked::RegisterEventSinks_Hooked()
-{
-	RegisterPapyrusFunctions(GetClassRegistry());
-
-	CALL_MEMBER_FN(this, RegisterEventSinks)();
-
-	if (g_changeUniqueIDEventDispatcher)
-		g_changeUniqueIDEventDispatcher->AddEventSink(&g_uniqueIdEventSink);
-
-	g_tintMaskInterface.ReadTintData("Data\\SKSE\\Plugins\\NiOverride\\TintData\\", "*.xml");
-}
-#endif
-
 #include <d3d11_4.h>
 #include "CDXD3DDevice.h"
 #include "CDXNifScene.h"
@@ -568,13 +500,8 @@ bool UsePreprocessedHead(TESNPC * npc)
 	return presetData == nullptr && (*g_useFaceGenPreProcessedHeads);
 }
 
-typedef void(*_ClearFaceGenCache)();
-const _ClearFaceGenCache ClearFaceGenCache = (_ClearFaceGenCache)0x00886B50;
-
 void _cdecl ClearFaceGenCache_Hooked()
 {
-	ClearFaceGenCache();
-
 	g_morphInterface.RevertInternals();
 	g_partSet.Revert(); // Cleanup HeadPart List before loading new ones
 }
@@ -1015,6 +942,14 @@ void UpdateModelColor_Recursive(NiAVObject * object, NiColor *& color, UInt32 sh
 			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
 			if (material && material->GetShaderType() == shaderType)
 			{
+				NiExtraData* extraData = shaderProperty->GetExtraData("NO_TINT");
+				if (extraData) {
+					NiBooleanExtraData* booleanData = static_cast<NiBooleanExtraData*>(extraData);
+					if (booleanData->m_data)
+					{
+						return;
+					}
+				}
 				if (material->GetShaderType() == BSLightingShaderMaterial::kShaderType_FaceGenRGBTint)
 				{
 					BSLightingShaderMaterialFacegenTint* tintMaterial = (BSLightingShaderMaterialFacegenTint *)shaderProperty->material;
@@ -1150,36 +1085,78 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 
 	if (_strnicmp(buffer, "reload", MAX_PATH) == 0)
 	{
-		if (_strnicmp(buffer, "tints", MAX_PATH) == 0)
+		if (_strnicmp(buffer2, "tints", MAX_PATH) == 0)
 		{
 			g_tintMaskInterface.LoadMods();
+			Console_Print("Tint XMLs reloaded");
 		}
 	}
 	else if (_strnicmp(buffer, "erase", MAX_PATH) == 0)
 	{
-		if (_strnicmp(buffer, "bodymorph", MAX_PATH) == 0)
+		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
 		{
-			if (thisObj)
-			{
-				g_bodyMorphInterface.ClearMorphs(thisObj);
-				g_bodyMorphInterface.UpdateModelWeight(thisObj);
-			}
-			else
-			{
+			if (!thisObj) {
 				Console_Print("Erasing BodyMorphs requires a console target");
+				return false;
 			}
+
+			g_bodyMorphInterface.ClearMorphs(thisObj);
+			g_bodyMorphInterface.UpdateModelWeight(thisObj);
+			Console_Print("Erased all bodymorphs");
 		}
-		else if (_strnicmp(buffer, "transforms", MAX_PATH) == 0)
+		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
 		{
-			if (thisObj)
-			{
-				g_transformInterface.RemoveAllReferenceTransforms(thisObj);
-				g_transformInterface.UpdateNodeAllTransforms(thisObj);
-			}
-			else
-			{
+			if (!thisObj) {
 				Console_Print("Erasing transforms requires a console target");
+				return false;
 			}
+
+			g_transformInterface.RemoveAllReferenceTransforms(thisObj);
+			g_transformInterface.UpdateNodeAllTransforms(thisObj);
+			Console_Print("Erased all transforms");
+		}
+		else if (_strnicmp(buffer2, "sculpt", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Erasing sculpt requires a console target");
+				return false;
+			}
+			if (thisObj->formType != Character::kTypeID) {
+				Console_Print("Console target must be an actor");
+				return false;
+			}
+			Actor* actor = static_cast<Actor*>(thisObj);
+			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
+			if (!npc) {
+				Console_Print("Failed to acquire ActorBase for specified reference");
+				return false;
+			}
+
+			g_morphInterface.EraseSculptData(npc);
+			g_task->AddTask(new SKSEUpdateFaceModel(actor));
+
+			Console_Print("Erased all sculpting");
+		}
+		else if (_strnicmp(buffer2, "overlays", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Erasing overlays requires a console target");
+				return false;
+			}
+			if (thisObj->formType != Character::kTypeID) {
+				Console_Print("Console target must be an actor");
+				return false;
+			}
+			Actor* actor = static_cast<Actor*>(thisObj);
+			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
+			if (!npc) {
+				Console_Print("Failed to acquire ActorBase for specified reference");
+				return false;
+			}
+
+			g_overlayInterface.EraseOverlays(actor);
+
+			Console_Print("Erased and reverted all overlays");
 		}
 	}
 	else if (_strnicmp(buffer, "preset-save", MAX_PATH) == 0)
@@ -1192,6 +1169,7 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 		g_morphInterface.SaveJsonPreset(slotPath);
 
 		g_task->AddTask(new SKSETaskExportTintMask(tintPath, buffer2));
+		Console_Print("Preset saved");
 	}
 	else if (_strnicmp(buffer, "preset-load", MAX_PATH) == 0)
 	{
@@ -1228,6 +1206,101 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 
 		// Queue a node update
 		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
+		Console_Print("Preset loaded");
+	}
+
+	else if (_strnicmp(buffer, "dump", MAX_PATH) == 0)
+	{
+		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping transforms requires a console target");
+				return false;
+			}
+
+			Console_Print("Dumping body morphs for %08X", thisObj->formID);
+
+			class Visitor : public IBodyMorphInterface::MorphValueVisitor
+			{
+			public:
+				Visitor() { }
+
+				virtual void Visit(TESObjectREFR * ref, const char* morphKey, const char* key, float value)
+				{
+					m_mapping[key][morphKey] = value;
+				}
+				std::map<SKEEFixedString, std::map<SKEEFixedString, float>> m_mapping;
+			};
+			Visitor visitor;
+			g_bodyMorphInterface.VisitMorphValues(thisObj, visitor);
+				
+			UInt32 totalMorphs = 0;
+			for (auto & key : visitor.m_mapping)
+			{
+				Console_Print("Key: %s", key.first.c_str());
+				for (auto & morph : key.second)
+				{
+					Console_Print("\tMorph: %s\t\tValue: %f", morph.first.c_str(), morph.second);
+				}
+				Console_Print("Dumped %d morphs for key %s", key.second.size(), key.first.c_str());
+				totalMorphs += key.second.size();
+			}
+			Console_Print("Dumped %d total morphs", totalMorphs);
+
+		}
+		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping transforms requires a console target");
+				return false;
+			}
+			if (thisObj->formType != Character::kTypeID) {
+				Console_Print("Console target must be an actor");
+				return false;
+			}
+			Actor* actor = static_cast<Actor*>(thisObj);
+			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
+			if (!npc) {
+				Console_Print("Failed to acquire ActorBase for specified reference");
+				return false;
+			}
+
+			Console_Print("Dumping transforms for %08X", thisObj->formID);
+
+			UInt32 totalTransforms = 0;
+			g_transformInterface.VisitNodes(thisObj, false, CALL_MEMBER_FN(npc, GetSex)() == 1, [&](const SKEEFixedString& node, OverrideRegistration<StringTableItem> * keys)
+			{
+				Console_Print("Node: %s", node.c_str());
+				for (auto& item : *keys)
+				{
+					Console_Print("\tKey: %s\t\tProperties %d", item.first ? item.first->c_str() : "", item.second.size());
+					totalTransforms++;
+				}
+				return false;
+			});
+			Console_Print("Dumped %d total transforms", totalTransforms);
+		}
+#if _DEBUG
+		else if (_strnicmp(buffer2, "nodes", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping nodes requires a reference");
+				return false;
+			}
+
+			if (_strnicmp(buffer2, "fp", MAX_PATH) == 0)
+			{
+				DumpNodeChildren(thisObj->GetNiRootNode(1));
+			}
+			else
+			{
+				DumpNodeChildren(thisObj->GetNiRootNode(0));
+			}
+
+			Console_Print("Dumped actor");
+		}
+		
+#endif
 	}
 	
 	return true;
@@ -1237,54 +1310,6 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 
 bool InstallSKEEHooks()
 {
-#ifdef FIXME
-	WriteRelJump(kInstallArmorHook_Base, (UInt32)&InstallArmorNodeHook_Entry);
-
-	if (g_enableFaceOverlays) {
-		WriteRelJump(0x00569990 + 0x16E, GetFnAddr(&TESNPC_Hooked::CreateHeadState_Hooked)); // Creates new head
-		WriteRelCall(0x0056AFC0 + 0x2E5, GetFnAddr(&TESNPC_Hooked::UpdateHeadState_Hooked)); // Updates head state
-	}
-
-	WriteRelCall(0x0046C310 + 0x110, GetFnAddr(&BSLightingShaderProperty_Hooked::HasFlags_Hooked));
-
-	// Make the ExtraRank item unique
-	WriteRelCall(0x00482120 + 0x5DD, GetFnAddr(&ExtraContainerChangesData_Hooked::TransferItemUID_Hooked));
-
-	// Closest and easiest hook to Payprus Native Function Registry without a detour
-	WriteRelCall(0x008D7A40 + 0x995, GetFnAddr(&SkyrimVM_Hooked::RegisterEventSinks_Hooked));
-
-	WriteRelJump(kInstallWeaponFPHook_Base, (UInt32)&CreateWeaponNodeFPHook_Entry);
-	WriteRelJump(kInstallWeapon3PHook_Base, (UInt32)&CreateWeaponNode3PHook_Entry);
-	WriteRelJump(kInstallWeaponHook_Base, (UInt32)&InstallWeaponNodeHook_Entry);
-
-
-
-	WriteRelCall(DATA_ADDR(0x00699100, 0x275), (UInt32)&LoadActorValues_Hook); // Hook for loading initial data on startup
-
-	WriteRelCall(DATA_ADDR(0x00882290, 0x185), GetFnAddr(&DataHandler_Hooked::GetValidPlayableHeadParts_Hooked)); // Cleans up HeadPart List
-	WriteRelCall(DATA_ADDR(0x00886C70, 0x97), (UInt32)&ClearFaceGenCache_Hooked); // RaceMenu dtor Cleans up HeadPart List
-	WriteRelCall(DATA_ADDR(0x00881320, 0x67), GetFnAddr(&BGSHeadPart_Hooked::IsPlayablePart_Hooked)); // Custom head part insertion
-
-	if (g_extendedMorphs) {
-		WriteRelCall(DATA_ADDR(0x005A4070, 0xBE), GetFnAddr(&BSFaceGenModel_Hooked::ApplyChargenMorph_Hooked)); // Load and apply extended morphs
-		WriteRelCall(DATA_ADDR(0x005A5CE0, 0x39), GetFnAddr(&BSFaceGenModel_Hooked::ApplyRaceMorph_Hooked)); // Load and apply extended morphs
-	}
-	WriteRelCall(DATA_ADDR(0x005A4AC0, 0x67), GetFnAddr(&TESNPC_Hooked::UpdateMorphs_Hooked)); // Updating all morphs when head is regenerated
-	WriteRelCall(DATA_ADDR(0x005AA230, 0x5C), GetFnAddr(&TESNPC_Hooked::UpdateMorph_Hooked)); // ChangeHeadPart to update morph on single part
-	WriteRelCall(DATA_ADDR(0x00882290, 0x2E26), GetFnAddr(&SliderArray::AddSlider_Hooked)); // Create Slider 
-	WriteRelCall(DATA_ADDR(0x00881DD0, 0x436), GetFnAddr(&FxResponseArgsList_Hooked::AddArgument_Hooked)); // Add Slider
-
-	WriteRelCall(DATA_ADDR(0x00882290, 0x337C), GetFnAddr(&RaceSexMenu_Hooked::DoubleMorphCallback_Hooked)); // Change Slider OnLoad
-	WriteRelCall(DATA_ADDR(0x0087FA50, 0x93), GetFnAddr(&RaceSexMenu_Hooked::DoubleMorphCallback_Hooked)); // Change Slider OnCallback
-
-	SafeWrite32(DATA_ADDR(0x010E7404, 0x18), GetFnAddr(&RaceSexMenu_Hooked::RenderMenu_Hooked)); // Hooks RaceMenu renderer
-
-	if (!g_externalHeads) {
-		WriteRelJump(kInstallRegenHeadHook_Base, (UInt32)&InstallRegenHeadHook_Entry); // FaceGen Regenerate HeadPart Hook
-		WriteRelJump(kInstallForceRegenHeadHook_Base, (UInt32)&InstallForceRegenHeadHook_Entry); // Preprocessed Head Hook
-	}
-#endif
-
 	if (!g_branchTrampoline.Create(1024 * 64))
 	{
 		_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
@@ -1297,22 +1322,24 @@ bool InstallSKEEHooks()
 		return false;
 	}
 
-	RelocAddr <uintptr_t> GetHeadParts_Target(0x008B5E20 + 0x212);
+	static const uintptr_t LoadRaceMenuSliders = 0x008B5E20;
+
+	RelocAddr <uintptr_t> GetHeadParts_Target(LoadRaceMenuSliders + 0x212);
 	g_branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
-	RelocAddr <uintptr_t> AddSlider_Target(0x008B5E20 + 0x37E4);
+	RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x37E4);
 	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(0x008B5E20 + 0x3CD5);
+	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3CD5);
 	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
 	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008B1BC0 + 0x4F); // ChangeDoubleMorph callback
 	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 	
-	RelocAddr<uintptr_t> SliderLookup_Target(0x008B5E20 + 0x3895);
+	RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3895);
 	{
 		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
 			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1343,9 +1370,11 @@ bool InstallSKEEHooks()
 
 	if (!g_externalHeads)
 	{
-		RelocAddr<uintptr_t> PreprocessedHeads1_Target(0x00363DE0 + 0x58);
-		RelocAddr<uintptr_t> PreprocessedHeads2_Target(0x00363DE0 + 0x81);
-		RelocAddr<uintptr_t> PreprocessedHeads3_Target(0x00363DE0 + 0x67);
+		static const uintptr_t PreprocessedHeads = 0x00363DE0;
+
+		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
+		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
+		RelocAddr<uintptr_t> PreprocessedHeads3_Target(PreprocessedHeads + 0x67);
 		{
 			struct UsePreprocessedHeads_Entry_Code : Xbyak::CodeGenerator {
 				UsePreprocessedHeads_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1437,16 +1466,16 @@ bool InstallSKEEHooks()
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
 	if(g_enableFaceOverlays)
 	{
-		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C71A50 + 0x92);
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C71F00 + 0x92);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C71A50 + 0x8B);
+		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C71F00 + 0x8B);
 		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C71DA0 + 0x76);
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C72250 + 0x76);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C727B0 + 0x2F);
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C72C60 + 0x2F);
 		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
 		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
@@ -1459,15 +1488,18 @@ bool InstallSKEEHooks()
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC78 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC68 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		RelocAddr <uintptr_t> Cache_Target(0x008B2BE0);
+		/*RelocAddr <uintptr_t> Cache_Target(0x008B2BE0);
 		SafeWrite8(Cache_Target.GetUIntPtr(), 0xC3); // Cache immediate retn
 		RelocAddr <uintptr_t> CacheClear_Target(0x008B2D60);
-		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn
+		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn*/
+
+		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008BB750);
+		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
 	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C6F90 + 0xB4A);
@@ -1478,7 +1510,11 @@ bool InstallSKEEHooks()
 				Xbyak::Label retnLabel;
 				Xbyak::Label funcLabel;
 
-				lea(r8, ptr[rsp + 0x78]);
+				mov(r8d, r15d);
+				shl(r8, 0x20);
+				and (r9, 0xFFFFFFFF);
+				or (r8, r9);
+				mov(r9, ptr[rsp + 0x78]);
 				mov(rdx, rsi);
 				mov(rcx, r13);
 				call(ptr[rip + funcLabel]);

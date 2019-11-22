@@ -213,7 +213,7 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	CDXMeshVert* pVertices = LockVertices(LockMode::READ);
+	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
 	CDXMeshIndex* pIndices = LockIndices();
 
 	if (!pVertices || !pIndices)
@@ -256,7 +256,7 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 		}
 	}
 
-	UnlockVertices(LockMode::READ);
+	UnlockVertices(LockMode::WRITE);
 	UnlockIndices();
 
 	pickInfo.ray = rayInfo;
@@ -344,6 +344,10 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 		_ERROR("%s - Failed to create vertex buffer", __FUNCTION__);
 		return false;
 	}
+
+	// We don't need this buffer after we create the mesh
+	delete m_vertices;
+	m_vertices = nullptr;
 
 	// Set up the description of the static index buffer.
 	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;

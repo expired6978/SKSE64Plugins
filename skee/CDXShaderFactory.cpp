@@ -122,6 +122,56 @@ bool CDXShaderFactory::CreateVertexShader(CDXD3DDevice * device, CDXShaderFile *
 	return true;
 }
 
+bool CDXShaderFactory::CreateGeometryShader(CDXD3DDevice * device, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, Microsoft::WRL::ComPtr<ID3D11GeometryShader> & geometryShader)
+{
+	Microsoft::WRL::ComPtr<ID3D11Device> pDevice = device->GetDevice();
+	Microsoft::WRL::ComPtr<ID3DBlob> errorMessage;
+	Microsoft::WRL::ComPtr<ID3DBlob> shaderBuffer;
+
+	// Compile the pixel shader code.
+	HRESULT result = CompileShaderFromData(sourceFile->GetBuffer(), sourceFile->GetBufferSize(), sourceFile->GetSourceName(), sourceFile->GetEntryPoint(), "gs_5_0", &shaderBuffer, &errorMessage);
+	if (SUCCEEDED(result))
+	{
+		if (!shaderBuffer)
+		{
+			_ERROR("%s - Failed to acquire geometry shader buffer", __FUNCTION__);
+			return false;
+		}
+
+		// Create the vertex shader from the buffer.
+		result = pDevice->CreateGeometryShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, &geometryShader);
+		if (FAILED(result))
+		{
+			_ERROR("%s - Failed to create geometry shader", __FUNCTION__);
+			return false;
+		}
+	}
+	else if (result == E_NOINTERFACE && precompiledFile && precompiledFile->GetBufferSize())
+	{
+		// Create the vertex shader from the buffer.
+		result = pDevice->CreateGeometryShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, &geometryShader);
+		if (FAILED(result))
+		{
+			_ERROR("%s - Failed to create geometry shader", __FUNCTION__);
+			return false;
+		}
+	}
+	else
+	{
+		// If the shader failed to compile it should have writen something to the error message.
+		std::stringstream errors;
+		if (errorMessage)
+		{
+			OutputShaderErrorMessage(errorMessage, errors);
+		}
+
+		_ERROR("%s - Failed to compile geometry shader:\n%s", __FUNCTION__, errors.str().c_str());
+		return false;
+	}
+
+	return true;
+}
+
 void CDXShaderFactory::OutputShaderErrorMessage(Microsoft::WRL::ComPtr<ID3DBlob> & errorMessage, std::stringstream & output)
 {
 	// Get a pointer to the error message text buffer.

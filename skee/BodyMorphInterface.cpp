@@ -29,6 +29,8 @@
 #include "skse64/NiExtraData.h"
 #include "skse64/NiRTTI.h"
 
+#include "Morpher.h"
+
 extern BodyMorphInterface				g_bodyMorphInterface;
 extern OverlayInterface					g_overlayInterface;
 extern StringTable						g_stringTable;
@@ -566,6 +568,8 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 
 									// Applies all morphs for this shape
 									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
+
+									NormalApplicator applicator(bodyGeometry, newSkinPartition);
 
 									// Propagate the data to the other partitions
 									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
@@ -1347,7 +1351,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphTemplates(SKEEFixedString filePath)
 	return true;
 }
 
-void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter)
+void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter, std::unordered_set<TESFaction*> factionList)
 {
 	for (UInt32 i = 0; i < (*g_dataHandler)->npcs.count; i++)
 	{
@@ -1355,9 +1359,10 @@ void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], c
 		if ((*g_dataHandler)->npcs.GetNthItem(i, npc))
 		{
 			bool matchMod = modInfo ? modInfo->IsFormInMod(npc->formID) : true;
+			bool matchRace = (raceFilter == nullptr || npc->race.race == raceFilter);			
+			bool matchFactions = IsNPCInFactions(npc, factionList);
 
-			bool matchRace = (raceFilter == nullptr || npc->race.race == raceFilter);
-			if (npc && npc->nextTemplate == nullptr && matchMod && matchRace)
+			if (npc && npc->nextTemplate == nullptr && matchMod && matchRace && matchFactions)
 			{
 				if (gender == 0xFF)
 				{
@@ -1369,6 +1374,23 @@ void BodyMorphInterface::GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], c
 			}
 		}
 	}
+}
+
+bool BodyMorphInterface::IsNPCInFactions(TESNPC* npc, std::unordered_set<TESFaction*> factionList)
+{
+	UInt32 matchingFactions = 0;
+	if (factionList.size() > 0)
+	{
+		for (UInt32 k = 0; k < npc->actorData.factions.count; ++k)
+		{
+			TESActorBaseData::FactionInfo fi;
+			npc->actorData.factions.GetNthItem(k, fi);
+			if (factionList.find(fi.faction) != factionList.end())
+				matchingFactions++;
+		}
+	}
+
+	return matchingFactions == factionList.size();
 }
 
 bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
@@ -1402,10 +1424,26 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 			continue;
 		}
 
+		std::unordered_set<TESFaction*> factionList;
+
 		std::string lSide = std::trim(side[0]);
+		std::vector<std::string> lProperties = std::explode(lSide, ',');
+		if (lProperties.size() > 1)
+		{
+			std::vector<std::string> forms = std::explode(std::trim(lProperties[1]), '+');
+			for (auto & formIdentifier : forms)
+			{
+				TESForm * form = GetFormFromIdentifier(std::trim(formIdentifier));
+				if (form && form->formType == TESFaction::kTypeID)
+				{
+					factionList.insert(static_cast<TESFaction*>(form));
+				}
+			}
+		}
+
 		std::string rSide = std::trim(side[1]);
 
-		std::vector<std::string> form = std::explode(lSide, '|');
+		std::vector<std::string> form = std::explode(lProperties[0], '|');
 		if (form.size() < 2) {
 			_ERROR("%s - Error - Morph left side missing mod name or formID.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
 			continue;
@@ -1448,7 +1486,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 				paramIndex++;
 			}
 
-			GetFilteredNPCList(activeNPCs, nullptr, gender, foundRace);
+			GetFilteredNPCList(activeNPCs, nullptr, gender, foundRace, factionList);
 		}
 		else
 		{
@@ -1492,7 +1530,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 					paramIndex++;
 				}
 
-				GetFilteredNPCList(activeNPCs, modInfo, gender, foundRace);
+				GetFilteredNPCList(activeNPCs, modInfo, gender, foundRace, factionList);
 			}
 			else // Fallout4.esm|XXXX[|Gender]
 			{
@@ -1516,23 +1554,29 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 				if (levCharacter) {
 					VisitLeveledCharacter(levCharacter, [&](TESNPC * npc)
 					{
+						if (IsNPCInFactions(npc, factionList))
+						{
+							if (gender == 0xFF) {
+								activeNPCs[0].push_back(npc);
+								activeNPCs[1].push_back(npc);
+							}
+							else
+								activeNPCs[gender].push_back(npc);
+						}
+					});
+				}
+
+				TESNPC * npc = DYNAMIC_CAST(foundForm, TESForm, TESNPC);
+				if (npc) {
+					if (IsNPCInFactions(npc, factionList))
+					{
 						if (gender == 0xFF) {
 							activeNPCs[0].push_back(npc);
 							activeNPCs[1].push_back(npc);
 						}
 						else
 							activeNPCs[gender].push_back(npc);
-					});
-				}
-
-				TESNPC * npc = DYNAMIC_CAST(foundForm, TESForm, TESNPC);
-				if (npc) {
-					if (gender == 0xFF) {
-						activeNPCs[0].push_back(npc);
-						activeNPCs[1].push_back(npc);
 					}
-					else
-						activeNPCs[gender].push_back(npc);
 				}
 
 				if (!npc && !levCharacter) {
@@ -2066,7 +2110,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 
 		newFormId = newHandle & 0xFFFFFFFF;
 	}
-
+	
 	if(morphMap.empty())
 		return false;
 

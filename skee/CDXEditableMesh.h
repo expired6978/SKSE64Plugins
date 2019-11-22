@@ -24,8 +24,8 @@ typedef std::map<CDXMeshIndex, CDXAdjacentList>		CDXAdjacencyMap;
 typedef std::unordered_map<CDXMeshEdge, UInt32>		CDXEdgeMap;
 typedef std::unordered_set<CDXMeshIndex>			CDXVertexEdgeList;
 
-#define COLOR_UNSELECTED	XMVectorSet(1.0, 1.0, 1.0, 1.0)
-#define COLOR_SELECTED		XMVectorSet(0, 0, 1.0, 1.0)
+static DirectX::XMVECTOR COLOR_UNSELECTED = DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 0.0f);
+static DirectX::XMVECTOR COLOR_SELECTED = DirectX::XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 
 class CDXEditableMesh : public CDXMesh
 {

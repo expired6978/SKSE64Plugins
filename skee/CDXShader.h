@@ -54,7 +54,15 @@ protected:
 
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
-	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_wireShader;
+
+	Microsoft::WRL::ComPtr<ID3D11VertexShader> m_wvShader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_wpShader;
+	Microsoft::WRL::ComPtr<ID3D11GeometryShader> m_wgShader;
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_depthSS;
+	Microsoft::WRL::ComPtr<ID3D11BlendState> m_wireBlendState;
+
+	UINT m_baseRef;
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_baseSS;
 #if 0
 	struct WireShaders
 	{

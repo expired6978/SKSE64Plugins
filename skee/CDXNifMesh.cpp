@@ -122,7 +122,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 			}
 		}
 
-		vertCount = geometry->numVertices;
+		vertCount = geometry->numVertices ? geometry->numVertices : skinPartition->vertexCount;
 		triangleCount = indices.size();
 
 		nifMesh->m_vertCount = vertCount;
@@ -142,7 +142,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 			UInt32 vertexSize = NiSkinPartition::GetVertexSize(geometry->vertexDesc);
 			UInt32 uvOffset = NiSkinPartition::GetVertexAttributeOffset(geometry->vertexDesc, VertexAttribute::VA_TEXCOORD0);
 
-			dynamicTriShape->lock.Lock();
+			if(dynamicTriShape) dynamicTriShape->lock.Lock();
 			for (UInt32 i = 0; i < vertCount; i++) {
 				NiPoint3 * vertex = dynamicTriShape ? reinterpret_cast<NiPoint3*>(&reinterpret_cast<DirectX::XMFLOAT4*>(dynamicTriShape->pDynamicData)[i]) : reinterpret_cast<NiPoint3*>(&skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData[i * vertexSize]);
 				NiPoint3 xformed = localTransform * (*vertex);
@@ -158,7 +158,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 				pVertices[i].Tex = uv;
 				XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
 			}
-			dynamicTriShape->lock.Release();
+			if (dynamicTriShape) dynamicTriShape->lock.Release();
 		});
 
 		nifMesh->BuildAdjacency();

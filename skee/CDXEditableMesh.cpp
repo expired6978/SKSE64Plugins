@@ -142,7 +142,7 @@ void CDXEditableMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 
 CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 {
-	CDXMeshVert* pVertices = LockVertices(LockMode::READ);
+	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
 
 	CDXVec vNormal = XMVectorZero();
 	if (!pVertices)
@@ -165,7 +165,7 @@ CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 		vNormal = XMVector3Normalize(vNormal);
 	}
 
-	UnlockVertices(LockMode::READ);
+	UnlockVertices(LockMode::WRITE);
 	return vNormal;
 }
 

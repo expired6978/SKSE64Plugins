@@ -175,7 +175,7 @@ float CDXBrush::CalculateFalloff(float & dist)
 
 CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditableMesh * mesh)
 {
-	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::READ);
+	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	CDXHitIndexMap hitVertex;
 	for (UInt16 i = 0; i < mesh->GetVertexCount(); i++) {
 		if (FilterVertex(mesh, pVertices, i))
@@ -188,7 +188,7 @@ CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditab
 			hitVertex.emplace(i, CalculateFalloff(testRadius));
 		}
 	}
-	mesh->UnlockVertices(CDXMesh::LockMode::READ);
+	mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 	return hitVertex;
 }
 

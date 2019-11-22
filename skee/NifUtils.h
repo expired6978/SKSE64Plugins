@@ -7,8 +7,7 @@
 
 #include <functional>
 
-class NiSourceTexture;
-class NiRenderedTexture;
+class NiTexture;
 class NiTriBasedGeom;
 class TESNPC;
 class BGSHeadPart;
@@ -54,13 +53,24 @@ public:
 	BSFixedString	m_ddsPath;
 };
 
+class SKSEUpdateFaceModel : public TaskDelegate
+{
+	virtual void Run();
+	virtual void Dispose() { delete this; }
+
+public:
+	SKSEUpdateFaceModel(Actor * actor);
+
+	UInt32			m_formId;
+};
+
 BGSTextureSet * GetTextureSetForPart(TESNPC * npc, BGSHeadPart * headPart);
 std::pair<BGSTextureSet*, BGSHeadPart*> GetTextureSetForPartByName(TESNPC * npc, BSFixedString partName);
 BSGeometry * GetHeadGeometry(Actor * actor, UInt32 partType);
 void ExportTintMaskDDS(Actor * actor, BSFixedString filePath);
 NiAVObject * GetObjectByHeadPart(BSFaceGenNiNode * faceNode, BGSHeadPart * headPart);
 
-bool SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName);
+bool SaveRenderedDDS(NiTexture * pkTexture, const char * pcFileName);
 
 bool VisitObjects(NiAVObject * parent, std::function<bool(NiAVObject*)> functor);
 

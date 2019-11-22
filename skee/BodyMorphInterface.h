@@ -22,6 +22,7 @@
 #include <set>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <memory>
 #include <ctime>
@@ -41,6 +42,7 @@ class TESNPC;
 class TESRace;
 class NiSkinPartition;
 struct ModInfo;
+class TESFaction;
 
 #define MORPH_MOD_DIRECTORY "actors\\character\\BodyGenData\\"
 
@@ -367,7 +369,8 @@ public:
 	void LoadMods();
 
 private:
-	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter);
+	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter, std::unordered_set<TESFaction*> factionList);
+	bool IsNPCInFactions(TESNPC* npc, std::unordered_set<TESFaction*> factionList);
 
 	void Impl_SetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey, float relative);
 	float Impl_GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey);

@@ -155,6 +155,8 @@ public:
 	virtual void RevertOverlays(TESObjectREFR * reference, bool resetDiffuse);
 	virtual void RevertOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 armorMask, UInt32 addonMask, bool resetDiffuse);
 
+	virtual void EraseOverlays(TESObjectREFR * reference);
+
 	virtual void RevertHeadOverlays(TESObjectREFR * reference, bool resetDiffuse);
 	virtual void RevertHeadOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 partType, UInt32 shaderType, bool resetDiffuse);
 

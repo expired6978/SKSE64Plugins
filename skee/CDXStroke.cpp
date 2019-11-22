@@ -117,7 +117,7 @@ void CDXMaskSubtractStroke::Update(CDXStroke::Info * info)
 	CDXColor color;
 	XMStoreFloat3(&color, COLOR_UNSELECTED);
 
-	if (XMVector3NotEqual(XMLoadFloat3(&pVertices[info->index].Color), XMLoadFloat3(&color))) {
+	if (XMVector3NotEqual(XMLoadFloat3(&pVertices[info->index].Color), COLOR_UNSELECTED)) {
 		auto ret = m_current.emplace(info->index, color);
 		if (ret.second)
 			m_previous.emplace(info->index, pVertices[info->index].Color);

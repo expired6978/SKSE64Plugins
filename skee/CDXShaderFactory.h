@@ -20,6 +20,7 @@ class CDXShaderFactory
 public:
 	virtual bool CreateVertexShader(CDXD3DDevice * device, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, D3D11_INPUT_ELEMENT_DESC * polygonLayout, int numElements, Microsoft::WRL::ComPtr<ID3D11VertexShader> & vertexShader, Microsoft::WRL::ComPtr<ID3D11InputLayout> & layout);
 	virtual bool CreatePixelShader(CDXD3DDevice * device, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, Microsoft::WRL::ComPtr<ID3D11PixelShader> & pixelShader);
+	virtual bool CreateGeometryShader(CDXD3DDevice * device, CDXShaderFile * sourceFile, CDXShaderFile * precompiledFile, Microsoft::WRL::ComPtr<ID3D11GeometryShader> & geometryShader);
 
 private:
 	void OutputShaderErrorMessage(Microsoft::WRL::ComPtr<ID3DBlob> & errorMessage, std::stringstream & output);

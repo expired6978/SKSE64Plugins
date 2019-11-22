@@ -329,6 +329,7 @@ void CDXBrushMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 	pDeviceContext->RSSetState(m_solidState.Get());
 	pDeviceContext->VSSetShader(m_vertexShader.Get(), NULL, 0);
 	pDeviceContext->PSSetShader(m_pixelShader.Get(), NULL, 0);
+	pDeviceContext->GSSetShader(nullptr, nullptr, 0);
 
 	CDXShader::TransformBuffer xform;
 

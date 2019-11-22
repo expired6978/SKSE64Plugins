@@ -6,6 +6,7 @@
 #include "CDXNifTextureRenderer.h"
 
 struct SKSESerializationInterface;
+struct SKSENiNodeUpdateEvent;
 
 class TESObjectREFR;
 class TESObjectARMO;
@@ -23,6 +24,7 @@ class BSRenderTargetGroup;
 
 #include "skse64/NiMaterial.h"
 #include "skse64/GameTypes.h"
+#include "skse64/PapyrusEvents.h"
 
 #include <unordered_map>
 #include <functional>
@@ -95,7 +97,10 @@ public:
 	MaskTriShapeMap * GetTriShapeMap(SKEEFixedString nifPath);
 };
 
-class TintMaskInterface : public IPluginInterface
+class TintMaskInterface 
+	: public IPluginInterface
+	, public IAddonAttachmentInterface
+	, public BSTEventSink<SKSENiNodeUpdateEvent>
 {
 public:
 	enum
@@ -147,11 +152,18 @@ public:
 	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides, UInt32 & flags);
 	void ParseTintData(LPCTSTR filePath);
 
+private:
+	// Inherited via IAddonAttachmentInterface
+	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
+
 	MaskModelMap	m_modelMap;
 	TintMaskMap		m_maskMap;
 
 	SimpleLock						m_dyeableLock;
 	std::unordered_map<UInt32, bool> m_dyeable;
+
+	// Inherited via BSTEventSink
+	virtual EventResult ReceiveEvent(SKSENiNodeUpdateEvent * evn, EventDispatcher<SKSENiNodeUpdateEvent>* dispatcher) override;
 };
 
 class NIOVTaskDeferredMask : public TaskDelegate

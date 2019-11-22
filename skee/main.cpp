@@ -10,6 +10,7 @@
 #include "skse64/GameExtraData.h"
 
 #include "skse64/PapyrusVM.h"
+#include "skse64/PapyrusEvents.h"
 
 #include "skse64/NiRTTI.h"
 #include "skse64/NiNodes.h"
@@ -81,6 +82,7 @@ bool	g_enableHeadExport = true;
 bool	g_enableBodyMorph = true;
 bool	g_enableTintSync = true;
 bool	g_enableTintInventory = true;
+bool	g_enableTintHairSlot = true;
 
 bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
@@ -91,6 +93,7 @@ UInt32	g_numSpellBodyOverlays = 1;
 UInt32	g_numSpellHandOverlays = 1;
 UInt32	g_numSpellFeetOverlays = 1;
 UInt32	g_numSpellFaceOverlays = 1;
+UInt32	g_tintHairSlot = 1;
 
 bool	g_alphaOverride = true;
 UInt16	g_alphaFlags = 4845;
@@ -578,6 +581,12 @@ extern "C"
 
 bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 {
+	// Loading SKEE64 into SKSEVR short circuit immediately
+	if (GET_EXE_VERSION_SUB(skse->runtimeVersion) != 0)
+	{
+		return false;
+	}
+
 	SInt32	logLevel = IDebugLog::kLevel_DebugMessage;
 	if (SKEE64GetConfigValue("Debug", "iLogLevel", &logLevel))
 		gLog.SetLogLevel((IDebugLog::LogLevel)logLevel);
@@ -600,9 +609,9 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_80 && skse->runtimeVersion != RUNTIME_VERSION_1_5_73)
+	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_97 && skse->runtimeVersion != RUNTIME_VERSION_1_5_97)
 	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_80;
+		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_97;
 		char buf[512];
 		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
 			GET_EXE_VERSION_MAJOR(runtimeVersion),
@@ -681,21 +690,6 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 
 bool SKSEPlugin_Load(const SKSEInterface * skse)
 {
-	g_interfaceMap.AddInterface("Override", &g_overrideInterface);
-	g_interfaceMap.AddInterface("Overlay", &g_overlayInterface);
-	g_interfaceMap.AddInterface("NiTransform", &g_transformInterface);
-	g_interfaceMap.AddInterface("BodyMorph", &g_bodyMorphInterface);
-	g_interfaceMap.AddInterface("ItemData", &g_itemDataInterface);
-	g_interfaceMap.AddInterface("TintMask", &g_tintMaskInterface);
-	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
-	g_interfaceMap.AddInterface("ActorUpdateManager", &g_actorUpdateManager);
-
-	g_actorUpdateManager.AddInterface(&g_skeletonExtenderInterface);
-	g_actorUpdateManager.AddInterface(&g_bodyMorphInterface);
-	g_actorUpdateManager.AddInterface(&g_overlayInterface);
-	g_actorUpdateManager.AddInterface(&g_overrideInterface);
-	g_actorUpdateManager.AddInterface(&g_itemDataInterface);
-
 	_DMESSAGE("NetImmerse Override Enabled");
 
 	SKEE64GetConfigValue("Features", "bEnableOverlays", &g_enableOverlays);
@@ -707,6 +701,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableEquippableTransforms", &g_enableEquippableTransforms);
 	SKEE64GetConfigValue("Features", "bEnableTintSync", &g_enableTintSync);
 	SKEE64GetConfigValue("Features", "bEnableTintInventory", &g_enableTintInventory);
+	SKEE64GetConfigValue("Features", "bEnableTintHairSlot", &g_enableTintHairSlot);
 
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
 	SKEE64GetConfigValue("Overlays", "bEnableFaceOverlays", &g_enableFaceOverlays);
@@ -738,6 +733,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("General", "iScaleMode", &g_scaleMode);
 	SKEE64GetConfigValue("General", "iBodyMorphMode", &g_bodyMorphMode);
 	SKEE64GetConfigValue("General", "bParallelMorphing", &g_parallelMorphing);
+	SKEE64GetConfigValue("General", "uTintHairSlot", &g_tintHairSlot);
 
 	UInt32 bodyMorphMemoryLimit = 256000000;
 	if (SKEE64GetConfigValue("General", "uBodyMorphMemoryLimit", &bodyMorphMemoryLimit))
@@ -863,6 +859,35 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	if (g_messaging) {
 		g_messaging->RegisterListener(g_pluginHandle, "SKSE", SKSEMessageHandler);
 		g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
+
+		if (g_enableTintHairSlot)
+		{
+			EventDispatcher<SKSENiNodeUpdateEvent> * dispatcher = static_cast<EventDispatcher<SKSENiNodeUpdateEvent>*>(g_messaging->GetEventDispatcher(SKSEMessagingInterface::kDispatcher_NiNodeUpdateEvent));
+			if (dispatcher)
+			{
+				dispatcher->AddEventSink(&g_tintMaskInterface);
+			}
+		}
+	}
+
+	g_interfaceMap.AddInterface("Override", &g_overrideInterface);
+	g_interfaceMap.AddInterface("Overlay", &g_overlayInterface);
+	g_interfaceMap.AddInterface("NiTransform", &g_transformInterface);
+	g_interfaceMap.AddInterface("BodyMorph", &g_bodyMorphInterface);
+	g_interfaceMap.AddInterface("ItemData", &g_itemDataInterface);
+	g_interfaceMap.AddInterface("TintMask", &g_tintMaskInterface);
+	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
+	g_interfaceMap.AddInterface("ActorUpdateManager", &g_actorUpdateManager);
+
+	g_actorUpdateManager.AddInterface(&g_skeletonExtenderInterface);
+	g_actorUpdateManager.AddInterface(&g_bodyMorphInterface);
+	g_actorUpdateManager.AddInterface(&g_overlayInterface);
+	g_actorUpdateManager.AddInterface(&g_overrideInterface);
+	g_actorUpdateManager.AddInterface(&g_itemDataInterface);
+
+	if (g_enableTintHairSlot)
+	{
+		g_actorUpdateManager.AddInterface(&g_tintMaskInterface);
 	}
 
 	return InstallSKEEHooks();

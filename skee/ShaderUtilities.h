@@ -12,6 +12,7 @@
 #include "StringTable.h"
 
 #include <functional>
+#include <unordered_set>
 
 class NiExtraData;
 class BSGeometry;
@@ -101,6 +102,9 @@ public:
 	NiExtraData * m_data;
 	BSFixedString m_name;
 };
+
+void VisitEquippedNodes(Actor* actor, UInt32 slotMask, std::function<void(TESObjectARMO*, TESObjectARMA*, NiAVObject*, bool)> functor);
+void VisitAllWornItems(Actor* thisActor, UInt32 slotMask, std::function<void(InventoryEntryData*)> functor);
 
 void VisitArmorAddon(Actor * actor, TESObjectARMO * armor, TESObjectARMA * arma, std::function<void(bool, NiNode*,NiAVObject*)> functor);
 NiExtraData * FindExtraData(NiAVObject * object, BSFixedString name);

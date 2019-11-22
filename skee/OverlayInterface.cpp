@@ -777,6 +777,14 @@ void OverlayInterface::RevertOverlay(TESObjectREFR * reference, BSFixedString no
 	g_task->AddTask(new SKSETaskRevertOverlay(reference, nodeName, armorMask, addonMask, resetDiffuse));
 }
 
+void OverlayInterface::EraseOverlays(TESObjectREFR * reference)
+{
+	RevertOverlays(reference, true);
+
+	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
+	overlays.erase(handle);
+}
+
 void OverlayInterface::RevertOverlays(TESObjectREFR * reference, bool resetDiffuse)
 {
 	if(!reference)

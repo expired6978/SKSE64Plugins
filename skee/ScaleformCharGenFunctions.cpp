@@ -828,18 +828,28 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 
 	CDXBSShaderResource vsShader("SKSE/Plugins/CharGen/Shaders/shader_vs.hlsl", "LightVertexShader");
 	CDXBSShaderResource pvsShader("SKSE/Plugins/CharGen/Shaders/Compiled/shader_vs.cso");
-	initParams.vertexShader[0] = &vsShader;
-	initParams.vertexShader[1] = &pvsShader;
+	initParams.vShader[0] = &vsShader;
+	initParams.vShader[1] = &pvsShader;
 
 	CDXBSShaderResource psShader("SKSE/Plugins/CharGen/Shaders/shader_ps.hlsl", "LightPixelShader");
 	CDXBSShaderResource ppsShader("SKSE/Plugins/CharGen/Shaders/Compiled/shader_ps.cso");
-	initParams.pixelShader[0] = &psShader;
-	initParams.pixelShader[1] = &ppsShader;
+	initParams.pShader[0] = &psShader;
+	initParams.pShader[1] = &ppsShader;
+
+	CDXBSShaderResource wvShader("SKSE/Plugins/CharGen/Shaders/wireframe_vs.hlsl", "WireframeVertexShader");
+	CDXBSShaderResource pwvShader("SKSE/Plugins/CharGen/Shaders/Compiled/wireframe_vs.cso");
+	initParams.wvShader[0] = &wvShader;
+	initParams.wvShader[1] = &pwvShader;
 
 	CDXBSShaderResource wsShader("SKSE/Plugins/CharGen/Shaders/wireframe_ps.hlsl", "WireframePixelShader");
 	CDXBSShaderResource pwsShader("SKSE/Plugins/CharGen/Shaders/Compiled/wireframe_ps.cso");
-	initParams.wireShader[0] = &wsShader;
-	initParams.wireShader[1] = &pwsShader;
+	initParams.wpShader[0] = &wsShader;
+	initParams.wpShader[1] = &pwsShader;
+
+	CDXBSShaderResource gsShader("SKSE/Plugins/CharGen/Shaders/wireframe_gs.hlsl", "WireframeGeometryShader");
+	CDXBSShaderResource pgsShader("SKSE/Plugins/CharGen/Shaders/Compiled/wireframe_gs.cso");
+	initParams.wgShader[0] = &gsShader;
+	initParams.wgShader[1] = &pgsShader;
 
 	if (!g_World.Setup(initParams)) {
 		_ERROR("%s - Failed to setup world.", __FUNCTION__);
@@ -866,8 +876,7 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 
 	g_World.SetWorkingActor(player);
 
-#if 0
-	BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
+	BSFaceGenAnimationData * animationData = player->GetFaceGenAnimationData();
 	if (animationData) {
 		FaceGen::GetSingleton()->isReset = 0;
 		for (UInt32 t = BSFaceGenAnimationData::kKeyframeType_Expression; t <= BSFaceGenAnimationData::kKeyframeType_Phoneme; t++)
@@ -879,7 +888,6 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 		}
 		UpdateModelFace(rootFaceGen);
 	}
-#endif
 
 	UInt32 numHeadParts = actorBase->numHeadParts;
 	BGSHeadPart ** headParts = actorBase->headparts;
@@ -894,18 +902,18 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 		return;
 	}
 
+	std::set<BGSHeadPart*> extraParts; // Collect extra hair parts
+	BGSHeadPart * hairPart = actorBase->GetCurrentHeadPartByType(BGSHeadPart::kTypeHair);
+	if (hairPart) {
+		BGSHeadPart * extraPart = NULL;
+		for (UInt32 p = 0; p < hairPart->extraParts.count; p++) {
+			if (hairPart->extraParts.GetNthItem(p, extraPart))
+				extraParts.insert(extraPart);
+		}
+	}
+
 	for(UInt32 i = 0; i < rootFaceGen->m_children.m_emptyRunStart; i++)
 	{
-		std::set<BGSHeadPart*> extraParts; // Collect extra hair parts
-		BGSHeadPart * hairPart = actorBase->GetCurrentHeadPartByType(BGSHeadPart::kTypeHair);
-		if(hairPart) {
-			BGSHeadPart * extraPart = NULL;
-			for(UInt32 p = 0; p < hairPart->extraParts.count; p++) {
-				if(hairPart->extraParts.GetNthItem(p, extraPart))
-					extraParts.insert(extraPart);
-			}
-		}
-
 		for(UInt32 h = 0; h < actorBase->numHeadParts; h++) {
 			BGSHeadPart * headPart = headParts[h];
 			if (!headPart)
@@ -948,14 +956,12 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 		}
 	}
 
-#if 0
 	if (animationData) {
 		animationData->overrideFlag = 0;
 		CALL_MEMBER_FN(animationData, Reset)(1.0, 1, 1, 0, 0);
 		FaceGen::GetSingleton()->isReset = 1;
 		UpdateModelFace(rootFaceGen);
 	}
-#endif
 
 	args->movie->CreateObject(args->result);
 	RegisterNumber(args->result, "width", initParams.viewportWidth);

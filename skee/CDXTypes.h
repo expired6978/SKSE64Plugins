@@ -15,9 +15,11 @@ struct CDXInitParams
 {
 	CDXD3DDevice * device;
 	CDXCamera * camera;
-	CDXShaderFile* vertexShader[2];
-	CDXShaderFile* pixelShader[2];
-	CDXShaderFile* wireShader[2];
+	CDXShaderFile* vShader[2];
+	CDXShaderFile* pShader[2];
+	CDXShaderFile* wvShader[2];
+	CDXShaderFile* wpShader[2];
+	CDXShaderFile* wgShader[2];
 	CDXShaderFactory* factory;
 	int viewportWidth;
 	int viewportHeight;

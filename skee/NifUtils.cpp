@@ -26,7 +26,7 @@
 
 extern bool g_exportSkinToBone;
 
-bool SaveRenderedDDS(NiRenderedTexture * pkTexture, const char * pcFileName)
+bool SaveRenderedDDS(NiTexture * pkTexture, const char * pcFileName)
 {
 	HRESULT res = 0;
 	if (!pkTexture)
@@ -253,7 +253,7 @@ void SKSETaskExportHead::Run()
 	if (!actorBase || !faceNode)
 		return;
 
-	/*BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
+	BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
 	if (animationData) {
 		FaceGen::GetSingleton()->isReset = 0;
 		for (UInt32 t = BSFaceGenAnimationData::kKeyframeType_Expression; t <= BSFaceGenAnimationData::kKeyframeType_Phoneme; t++)
@@ -264,7 +264,7 @@ void SKSETaskExportHead::Run()
 			keyframe->isUpdated = 0;
 		}
 		UpdateModelFace(faceNode);
-	}*/
+	}
 
 	IFileStream::MakeAllDirs(m_nifPath.data);
 
@@ -621,12 +621,12 @@ void SKSETaskExportHead::Run()
 
 	rootNode->DecRef();
 
-	/*if (animationData) {
+	if (animationData) {
 		animationData->overrideFlag = 0;
 		CALL_MEMBER_FN(animationData, Reset)(1.0, 1, 1, 0, 0);
 		FaceGen::GetSingleton()->isReset = 1;
 		UpdateModelFace(faceNode);
-	}*/
+	}
 }
 
 bool VisitObjects(NiAVObject * parent, std::function<bool(NiAVObject*)> functor)
@@ -740,4 +740,20 @@ void SKSETaskExportTintMask::Run()
 		PlayerCharacter * player = (*g_thePlayer);
 		ExportTintMaskDDS(player, ddsPath.c_str());
 	}
+}
+
+void SKSEUpdateFaceModel::Run()
+{
+	TESForm * form = LookupFormByID(m_formId);
+	Actor * actor = DYNAMIC_CAST(form, TESForm, Actor);
+	if (!actor)
+		return;
+
+	NiNode * rootFaceGen = actor->GetFaceGenNiNode();
+	UpdateModelFace(rootFaceGen);
+}
+
+SKSEUpdateFaceModel::SKSEUpdateFaceModel(Actor * actor)
+{
+	m_formId = actor->formID;
 }

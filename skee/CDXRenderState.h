@@ -22,12 +22,14 @@ private:
 		ID3D11DepthStencilState*    DepthStencilState;
 		ID3D11ShaderResourceView*   PSShaderResource;
 		ID3D11SamplerState*         PSSampler;
+		ID3D11ShaderResourceView*   GSShaderResource;
 		ID3D11PixelShader*          PS;
 		ID3D11VertexShader*         VS;
-		UINT                        PSInstancesCount, VSInstancesCount;
-		ID3D11ClassInstance*        PSInstances[256], *VSInstances[256];   // 256 is max according to PSSetShader documentation
+		ID3D11GeometryShader*       GS;
+		UINT                        PSInstancesCount, VSInstancesCount, GSInstancesCount;
+		ID3D11ClassInstance*        PSInstances[256], *VSInstances[256], *GSInstances[256];   // 256 is max according to PSSetShader documentation
 		D3D11_PRIMITIVE_TOPOLOGY    PrimitiveTopology;
-		ID3D11Buffer*               IndexBuffer, *VertexBuffer, *VSConstantBuffer;
+		ID3D11Buffer*               IndexBuffer, *VertexBuffer, *VSConstantBuffer, *GSConstantBuffer;
 		UINT                        IndexBufferOffset, VertexBufferStride, VertexBufferOffset;
 		DXGI_FORMAT                 IndexBufferFormat;
 		ID3D11InputLayout*          InputLayout;

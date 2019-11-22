@@ -33,7 +33,7 @@ extern RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs;
 typedef void(*_UpdateNPCMorph)(TESNPC * npc, BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
 extern RelocAddr<_UpdateNPCMorph> UpdateNPCMorph;
 
-typedef NiNode * (*_CreateArmorNode)(void * unk1, void * unk2, UInt32 unk3, UInt32 unk4, UInt32 unk5, UInt64 unk6);
+typedef NiNode * (*_CreateArmorNode)(void * unk1, void * unk2, UInt64 unk3, UInt64 unk4, UInt64 unk5, UInt64 unk6, UInt64 unk7);
 extern RelocAddr<_CreateArmorNode> CreateArmorNode;
 
 class ArmorAddonTree

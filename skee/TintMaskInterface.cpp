@@ -18,6 +18,8 @@
 #include "skse64/NiRenderer.h"
 #include "skse64/NiTextures.h"
 
+#include "skse64/PapyrusEvents.h"
+
 #include "tinyxml2.h"
 
 #include "CDXD3DDevice.h"
@@ -31,6 +33,7 @@
 CDXShaderFactory			g_shaderFactory;
 CDXNifPixelShaderCache		g_pixelShaders(&g_shaderFactory);
 extern TintMaskInterface	g_tintMaskInterface;
+extern UInt32	g_tintHairSlot;
 
 UInt32 TintMaskInterface::GetVersion()
 {
@@ -197,6 +200,7 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 		LayerTarget obj;
 		obj.object = geom;
 		obj.targetIndex = targetIndex;
+		obj.targetFlags = 0;
 		obj.textureData = layer->textures;
 		obj.colorData = layer->colors;
 		obj.alphaData = layer->alphas;
@@ -219,6 +223,7 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 	}
 	device = std::make_unique<CDXD3DDevice>(pDevice, pDeviceContext);
 
+	int i = 0;
 	for (auto & layer : layerList)
 	{
 		NiPointer<BSShaderProperty> shaderProperty = niptr_cast<BSShaderProperty>(layer.object->m_spEffectState);
@@ -279,10 +284,39 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 					BSLightingShaderMaterial * newMaterial = static_cast<BSLightingShaderMaterial*>(material->Create());
 					newMaterial->Copy(material);
 
+					// If the target material has HairTint we should neutralize the color and block it from receiving tint updates
+					// But only if theres a layer in the XML that says to do this, this is still missing TODO
+					if (newMaterial->GetShaderType() == BSLightingShaderMaterial::kShaderType_HairTint)
+					{
+						BSLightingShaderMaterialHairTint* hairMaterial = static_cast<BSLightingShaderMaterialHairTint*>(newMaterial);
+						hairMaterial->tintColor.r = 0.5;
+						hairMaterial->tintColor.g = 0.5;
+						hairMaterial->tintColor.b = 0.5;
+
+						NiExtraData* extraData = lightingShader->GetExtraData("NO_TINT");
+						if (!extraData) {
+							extraData = NiBooleanExtraData::Create("NO_TINT", true);
+							lightingShader->AddExtraData(extraData);
+						}
+					}
+
 					NiTexturePtr * targetTexture = GetTextureFromIndex(newMaterial, layer.targetIndex);
 					if (targetTexture) {
 						*targetTexture = output;
 					}
+
+#if DUMP_TEXTURE
+					char texturePath[MAX_PATH];
+					_snprintf_s(texturePath, MAX_PATH, "Layer_%d_%s.dds", i++, layer.object->m_name);
+					int len = strlen(texturePath);
+					for (int i = 0; i < len; ++i)
+					{
+						if (isalpha(texturePath[i]) || isdigit(texturePath[i]) || texturePath[i] == '.' || texturePath[i] == '_')
+							continue;
+						texturePath[i] = '_';
+					}
+					SaveRenderedDDS(output.get(), texturePath);
+#endif
 
 					CALL_MEMBER_FN(lightingShader, SetMaterial)(newMaterial, 1); // This creates a new material from the one we created above, so we destroy it after
 					CALL_MEMBER_FN(lightingShader, InitializeShader)(layer.object);
@@ -693,4 +727,62 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 			object = object->NextSiblingElement("object");
 		}
 	}
+}
+
+void TintMaskInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
+{
+	UInt32 armorMask = armor->bipedObject.GetSlotMask();
+	UInt32 addonMask = addon->biped.GetSlotMask();
+	if (((armorMask & addonMask) & (g_tintHairSlot)) != 0)
+	{
+		Character * actor = refr->formType == Character::kTypeID ? static_cast<Character*>(refr) : nullptr;
+		TESNPC * actorBase = static_cast<TESNPC*>(refr->baseForm);
+		if (actor && actorBase)
+		{
+			auto headData = actorBase->headData;
+			if (headData) {
+				auto hairColorForm = headData->hairColor;
+				if (hairColorForm) {
+					// Dunno why the hell they multiplied hairColor by 2
+					NiColorA val;
+					val.r = static_cast<float>(min((hairColorForm->abgr & 0xFF) * 2, 255)) / 255.0f;
+					val.g = static_cast<float>(min(((hairColorForm->abgr >> 8) & 0xFF) * 2, 255)) / 255.0f;
+					val.b = static_cast<float>(min(((hairColorForm->abgr >> 16) & 0xFF) * 2, 255)) / 255.0f;
+					val.a = 1.0f;
+					NiColorA * color = &val;
+					UpdateModelHair(object, &color);
+				}
+			}
+		}
+	}
+}
+
+EventResult TintMaskInterface::ReceiveEvent(SKSENiNodeUpdateEvent * evn, EventDispatcher<SKSENiNodeUpdateEvent>* dispatcher)
+{
+	TESObjectREFR* refr = evn->reference;
+	if (refr && refr->formType == Character::kTypeID)
+	{
+		Character * actor = static_cast<Character*>(refr);
+		TESNPC * actorBase = static_cast<TESNPC*>(refr->baseForm);
+		if (actor && actorBase) {
+			auto headData = actorBase->headData;
+			if (headData) {
+				auto hairColorForm = headData->hairColor;
+				if (hairColorForm) {
+					NiColorA val;
+					val.r = static_cast<float>(min((hairColorForm->abgr & 0xFF) * 2, 255)) / 255.0f;
+					val.g = static_cast<float>(min(((hairColorForm->abgr >> 8) & 0xFF) * 2, 255)) / 255.0f;
+					val.b = static_cast<float>(min(((hairColorForm->abgr >> 16) & 0xFF) * 2, 255)) / 255.0f;
+					val.a = 1.0f;
+					NiColorA * color = &val;
+
+					VisitEquippedNodes(actor, g_tintHairSlot, [&](TESObjectARMO* armor, TESObjectARMA* arma, NiAVObject* node, bool isFP)
+					{
+						UpdateModelHair(node, &color);
+					});
+				}
+			}
+		}
+	}
+	return kEvent_Continue;
 }
