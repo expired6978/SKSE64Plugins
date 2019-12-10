@@ -168,8 +168,8 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 				memcpy(newDynShape->pDynamicData, sourceShape->pDynamicData, sourceShape->dataSize);
 			}
 			
-			newDynShape->unk178 = sourceShape->unk178;
-			newDynShape->unk17C = 0;
+			newDynShape->unk1B8 = sourceShape->unk1B8;
+			newDynShape->unk1BC = 0;
 		}
 
 		targetShape->m_localTransform = source->m_localTransform;

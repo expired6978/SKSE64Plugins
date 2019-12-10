@@ -158,20 +158,8 @@ BGSHeadPart * GetHeadPartByName(std::string & headPartName)
 ModInfo* GetModInfoByFormID(UInt32 formId, bool allowLight)
 {
 	DataHandler * dataHandler = DataHandler::GetSingleton();
-
 	UInt8 modIndex = formId >> 24;
-	UInt16 lightIndex = ((formId >> 12) & 0xFFF);
-
-	ModInfo* modInfo = nullptr;
-	if (modIndex == 0xFE && allowLight) {
-		if (lightIndex < dataHandler->modList.loadedCCMods.count)
-			dataHandler->modList.loadedCCMods.GetNthItem(lightIndex, modInfo);
-	} else {
-		if(modIndex < 0xFE)
-			dataHandler->modList.loadedMods.GetNthItem(modIndex, modInfo);
-	}
-
-	return modInfo;
+	return (*g_dataHandler)->modList.loadedMods[modIndex];
 }
 
 std::string GetFormIdentifier(TESForm * form)
@@ -180,18 +168,7 @@ std::string GetFormIdentifier(TESForm * form)
 	UInt8 modIndex = form->formID >> 24;
 	UInt32 modForm = form->formID & 0xFFFFFF;
 
-	ModInfo* modInfo = nullptr;
-	if (modIndex == 0xFE)
-	{
-		UInt16 lightIndex = (form->formID >> 12) & 0xFFF;
-		if (lightIndex < (*g_dataHandler)->modList.loadedCCMods.count)
-			modInfo = (*g_dataHandler)->modList.loadedCCMods[lightIndex];
-	}
-	else
-	{
-		modInfo = (*g_dataHandler)->modList.loadedMods[modIndex];
-	}
-
+	ModInfo* modInfo = (*g_dataHandler)->modList.loadedMods[modIndex];
 	if (modInfo) {
 		sprintf_s(formName, "%s|%06X", modInfo->name, modForm);
 	}

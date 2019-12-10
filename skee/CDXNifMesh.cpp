@@ -266,7 +266,7 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, NiGeometry *
 				NiTransform localTransform = GetLegacyGeometryTransform(geometry);
 				BSLightingShaderProperty * shaderProperty = ni_cast(geometry->m_spEffectState, BSLightingShaderProperty);
 				if (shaderProperty) {
-					BSLightingShaderMaterial * material = shaderProperty->material;
+					BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial*>(shaderProperty->material);
 					if (material) {
 						NiTexture * diffuse = material->texture1;
 						if (diffuse) {

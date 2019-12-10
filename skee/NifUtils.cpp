@@ -513,7 +513,8 @@ void SKSETaskExportHead::Run()
 
 					xData->dataSize = dynamicShape->dataSize;
 					xData->frameCount = dynamicShape->frameCount;
-					xData->unk178 = dynamicShape->unk178;
+					xData->unk1B8 = dynamicShape->unk1B8;
+					xData->unk1BC = dynamicShape->unk1BC;
 				}
 				else
 				{
@@ -543,21 +544,26 @@ void SKSETaskExportHead::Run()
 
 					newTrishape->unk104 = trishape->unk104;
 					newTrishape->unk108 = trishape->unk108;
-					newTrishape->unk109 = trishape->unk109;
+					
+					for(UInt32 i = 0; i < 8; ++i)
+						newTrishape->unk120[i] = trishape->unk120[i];
 
 					newTrishape->unk110 = trishape->unk110;
 					newTrishape->unk118 = trishape->unk118;
+					newTrishape->unk11C = trishape->unk11C;
+					newTrishape->unk128 = trishape->unk128;
+					newTrishape->unk130 = trishape->unk130;
 					newTrishape->unk140 = trishape->unk140;
 					newTrishape->vertexDesc = trishape->vertexDesc;
 					newTrishape->shapeType = trishape->shapeType;
-					newTrishape->unk151 = trishape->unk151;
-					newTrishape->unk152 = trishape->unk152;
-					newTrishape->unk154 = trishape->unk154;
+					newTrishape->unk191 = trishape->unk191;
+					newTrishape->unk192 = trishape->unk192;
+					newTrishape->unk194 = trishape->unk194;
 
 					newTrishape->unk158 = trishape->unk158;
 					newTrishape->numVertices = trishape->numVertices;
-					newTrishape->unk15C = trishape->unk15C;
-					newTrishape->unk15D = trishape->unk15D;
+					newTrishape->unk19C = trishape->unk19C;
+					newTrishape->unk19D = trishape->unk19D;
 				}
 
 				newGeometry = newTrishape;
@@ -655,7 +661,6 @@ NiTransform GetGeometryTransform(BSGeometry * geometry)
 	NiTransform transform = geometry->m_localTransform;
 	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 	if (dstSkin) {
-		ScopedCriticalSection cs(&dstSkin->lock);
 		NiSkinData * skinData = dstSkin->m_spSkinData;
 		if (skinData) {
 			transform = transform * skinData->m_kRootParentToSkin;
@@ -678,7 +683,6 @@ NiTransform GetLegacyGeometryTransform(NiGeometry * geometry)
 	NiTransform transform = geometry->m_localTransform;
 	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 	if (dstSkin) {
-		ScopedCriticalSection cs(&dstSkin->lock);
 		NiSkinData * skinData = dstSkin->m_spSkinData;
 		if (skinData) {
 			transform = transform * skinData->m_kRootParentToSkin;

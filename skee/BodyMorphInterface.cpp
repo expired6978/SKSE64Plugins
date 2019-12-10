@@ -1147,7 +1147,6 @@ void NIOVTaskUpdateSkinPartition::Run()
 	if (m_skinInstance && m_partition)
 	{
 		EnterCriticalSection(&g_renderManager->lock);
-		EnterCriticalSection(&m_skinInstance->lock);
 		auto & partition = m_partition->m_pkPartitions[0];
 		UInt32 vertexSize = m_partition->GetVertexSize(partition.vertexDesc);
 		UInt32 vertexCount = m_partition->vertexCount;
@@ -1162,7 +1161,6 @@ void NIOVTaskUpdateSkinPartition::Run()
 		}
 
 		m_skinInstance->m_spSkinPartition = m_partition;
-		LeaveCriticalSection(&m_skinInstance->lock);
 		LeaveCriticalSection(&g_renderManager->lock);
 	}
 }

@@ -1,4 +1,3 @@
-#include "common/IFileStream.h"
 #include "skse64_common/SafeWrite.h"
 #include "skse64/PluginAPI.h"
 #include "skse64/PapyrusVM.h"
@@ -42,7 +41,8 @@
 #include "common/ICriticalSection.h"
 #include <queue>
 
-extern SKSETaskInterface	* g_task;
+extern SKSETaskInterface		* g_task;
+extern SKSETrampolineInterface	* g_trampoline;
 
 extern ItemDataInterface	g_itemDataInterface;
 extern TintMaskInterface	g_tintMaskInterface;
@@ -79,43 +79,43 @@ extern bool					g_allowAllMorphs;
 extern bool					g_allowAnyRacePart;
 extern bool					g_allowAnyGenderPart;
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAC70);
+RelocAddr<_CreateArmorNode> CreateArmorNode(0x001DB680);
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
-RelocAddr <_RegenerateHead> RegenerateHead(0x003D2A60);
+RelocAddr <_RegenerateHead> RegenerateHead(0x003E23D0);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01DEA030);
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01EA71B0);
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x01596840);
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x0160D9C8);
 
-// DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856E10);
+// DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84 (Call at this location)
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x008811D0);
 
-// 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2220);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC760);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4820);
+// 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE (Call at this location)
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003E1B80);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008E9850);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008E23B0);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360840);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360A30);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00370140);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00370330);
 
 typedef void(*_RaceSexMenu_Render)(RaceSexMenu * menu);
-RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E7F0);
+RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0052EDE0);
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
-RelocAddr<_UpdateHeadState> UpdateHeadState(0x00362E90);
+RelocAddr<_UpdateHeadState> UpdateHeadState(0x003727B0);
 
 typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
-RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x00888730);
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008B60A0);
 _SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
 
 typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
-RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x00888290);
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008B5B40);
 
 typedef void*(*_GetHeadParts)(void * unk1, void * unk2);
-RelocAddr <_GetHeadParts> GetHeadParts(0x00165660);
+RelocAddr <_GetHeadParts> GetHeadParts(0x00175DA0);
 
 void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObject * resultNode1, NiAVObject * resultNode2, UInt32 firstPerson)
 {
@@ -150,100 +150,15 @@ void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObje
 	}
 }
 
-#ifdef FIXME
-typedef NiAVObject * (*_CreateWeaponNode)(UInt32 * unk1, UInt32 unk2, Actor * actor, UInt32 ** unk4, UInt32 * unk5);
-extern const _CreateWeaponNode CreateWeaponNode = (_CreateWeaponNode)0x0046F530;
-
-// Store stack values here, they would otherwise be lost
-enum
+struct ArmorAddonStack
 {
-	kWeaponHook_EntryStackOffset1 = 0x40,
-	kWeaponHook_EntryStackOffset2 = 0x20,
-	kWeaponHook_VarObj = 0x04
+	AddonTreeParameters * params;	// 00
+	UInt64			unk08;		// 08
+	UInt32			unk10;		// 10
+	UInt32			unk14;		// 14
 };
 
-static const UInt32 kInstallWeaponFPHook_Base = 0x0046F870 + 0x143;
-static const UInt32 kInstallWeaponFPHook_Entry_retn = kInstallWeaponFPHook_Base + 0x5;
-
-__declspec(naked) void CreateWeaponNodeFPHook_Entry(void)
-{
-	__asm
-	{
-		pushad
-		mov		eax, [esp + kWeaponHook_EntryStackOffset1 + kWeaponHook_VarObj + kWeaponHook_EntryStackOffset2]
-		mov		g_weaponHookWeapon, eax
-		mov		g_weaponHookActor, edi
-		mov		g_firstPerson, 1
-		popad
-
-		call[CreateWeaponNode]
-
-		mov		g_weaponHookWeapon, NULL
-		mov		g_weaponHookActor, NULL
-
-		jmp[kInstallWeaponFPHook_Entry_retn]
-	}
-}
-
-static const UInt32 kInstallWeapon3PHook_Base = 0x0046F870 + 0x17E;
-static const UInt32 kInstallWeapon3PHook_Entry_retn = kInstallWeapon3PHook_Base + 0x5;
-
-__declspec(naked) void CreateWeaponNode3PHook_Entry(void)
-{
-	__asm
-	{
-		pushad
-		mov		eax, [esp + kWeaponHook_EntryStackOffset1 + kWeaponHook_VarObj + kWeaponHook_EntryStackOffset2]
-		mov		g_weaponHookWeapon, eax
-		mov		g_weaponHookActor, edi
-		mov		g_firstPerson, 0
-		popad
-
-		call[CreateWeaponNode]
-
-		mov		g_weaponHookWeapon, NULL
-		mov		g_weaponHookActor, NULL
-
-		jmp[kInstallWeapon3PHook_Entry_retn]
-	}
-}
-
-// Recall stack values here
-static const UInt32 kInstallWeaponHook_Base = 0x0046F530 + 0x28A;
-static const UInt32 kInstallWeaponHook_Entry_retn = kInstallWeaponHook_Base + 0x5;
-
-__declspec(naked) void InstallWeaponNodeHook_Entry(void)
-{
-	__asm
-	{
-		pushad
-		mov		eax, g_firstPerson
-		push	eax
-		push	ebp
-		push	edx
-		mov		eax, g_weaponHookWeapon
-		push	eax
-		mov		eax, g_weaponHookActor
-		push	eax
-		call	InstallWeaponHook
-		popad
-
-		push	ebx
-		push	ecx
-		push	edx
-		push	ebp
-		push	esi
-
-		jmp[kInstallWeaponHook_Entry_retn]
-	}
-}
-
-UInt8 * g_unk1 = (UInt8*)0x001240DE8;
-UInt32 * g_unk2 = (UInt32*)0x001310588;
-
-#endif
-
-NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, UInt64 unk3_4, AddonTreeParameters * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)
+NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, UInt64 unk3_4, AddonTreeParameters * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)/* UInt64 unkPacked, AddonTreeParameters * stackInfo)*/
 {
 	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, unk3_4 >> 32, unk3_4 & 0xFFFFFFFF, unk5, unk6, unk7);
 
@@ -499,12 +414,6 @@ bool UsePreprocessedHead(TESNPC * npc)
 		}
 	}
 	return presetData == nullptr && (*g_useFaceGenPreProcessedHeads);
-}
-
-void _cdecl ClearFaceGenCache_Hooked()
-{
-	g_morphInterface.RevertInternals();
-	g_partSet.Revert(); // Cleanup HeadPart List before loading new ones
 }
 
 void UpdateMorphs_Hooked(TESNPC * npc, void * unk1, BSFaceGenNiNode * faceNode)
@@ -1328,38 +1237,100 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 	return true;
 }
 
+#include "skse64/GameInput.h"
+#include "skse64/ScaleformMovie.h"
 
+struct MouseCoords
+{
+	UInt64	unk00;	// 00
+	float	x;		// 08
+	float	y;		// 0C
+};
+
+class GFxMouseEvent : public GFxEvent
+{
+public:
+	float x;	// 04
+	float y;	// 08
+};
+
+RelocPtr<MouseCoords*> g_mouseCoords(0x02FEBC40);
+RelocPtr<void*> g_scaleformGFxEventData(0x03013620);
+
+// This function places the event into a fixed size pool of 16 to be processed
+typedef GFxMouseEvent * (*_QueueGFxMouseEvent)(void * eventData, UInt32 type, UInt32 unk1, float x, float y, float unk2, UInt32 unk3 );
+extern RelocAddr<_QueueGFxMouseEvent> QueueGFxMouseEvent(0x00F37680);
+
+// This function dispatches a scaleform event to a particular menu
+typedef void (*_DispatchGFxEvent)(const BSFixedString& name, GFxEvent* gfxEvent);
+extern RelocAddr<_DispatchGFxEvent> DispatchGFxEvent(0x00F209A0);
+
+// RaceMenu EventHandler
+bool MenuEventHandler_Hooked(MenuEventHandler* menuEventHandler, InputEvent* inputEvent)
+{
+	if (inputEvent->eventType == InputEvent::kEventType_Button) {
+		if (*inputEvent->GetControlID() == InputStringHolder::GetSingleton()->accept) {
+			ButtonEvent* t = static_cast<ButtonEvent*>(inputEvent);
+			bool isButtonDown = t->isDown == 1.0f && t->timer == 0.0f;
+			float x = (*g_mouseCoords)->x;
+			float y = (*g_mouseCoords)->y;
+			auto gfxEvent = QueueGFxMouseEvent(*g_scaleformGFxEventData, isButtonDown ? GFxEvent::kMouseDown : GFxEvent::kMouseUp, 0, x, y, 0, 0);
+			if (gfxEvent) {
+				DispatchGFxEvent(UIStringHolder::GetSingleton()->raceSexMenu, gfxEvent);
+			}
+			return true;
+		}
+	}
+	
+	return false;
+}
 
 bool InstallSKEEHooks()
 {
-	if (!g_branchTrampoline.Create(1024 * 64))
+	BranchTrampoline& branchTrampoline = g_trampoline ? g_trampoline->GetBranchTrampoline() : g_branchTrampoline;
+	BranchTrampoline& localTrampoline = g_trampoline ? g_trampoline->GetLocalTrampoline() : g_localTrampoline;
+
+	if (!branchTrampoline.IsValid())
 	{
-		_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
-		return false;
+		if (!branchTrampoline.Create(1024 * 64))
+		{
+			_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
+			return false;
+		}
 	}
-
-	if (!g_localTrampoline.Create(1024 * 64, nullptr))
-	{
-		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
-		return false;
-	}
-
-	static const uintptr_t LoadRaceMenuSliders = 0x008B5E20;
-
-	RelocAddr <uintptr_t> GetHeadParts_Target(LoadRaceMenuSliders + 0x212);
-	g_branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
 	
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
-	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
+	if (!localTrampoline.IsValid())
+	{
+		if (!localTrampoline.Create(1024 * 64, nullptr))
+		{
+			_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
+			return false;
+		}
+	}
+
+	if (!branchTrampoline.IsValid() || !localTrampoline.IsValid())
+	{
+		_ERROR("Failed to initialize branch trampolines");
+		return false;
+	}
+
+	static const uintptr_t LoadRaceMenuSliders = 0x008E39B0;
+
+
+	RelocAddr <uintptr_t> GetHeadParts_Target(LoadRaceMenuSliders + 0x215);
+	branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
+	
+	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008E2DC0 + 0x9FB);
+	branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
 	RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x37E4);
-	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
+	branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
 	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3CD5);
-	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
+	branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008B1BC0 + 0x4F); // ChangeDoubleMorph callback
-	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
+	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008DF4E0 + 0x4F); // ChangeDoubleMorph callback
+	branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 	
 	RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3895);
 	{
@@ -1383,20 +1354,18 @@ bool InstallSKEEHooks()
 			}
 		};
 
-		void * codeBuf = g_localTrampoline.StartAlloc();
+		void * codeBuf = localTrampoline.StartAlloc();
 		SliderLookup_Entry_Code code(codeBuf, uintptr_t(SliderLookup_Hooked), SliderLookup_Target.GetUIntPtr());
-		g_localTrampoline.EndAlloc(code.getCurr());
+		localTrampoline.EndAlloc(code.getCurr());
 
-		g_branchTrampoline.Write5Branch(SliderLookup_Target.GetUIntPtr(), uintptr_t(code.getCode()));
+		branchTrampoline.Write5Branch(SliderLookup_Target.GetUIntPtr(), uintptr_t(code.getCode()));
 	}
 
 	if (!g_externalHeads)
 	{
-		static const uintptr_t PreprocessedHeads = 0x00363DE0;
-
-		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
-		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
-		RelocAddr<uintptr_t> PreprocessedHeads3_Target(PreprocessedHeads + 0x67);
+		RelocAddr<uintptr_t> PreprocessedHeads1_Target(0x00373740 + 0x58);
+		RelocAddr<uintptr_t> PreprocessedHeads2_Target(0x00373740 + 0x81);
+		RelocAddr<uintptr_t> PreprocessedHeads3_Target(0x00373740 + 0x67);
 		{
 			struct UsePreprocessedHeads_Entry_Code : Xbyak::CodeGenerator {
 				UsePreprocessedHeads_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1416,13 +1385,13 @@ bool InstallSKEEHooks()
 				}
 			};
 
-			void * codeBuf = g_localTrampoline.StartAlloc();
+			void * codeBuf = localTrampoline.StartAlloc();
 			UsePreprocessedHeads_Entry_Code code1(codeBuf, uintptr_t(UsePreprocessedHead), PreprocessedHeads1_Target.GetUIntPtr());
-			g_localTrampoline.EndAlloc(code1.getCurr());
+			localTrampoline.EndAlloc(code1.getCurr());
 
-			codeBuf = g_localTrampoline.StartAlloc();
+			codeBuf = localTrampoline.StartAlloc();
 			UsePreprocessedHeads_Entry_Code code2(codeBuf, uintptr_t(UsePreprocessedHead), PreprocessedHeads2_Target.GetUIntPtr());
-			g_localTrampoline.EndAlloc(code2.getCurr());
+			localTrampoline.EndAlloc(code2.getCurr());
 
 			UInt8 resultFix[] = {
 				0x90,		// NOP
@@ -1432,9 +1401,9 @@ bool InstallSKEEHooks()
 				0x85, 0xDB	// TEST ebx, ebx
 			};
 
-			g_branchTrampoline.Write6Branch(PreprocessedHeads1_Target.GetUIntPtr(), uintptr_t(code1.getCode()));
+			branchTrampoline.Write6Branch(PreprocessedHeads1_Target.GetUIntPtr(), uintptr_t(code1.getCode()));
 			SafeWriteBuf(PreprocessedHeads1_Target.GetUIntPtr() + 6, resultFix, sizeof(resultFix));
-			g_branchTrampoline.Write6Branch(PreprocessedHeads2_Target.GetUIntPtr(), uintptr_t(code2.getCode()));
+			branchTrampoline.Write6Branch(PreprocessedHeads2_Target.GetUIntPtr(), uintptr_t(code2.getCode()));
 			SafeWriteBuf(PreprocessedHeads2_Target.GetUIntPtr() + 6, resultFix, sizeof(resultFix));
 
 			SafeWriteBuf(PreprocessedHeads3_Target.GetUIntPtr(), testFix, sizeof(testFix));
@@ -1458,73 +1427,70 @@ bool InstallSKEEHooks()
 				}
 			};
 
-			void * codeBuf = g_localTrampoline.StartAlloc();
+			void * codeBuf = localTrampoline.StartAlloc();
 			PreprocessedHeads_Code code(codeBuf);
-			g_localTrampoline.EndAlloc(code.getCurr());
+			localTrampoline.EndAlloc(code.getCurr());
 
 			RegenerateHead_Original = (_RegenerateHead)codeBuf;
 
-			g_branchTrampoline.Write6Branch(RegenerateHead.GetUIntPtr(), (uintptr_t)RegenerateHead_Hooked);
+			branchTrampoline.Write6Branch(RegenerateHead.GetUIntPtr(), (uintptr_t)RegenerateHead_Hooked);
 		}
 	}
 
 
 	if (g_extendedMorphs)
 	{
-		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D2380 + 0xF3);
-		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
+		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003E1CE0 + 0xF3);
+		branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D45B0 + 0x56);
-		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003E3F20 + 0x56);
+		branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
 	}
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D24F0 + 0xC7);
-	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
+	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003E1E50 + 0xC7);
+	branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC1C0 + 0x79);
-	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
+	RelocAddr <uintptr_t> UpdateMorph_Target(0x003EBB30 + 0x79);
+	branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
+#if 0
 	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
 	if(g_enableFaceOverlays)
 	{
-		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C71F00 + 0x92);
-		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00CB82B0 + 0x92);
+		branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C71F00 + 0x8B);
-		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
+		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00CB82B0 + 0x8B);
+		branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C72250 + 0x76);
-		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00CB8600 + 0x76);
+		branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C72C60 + 0x2F);
-		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00CB8700 + 0x28);
+		branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
-		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00373880 + 0x1E0);
+		branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
 
-		// RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00364FF0 + 0x33E);
-		// g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
-
-		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00363000 + 0x1DF);
-		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00372920 + 0x1DF);
+		branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
+#endif
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC68 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x0173F2C8 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
+
+	RelocAddr <uintptr_t> RaceSexMenu_MenuEventHandler_Target(0x0173F328 + 0x8); // ??_7RaceSexMenu@@6BMenuEventHandler@@@
+	SafeWrite64(RaceSexMenu_MenuEventHandler_Target.GetUIntPtr(), (uintptr_t)MenuEventHandler_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		/*RelocAddr <uintptr_t> Cache_Target(0x008B2BE0);
-		SafeWrite8(Cache_Target.GetUIntPtr(), 0xC3); // Cache immediate retn
-		RelocAddr <uintptr_t> CacheClear_Target(0x008B2D60);
-		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn*/
-
-		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008BB750);
+		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008E8930);
 		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
-	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C6F90 + 0xB4A);
+	RelocAddr<uintptr_t> ArmorAddon_Target(0x001D7450 + 0xC41);
 	{
 		struct ArmorAddonHook_Entry_Code : Xbyak::CodeGenerator {
 			ArmorAddonHook_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1532,11 +1498,12 @@ bool InstallSKEEHooks()
 				Xbyak::Label retnLabel;
 				Xbyak::Label funcLabel;
 
+
 				mov(r8d, r15d);
 				shl(r8, 0x20);
-				and (r9, 0xFFFFFFFF);
+				and(r9, 0xFFFFFFFF);
 				or (r8, r9);
-				mov(r9, ptr[rsp + 0x78]);
+				lea(r9, ptr[r12 + r13]);
 				mov(rdx, rsi);
 				mov(rcx, r13);
 				call(ptr[rip + funcLabel]);
@@ -1550,22 +1517,22 @@ bool InstallSKEEHooks()
 			}
 		};
 
-		void * codeBuf = g_localTrampoline.StartAlloc();
+		void * codeBuf = localTrampoline.StartAlloc();
 		ArmorAddonHook_Entry_Code code(codeBuf, uintptr_t(CreateArmorNode_Hooked), ArmorAddon_Target.GetUIntPtr());
-		g_localTrampoline.EndAlloc(code.getCurr());
+		localTrampoline.EndAlloc(code.getCurr());
 
-		g_branchTrampoline.Write6Branch(ArmorAddon_Target.GetUIntPtr(), uintptr_t(code.getCode()));
+		branchTrampoline.Write6Branch(ArmorAddon_Target.GetUIntPtr(), uintptr_t(code.getCode()));
 	}
 
 	if (g_enableTintSync)
 	{
-		g_branchTrampoline.Write6Branch(UpdateModelSkin.GetUIntPtr(), (uintptr_t)UpdateModelSkin_Hooked);
-		g_branchTrampoline.Write6Branch(UpdateModelHair.GetUIntPtr(), (uintptr_t)UpdateModelHair_Hooked);
+		branchTrampoline.Write6Branch(UpdateModelSkin.GetUIntPtr(), (uintptr_t)UpdateModelSkin_Hooked);
+		branchTrampoline.Write6Branch(UpdateModelHair.GetUIntPtr(), (uintptr_t)UpdateModelHair_Hooked);
 	}
 
 	if (g_enableTintInventory)
 	{
-		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008887E0 + 0x1BA);
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008B6220 + 0x1B0);
 		{
 			struct TintInventoryItem_Code : Xbyak::CodeGenerator {
 				TintInventoryItem_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)
@@ -1573,8 +1540,7 @@ bool InstallSKEEHooks()
 					Xbyak::Label retnLabel;
 					Xbyak::Label funcLabel;
 
-					push(rbx);
-					sub(rsp, 0x20);
+					mov(ptr[rsp + 0x18], rbx);
 
 					jmp(ptr[rip + retnLabel]);
 
@@ -1583,15 +1549,15 @@ bool InstallSKEEHooks()
 				}
 			};
 
-			void * codeBuf = g_localTrampoline.StartAlloc();
+			void * codeBuf = localTrampoline.StartAlloc();
 			TintInventoryItem_Code code(codeBuf);
-			g_localTrampoline.EndAlloc(code.getCurr());
+			localTrampoline.EndAlloc(code.getCurr());
 
 			SetInventoryItemModel_Original = (_SetInventoryItemModel)codeBuf;
 
-			g_branchTrampoline.Write6Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
+			branchTrampoline.Write5Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
 
-			g_branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
+			branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
 		}
 	}
 

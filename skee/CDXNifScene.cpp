@@ -177,7 +177,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 		return false;
 	}
 
-	imageLoader->AddVirtualImage(&m_renderTexture.m_pObject);
+	imageLoader->AddVirtualImage(m_renderTexture);
 
 	D3D11_TEXTURE2D_DESC depthBufferDesc;
 	D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
@@ -262,7 +262,7 @@ void CDXNifScene::Release()
 	ScopedCriticalSection locker(&g_renderManager->lock);
 	if(m_renderTexture) {
 		BSScaleformImageLoader * imageLoader = GFxLoader::GetSingleton()->imageLoader;
-		UInt8 ret = imageLoader->ReleaseVirtualImage(&m_renderTexture.m_pObject);
+		UInt8 ret = imageLoader->ReleaseVirtualImage(m_renderTexture);
 		m_renderTexture = nullptr;
 	}
 	if (m_renderTargetView) {

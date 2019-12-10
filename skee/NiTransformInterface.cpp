@@ -501,8 +501,8 @@ void NiTransformInterface::UpdateNodeTransforms(TESObjectREFR * ref, bool firstP
 
 		// Process Transform
 		foundNode->m_localTransform = (*baseTransform) * transformResult;
-		if (g_task)
-			g_task->AddTask(new NIOVTaskUpdateWorldData(foundNode));
+		//if (g_task)
+		//	g_task->AddTask(new NIOVTaskUpdateWorldData(foundNode));
 	});
 }
 

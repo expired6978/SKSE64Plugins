@@ -56,6 +56,7 @@ SKSEScaleformInterface			* g_scaleform = nullptr;
 SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
+SKSETrampolineInterface			* g_trampoline = nullptr;
 
 // Handlers
 InterfaceMap				g_interfaceMap;
@@ -157,7 +158,7 @@ extern double g_brushProperties[CDXBrush::kBrushTypes][CDXBrush::kBrushPropertie
 #define MIN_PAPYRUS_VERSION			1
 
 
-const std::string & F4EEGetRuntimeDirectory(void)
+const std::string & SKEEGetRuntimeDirectory(void)
 {
 	static std::string s_runtimeDirectory;
 
@@ -200,20 +201,20 @@ const std::string & SKEE64GetConfigPath(bool custom = false)
 
 	if (s_configPath.empty())
 	{
-		std::string	runtimePath = F4EEGetRuntimeDirectory();
+		std::string	runtimePath = SKEEGetRuntimeDirectory();
 		if (!runtimePath.empty())
 		{
-			s_configPath = runtimePath + "Data\\SKSE\\Plugins\\skee64.ini";
+			s_configPath = runtimePath + "Data\\SKSE\\Plugins\\skeevr.ini";
 
 			_MESSAGE("default config path = %s", s_configPath.c_str());
 		}
 	}
 	if (s_configPathCustom.empty())
 	{
-		std::string	runtimePath = F4EEGetRuntimeDirectory();
+		std::string	runtimePath = SKEEGetRuntimeDirectory();
 		if (!runtimePath.empty())
 		{
-			s_configPathCustom = runtimePath + "Data\\SKSE\\Plugins\\skee64_custom.ini";
+			s_configPathCustom = runtimePath + "Data\\SKSE\\Plugins\\skeevr_custom.ini";
 
 			_MESSAGE("custom config path = %s", s_configPathCustom.c_str());
 		}
@@ -527,6 +528,26 @@ bool RegisterPapyrusFunctions(VMClassRegistry * registry)
 	return true;
 }
 
+class SKEEMenuEventHandler : public BSTEventSink <MenuOpenCloseEvent>
+{
+public:
+	virtual EventResult		ReceiveEvent(MenuOpenCloseEvent * evn, EventDispatcher<MenuOpenCloseEvent> * dispatcher)
+	{
+		if (evn->opening) {
+			if (evn->menuName == UIStringHolder::GetSingleton()->raceSexMenu) {
+				RaceSexMenu * raceSexMenu = DYNAMIC_CAST(MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu), IMenu, RaceSexMenu);
+				if (raceSexMenu) {
+					raceSexMenu->flags |= (1 << 12) | (1 << 2);
+				}
+			}
+		}
+
+		return kEvent_Continue;
+	}
+};
+
+SKEEMenuEventHandler g_skeeMenuEventHandler;
+
 void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 {
 	switch (message->type)
@@ -535,6 +556,11 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 		{
 			if (g_enableAutoTransforms || g_enableBodyGen) {
 				GetEventDispatcherList()->objectLoadedDispatcher.AddEventSink(&g_actorUpdateManager);
+			}
+
+			MenuManager * mm = MenuManager::GetSingleton();
+			if (mm) {
+				mm->MenuOpenCloseEventDispatcher()->AddEventSink(&g_skeeMenuEventHandler);
 			}
 		}
 		break;
@@ -582,8 +608,8 @@ extern "C"
 
 bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 {
-	// Loading SKEE64 into SKSEVR short circuit immediately
-	if (GET_EXE_VERSION_SUB(skse->runtimeVersion) != 0)
+	// Loading SKEEVR into SKSE64 short circuit immediately
+	if (GET_EXE_VERSION_SUB(skse->runtimeVersion) == 0)
 	{
 		return false;
 	}
@@ -593,7 +619,7 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		gLog.SetLogLevel((IDebugLog::LogLevel)logLevel);
 
 	if (logLevel >= 0)
-		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\skee64.log");
+		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim VR\\SKSE\\skeevr.log");
 
 	_DMESSAGE("skee");
 
@@ -610,9 +636,9 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_97 && skse->runtimeVersion != RUNTIME_VERSION_1_5_97)
+	else if (skse->runtimeVersion != RUNTIME_VR_VERSION_1_4_15)
 	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_97;
+		UInt32 runtimeVersion = RUNTIME_VR_VERSION_1_4_15;
 		char buf[512];
 		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
 			GET_EXE_VERSION_MAJOR(runtimeVersion),
@@ -683,6 +709,11 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
 		_ERROR("couldn't get messaging interface");
+	}
+
+	g_trampoline = (SKSETrampolineInterface *)skse->QueryInterface(kInterface_Trampoline);
+	if (!g_trampoline) {
+		_ERROR("couldn't get trampoline interface");
 	}
 
 	// supported runtime version

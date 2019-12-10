@@ -740,6 +740,7 @@ void SKSEScaleform_SetPlayerRotation::Invoke(Args * args)
 void SKSEScaleform_GetRaceSexCameraRot::Invoke(Args * args)
 {
 	RaceSexMenu * raceMenu = DYNAMIC_CAST(MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu), IMenu, RaceSexMenu);
+#if 0
 	if(raceMenu) {
 		NiNode * raceCamera = raceMenu->camera.cameraNode;
 		args->movie->CreateArray(args->result);
@@ -750,11 +751,22 @@ void SKSEScaleform_GetRaceSexCameraRot::Invoke(Args * args)
 			args->result->PushBack(&index);
 		}
 	}
+#endif
+	if (raceMenu) {
+		NiTransform identity;
+		for (UInt32 i = 0; i < 3 * 3; i++)
+		{
+			GFxValue index;
+			index.SetNumber(((float*)identity.rot.data)[i]);
+			args->result->PushBack(&index);
+		}
+	}
 }
 
 void SKSEScaleform_GetRaceSexCameraPos::Invoke(Args * args)
 {
 	RaceSexMenu * raceMenu = DYNAMIC_CAST(MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu), IMenu, RaceSexMenu);
+#if 0
 	if(raceMenu) {
 		NiNode * raceCamera = raceMenu->camera.cameraNode;
 		args->movie->CreateObject(args->result);
@@ -768,6 +780,19 @@ void SKSEScaleform_GetRaceSexCameraPos::Invoke(Args * args)
 		z.SetNumber(raceCamera->m_localTransform.pos.z);
 		args->result->SetMember("z", &z);
 	}
+#endif
+	if (raceMenu) {
+		args->movie->CreateObject(args->result);
+		GFxValue x;
+		x.SetNumber(0.0f);
+		args->result->SetMember("x", &x);
+		GFxValue y;
+		y.SetNumber(0.0f);
+		args->result->SetMember("y", &y);
+		GFxValue z;
+		z.SetNumber(0.0f);
+		args->result->SetMember("z", &z);
+	}
 }
 
 void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
@@ -775,6 +800,7 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Object);
 
+#if 0
 	RaceSexMenu * raceMenu = DYNAMIC_CAST(MenuManager::GetSingleton()->GetMenu(&UIStringHolder::GetSingleton()->raceSexMenu), IMenu, RaceSexMenu);
 	if(raceMenu) {
 		NiNode * raceCamera = raceMenu->camera.cameraNode;
@@ -795,6 +821,7 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 		NiAVObject::ControllerUpdateContext ctx;
 		raceCamera->UpdateWorldData(&ctx);
 	}
+#endif
 }
 
 void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
