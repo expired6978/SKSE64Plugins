@@ -768,6 +768,23 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 		}
 	}
 
+	if (presetData->headTexture) {
+		if (!npc->headData) {
+			npc->headData = (TESNPC::HeadData*)Heap_Allocate(sizeof(TESNPC::HeadData));
+
+			// If we had no head data we probably have no hair color assigned, this isn't good
+			// lets just assign the first color from our race settings incase
+			BGSColorForm* color = nullptr;
+			if(race->chargenData[gender]->colors->count > 0)
+				race->chargenData[gender]->colors->GetNthItem(0, color);
+
+			npc->headData->hairColor = color;
+			npc->headData->headTexture = nullptr;
+		}
+		npc->headData->headTexture = presetData->headTexture;
+	}
+	
+
 	// Replace the old parts with the new parts if they are the right sex
 	for (auto & part : presetData->headParts) {
 		if ((gender == 0 && (part->partFlags & BGSHeadPart::kFlagMale) == BGSHeadPart::kFlagMale) ||
@@ -2223,6 +2240,16 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 		auto hairColor = npc->headData->hairColor;
 		if (hairColor)
 			root["actor"]["hairColor"] = (Json::UInt)(hairColor->color.red << 16 | hairColor->color.green << 8 | hairColor->color.blue);
+		
+		auto headTexture = npc->headData->headTexture;
+		if (headTexture) {
+			root["actor"]["headTexture"] = GetFormIdentifier(headTexture);
+
+			ModInfo * modInfo = GetModInfoByFormID(headTexture->formID, true);
+			if (modInfo) {
+				modList.emplace(modInfo->name);
+			}
+		}
 	}
 	
 	root["tintInfo"] = tintInfo;
@@ -2429,6 +2456,7 @@ PresetData::PresetData()
 {
 	weight = 0;
 	hairColor = 0;
+	headTexture = nullptr;
 }
 
 bool FaceMorphInterface::LoadJsonPreset(const char * filePath, PresetDataPtr presetData)
@@ -2554,6 +2582,9 @@ bool FaceMorphInterface::LoadJsonPreset(const char * filePath, PresetDataPtr pre
 	if (!actor.empty() && actor.type() == Json::objectValue) {
 		presetData->weight = actor["weight"].asFloat();
 		presetData->hairColor = actor["hairColor"].asUInt();
+		if (actor.isMember("headTexture")) {
+			presetData->headTexture = DYNAMIC_CAST(GetFormFromIdentifier(actor["headTexture"].asString()), TESForm, BGSTextureSet);
+		}
 	}
 
 

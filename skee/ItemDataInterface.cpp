@@ -193,12 +193,13 @@ std::shared_ptr<ItemAttributeData> ItemDataInterface::GetExistingData(TESObjectR
 	return NULL;
 }
 
-NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced)
+NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced, LayerFunctor layerFunctor)
 {
 	m_formId = actor->formID;
 	m_identifier = identifier;
 	m_flags = flags;
 	m_forced = forced;
+	m_layerFunctor = layerFunctor;
 }
 
 void NIOVTaskUpdateItemDye::Run()
@@ -226,10 +227,7 @@ void NIOVTaskUpdateItemDye::Run()
 					if (armor->armorAddons.GetNthItem(i, arma)) {
 						VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiAVObject * rootNode, NiAVObject * parent)
 						{
-							g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, parent, data ? [=]()
-							{
-								return data;
-							} : std::function<std::shared_ptr<ItemAttributeData>()>(), m_flags);
+							g_tintMaskInterface.ApplyMasks(actor, isFirstPerson, armor, arma, parent, m_flags, data, m_layerFunctor);
 						});
 					}
 				}
@@ -609,30 +607,18 @@ bool ItemDataInterface::EraseByUID(UInt32 uid, UInt32 formId)
 
 void ItemDataInterface::UpdateInventoryItemDye(UInt32 rankId, TESObjectARMO * armor, NiAVObject * rootNode)
 {
-	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
-	{
-		return rankId ? g_itemDataInterface.GetData(rankId) : std::shared_ptr<ItemAttributeData>();
-	};
-
-	g_task->AddTask(new NIOVTaskDeferredMask((*g_thePlayer), false, armor, nullptr, rootNode, overrideFunc));
+	g_task->AddTask(new NIOVTaskDeferredMask((*g_thePlayer), false, armor, nullptr, rootNode, rankId ? g_itemDataInterface.GetData(rankId) : nullptr));
 }
 
 void ItemDataInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
 {
 	UInt32 armorMask = armor->bipedObject.GetSlotMask();
-	std::function<std::shared_ptr<ItemAttributeData>()> overrideFunc = [=]()
-	{
-		Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
-		if (actor) {
-			ModifiedItemIdentifier identifier;
-			identifier.SetSlotMask(armorMask);
-			return g_itemDataInterface.GetExistingData(actor, identifier);
-		}
-
-		return std::shared_ptr<ItemAttributeData>();
-	};
-
-	g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, armor, addon, object, overrideFunc));
+	Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
+	if (actor) {
+		ModifiedItemIdentifier identifier;
+		identifier.SetSlotMask(armorMask);
+		g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, armor, addon, object, g_itemDataInterface.GetExistingData(actor, identifier)));
+	}
 }
 
 void ItemDataInterface::Revert()

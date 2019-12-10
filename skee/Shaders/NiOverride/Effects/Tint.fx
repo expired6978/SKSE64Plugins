@@ -27,12 +27,12 @@ float BlendTintf(float a, float b)
 float4 Blend(float4 a, float4 b)
 {
 	float4 r;
-	r.a = a.a;
 	b.rgb = clamp(b.rgb / b.a, 0, 1);
 	r.r = BlendTintf(a.r, b.r);
 	r.g = BlendTintf(a.g, b.g);
 	r.b = BlendTintf(a.b, b.b);
 	r.rgb = (1 - b.a) * a.rgb + r.rgb * b.a;
+	r.a = a.a;
 	return r;
 }
 

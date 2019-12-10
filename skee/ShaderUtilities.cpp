@@ -734,7 +734,7 @@ SKEEFixedString GetSanitizedPath(const SKEEFixedString & path)
 
 	fullPath = std::regex_replace(fullPath, std::regex("/+|\\\\+"), "\\"); // Replace multiple slashes or forward slashes with one backslash
 	fullPath = std::regex_replace(fullPath, std::regex("^\\\\+"), ""); // Remove all backslashes from the front
-	fullPath = std::regex_replace(fullPath, std::regex(".*?textures\\\\", std::regex_constants::icase), ""); // Remove everything before and including the textures path root
+	fullPath = std::regex_replace(fullPath, std::regex(R"(.*?[^\s]textures\\|^textures\\)", std::regex_constants::icase), ""); // Remove everything before and including the textures path root
 
 	return fullPath;
 }

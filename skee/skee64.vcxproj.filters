@@ -731,5 +731,8 @@
     <FxCompile Include="Shaders\CharGen\wireframe_vs.hlsl">
       <Filter>shaders\CharGen</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\NiOverride\Effects\Multiply.fx">
+      <Filter>shaders\NiOverride\Effects</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

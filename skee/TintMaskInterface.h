@@ -2,8 +2,17 @@
 
 #include "IPluginInterface.h"
 #include "IHashType.h"
-#include "ItemDataInterface.h"
+
 #include "CDXNifTextureRenderer.h"
+
+#include "skse64/NiMaterial.h"
+#include "skse64/GameTypes.h"
+#include "skse64/GameThreads.h"
+#include "skse64/PapyrusEvents.h"
+
+#include <unordered_map>
+#include <functional>
+#include <memory>
 
 struct SKSESerializationInterface;
 struct SKSENiNodeUpdateEvent;
@@ -21,14 +30,8 @@ class NiIntegerExtraData;
 
 class BSLightingShaderProperty;
 class BSRenderTargetGroup;
-
-#include "skse64/NiMaterial.h"
-#include "skse64/GameTypes.h"
-#include "skse64/PapyrusEvents.h"
-
-#include <unordered_map>
-#include <functional>
-#include <memory>
+class ItemAttributeData;
+typedef std::shared_ptr<ItemAttributeData> ItemAttributeDataPtr;
 
 struct ShaderHasher
 {
@@ -59,6 +62,7 @@ typedef std::unordered_map<SInt32, SInt32>			LayerColorMap;
 typedef std::unordered_map<SInt32, float>			LayerAlphaMap;
 typedef std::unordered_map<SInt32, SKEEFixedString>	LayerBlendMap;
 typedef std::unordered_map<SInt32, UInt8>			TextureTypeMap;
+typedef std::unordered_multimap<SInt32, SInt32>		LayerSlotMap;
 
 struct TextureLayer
 {
@@ -67,6 +71,7 @@ struct TextureLayer
 	LayerAlphaMap alphas;
 	LayerBlendMap blendModes;
 	TextureTypeMap types;
+	LayerSlotMap slots;
 };
 
 // maps diffuse names to layer data
@@ -81,6 +86,12 @@ class MaskTriShapeMap : public std::unordered_map<SKEEFixedString, TextureLayerM
 {
 public:
 	TextureLayerMap * GetTextureMap(SKEEFixedString triShape);
+
+	bool IsRemappable() const { return m_remappable; }
+	void SetRemappable(bool remap) { m_remappable = remap; }
+
+protected:
+	bool m_remappable;
 };
 
 
@@ -96,6 +107,26 @@ public:
 	void ApplyLayers(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * arma, NiAVObject * node, std::function<void(NiPointer<BSGeometry>, SInt32, TextureLayer*)> functor);
 	MaskTriShapeMap * GetTriShapeMap(SKEEFixedString nifPath);
 };
+
+struct LayerTarget
+{
+	enum TargetFlags
+	{
+		kTarget_EmissiveColor = 1,
+	};
+
+	NiPointer<BSGeometry>			object;
+	UInt32							targetIndex;
+	UInt32							targetFlags;
+	LayerTextureMap					textureData;
+	LayerColorMap					colorData;
+	LayerAlphaMap					alphaData;
+	LayerBlendMap					blendData;
+	TextureTypeMap					typeData;
+	LayerSlotMap					slots;
+};
+typedef std::vector<LayerTarget> LayerTargetList;
+typedef std::function<void(TESObjectARMO *, TESObjectARMA *, const char*, NiTexturePtr, LayerTarget&)> LayerFunctor;
 
 class TintMaskInterface 
 	: public IPluginInterface
@@ -122,34 +153,19 @@ public:
 		kUpdate_Hair = 1 << 1,
 		kUpdate_All = kUpdate_Skin | kUpdate_Hair
 	};
-	enum TargetFlags
-	{
-		kTarget_EmissiveColor = 1,
-	};
 
-	struct LayerTarget
-	{
-		NiPointer<BSGeometry>			object;
-		UInt32							targetIndex;
-		UInt32							targetFlags;
-		LayerTextureMap					textureData;
-		LayerColorMap					colorData;
-		LayerAlphaMap					alphaData;
-		LayerBlendMap					blendData;
-		TextureTypeMap					typeData;
-	};
-	typedef std::vector<LayerTarget> LayerTargetList;
-
-	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides, UInt32 flags);
+	virtual void ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, UInt32 flags, ItemAttributeDataPtr overrides, LayerFunctor layer = LayerFunctor());
 	virtual void ManageTints() { m_maskMap.ManageRenderTargetGroups(); }
 	virtual void ReleaseTints() { m_maskMap.ReleaseRenderTargetGroups(); }
 	virtual void Revert() { };
 
 	virtual bool IsDyeable(TESObjectARMO * armor);
 
+	virtual void GetTemplateColorMap(TESObjectREFR* actor, TESObjectARMO * armor, std::map<SInt32, UInt32>& colorMap);
+
 	virtual void LoadMods();
 
-	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides, UInt32 & flags);
+	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, ItemAttributeDataPtr & overrides, UInt32 & flags);
 	void ParseTintData(LPCTSTR filePath);
 
 private:
@@ -169,7 +185,7 @@ private:
 class NIOVTaskDeferredMask : public TaskDelegate
 {
 public:
-	NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides);
+	NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, ItemAttributeDataPtr overrides);
 
 	virtual void Run();
 	virtual void Dispose();
@@ -180,5 +196,5 @@ private:
 	UInt32							m_armorId;
 	UInt32							m_addonId;
 	NiPointer<NiAVObject>			m_object;
-	std::function<std::shared_ptr<ItemAttributeData>()>	m_overrides;
+	ItemAttributeDataPtr			m_overrides;
 };

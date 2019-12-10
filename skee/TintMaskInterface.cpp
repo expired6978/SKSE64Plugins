@@ -1,4 +1,5 @@
 #include "TintMaskInterface.h"
+#include "ItemDataInterface.h"
 #include "ShaderUtilities.h"
 #include "NifUtils.h"
 #include "FileUtils.h"
@@ -40,7 +41,7 @@ UInt32 TintMaskInterface::GetVersion()
 	return kCurrentPluginVersion;
 }
 
-void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, std::shared_ptr<ItemAttributeData> & overrides, UInt32 & flags)
+void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, ItemAttributeDataPtr & overrides, UInt32 & flags)
 {
 	UInt32 skinColor = 0;
 	UInt32 hairColor = 0;
@@ -103,12 +104,30 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 					masks[base.first].texture = *base.second;
 				}
 			}
-			for (auto base : layerData.m_colorMap) {
-				auto it = masks.find(base.first);
-				if (it != masks.end()) {
-					masks[base.first].color = base.second;
+
+			if (layerTarget.slots.empty())
+			{
+				for (auto base : layerData.m_colorMap) {
+					auto it = masks.find(base.first);
+					if (it != masks.end()) {
+						masks[base.first].color = base.second;
+					}
 				}
 			}
+			else
+			{
+				for (auto base : layerData.m_colorMap) {
+					auto it = layerTarget.slots.equal_range(base.first);
+					for (auto itr = it.first; itr != it.second; ++itr) {
+						auto it = masks.find(itr->second);
+						if (it != masks.end()) {
+							masks[itr->second].color = base.second;
+						}
+					}
+				}
+			}
+
+			
 			for (auto base : layerData.m_blendMap) {
 				auto it = masks.find(base.first);
 				if (it != masks.end()) {
@@ -125,7 +144,7 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 	}
 }
 
-NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, std::function<std::shared_ptr<ItemAttributeData>()> overrides)
+NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, ItemAttributeDataPtr overrides)
 {
 	m_firstPerson = isFirstPerson;
 	m_formId = refr->formID;
@@ -151,12 +170,13 @@ void NIOVTaskDeferredMask::Run()
 		TESObjectARMA * addon = addonForm ? DYNAMIC_CAST(addonForm, TESForm, TESObjectARMA) : nullptr;
 
 		if (refr && armor) {
-			g_tintMaskInterface.ApplyMasks(refr, m_firstPerson, armor, addon, m_object, m_overrides, TintMaskInterface::kUpdate_All);
+			g_tintMaskInterface.ApplyMasks(refr, m_firstPerson, armor, addon, m_object, TintMaskInterface::kUpdate_All, m_overrides);
 		}
 	}
 }
 
-void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * rootNode, std::function<std::shared_ptr<ItemAttributeData>()> overrides, UInt32 flags)
+void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TESObjectARMO * armor, TESObjectARMA * addon, 
+	NiAVObject * rootNode, UInt32 flags, ItemAttributeDataPtr overrides, LayerFunctor layerFunctor)
 {
 	LayerTargetList layerList;
 	VisitObjects(rootNode, [&](NiAVObject* object)
@@ -206,12 +226,13 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 		obj.alphaData = layer->alphas;
 		obj.blendData = layer->blendModes;
 		obj.typeData = layer->types;
+		obj.slots = layer->slots;
 		layerList.push_back(obj);
 	});
 
 	std::shared_ptr<ItemAttributeData> itemOverrideData;
 	if (overrides && !layerList.empty()) {
-		itemOverrideData = overrides();
+		itemOverrideData = overrides;
 	}
 
 	std::unique_ptr<CDXD3DDevice> device;
@@ -241,10 +262,11 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 					continue;
 				}
 
+				const char * texturePath = nullptr;
 				NiPointer<NiTexture> sourceTexture;
 				if (material->textureSet)
 				{
-					const char * texturePath = material->textureSet->GetTexturePath(layer.targetIndex);
+					texturePath = material->textureSet->GetTexturePath(layer.targetIndex);
 					if (!texturePath) {
 						continue;
 					}
@@ -303,6 +325,10 @@ void TintMaskInterface::ApplyMasks(TESObjectREFR * refr, bool isFirstPerson, TES
 					NiTexturePtr * targetTexture = GetTextureFromIndex(newMaterial, layer.targetIndex);
 					if (targetTexture) {
 						*targetTexture = output;
+					}
+
+					if (layerFunctor) {
+						layerFunctor(armor, addon, texturePath, output, layer);
 					}
 
 #if DUMP_TEXTURE
@@ -589,6 +615,78 @@ bool TintMaskInterface::IsDyeable(TESObjectARMO * armor)
 	return false;
 }
 
+void TintMaskInterface::GetTemplateColorMap(TESObjectREFR* refr, TESObjectARMO * armor, std::map<SInt32, UInt32>& colorMap)
+{
+	UInt8 gender = 0;
+	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
+	if (actorBase) {
+		Actor* actor = static_cast<Actor*>(refr);
+		gender = CALL_MEMBER_FN(actorBase, GetSex)();
+
+		for (UInt32 i = 0; i < armor->armorAddons.count; ++i)
+		{
+			TESObjectARMA* addon = nullptr;
+			armor->armorAddons.GetNthItem(i, addon);
+
+			if (!addon->IsPlayable() || !addon->isValidRace(actor->race))
+				continue;
+
+			auto shapeMap = m_modelMap.GetTriShapeMap(m_modelMap.GetModelPath(gender, false, armor, addon));
+			if (shapeMap)
+			{
+				if (shapeMap->IsRemappable())
+				{
+					for (auto& shape : *shapeMap)
+					{
+						// Try all textures, though we probably only care about the diffuse
+						for (auto& layer : shape.second)
+						{
+							for (auto& slot : layer.second.slots)
+							{
+								colorMap[slot.first] = 0;
+
+								auto cit = layer.second.colors.find(slot.second);
+								if (cit != layer.second.colors.end())
+								{
+									colorMap[slot.first] = cit->second & 0xFFFFFF;
+								}
+
+								auto ait = layer.second.alphas.find(slot.second);
+								if (ait != layer.second.alphas.end())
+								{
+									colorMap[slot.first] |= UInt32(ait->second * 255) << 24;
+								}
+							}
+						}
+					}
+				}
+				else
+				{
+					// Try all shapes in this nif
+					for (auto& shape : *shapeMap)
+					{
+						// Try all textures, though we probably only care about the diffuse
+						for (auto& layer : shape.second)
+						{
+							// For each color mapping extract the template color and alpha
+							for (auto& color : layer.second.colors)
+							{
+								colorMap[color.first] = color.second & 0xFFFFFF;
+
+								auto it = layer.second.alphas.find(color.first);
+								if (it != layer.second.alphas.end())
+								{
+									colorMap[color.first] |= UInt32(it->second * 255) << 24;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void TintMaskInterface::LoadMods()
 {
 	m_dyeableLock.Lock();
@@ -639,6 +737,9 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 				}
 			}
 
+			bool remappable = object->BoolAttribute("remappable");
+
+			UInt32 index = 0;
 			auto child = object->FirstChildElement("geometry");
 			while (child)
 			{
@@ -664,7 +765,11 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 					layer->textures.clear();
 				}
 
-				UInt32 index = 0;
+				if (remappable) {
+					index = 0;
+				}
+
+				
 				auto mask = child->FirstChildElement("mask");
 				while (mask) {
 					auto path = mask->Attribute("path");
@@ -711,17 +816,29 @@ void TintMaskInterface::ParseTintData(LPCTSTR filePath)
 					int i = index;
 					mask->QueryIntAttribute("index", &i);
 
+					int slot = -1;
+					mask->QueryIntAttribute("slot", &slot);
+
 					layer->textures[i] = path ? path : "";
 					layer->colors[i] = colorValue;
 					layer->alphas[i] = alpha;
 					layer->blendModes[i] = blend ? blend : "overlay";
 					layer->types[i] = typeNumber;
 
+					if (remappable && slot >= 0) {
+						layer->slots.emplace(slot, i);
+					}
+
 					mask = mask->NextSiblingElement("mask");
 					index++;
 				}
 
 				child = child->NextSiblingElement("geometry");
+			}
+
+			auto trishapeMap = m_modelMap.GetTriShapeMap(objectPath);
+			if (trishapeMap) {
+				trishapeMap->SetRemappable(remappable);
 			}
 
 			object = object->NextSiblingElement("object");

@@ -1,21 +1,31 @@
 #pragma once
 
-struct SKSESerializationInterface;
-class Actor;
-class ItemAttributeData;
-class NIOVTaskUpdateItemDye;
-
 #include "skse64/GameThreads.h"
 #include "skse64/GameExtraData.h"
+#include "skse64/NiTypes.h"
 
 #include "CDXTextureRenderer.h"
 #include "IPluginInterface.h"
 #include "StringTable.h"
 
+
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <memory>
+#include <functional>
+
+struct SKSESerializationInterface;
+class Actor;
+class ItemAttributeData;
+class NIOVTaskUpdateItemDye;
+struct LayerTarget;
+class TESObjectARMO;
+class TESObjectARMA;
+class NiTexture;
+typedef NiPointer<NiTexture> NiTexturePtr;
+
+typedef std::function<void(TESObjectARMO *, TESObjectARMA *, const char*, NiTexturePtr, LayerTarget&)> LayerFunctor;
 
 
 struct ModifiedItem
@@ -251,7 +261,7 @@ public:
 class NIOVTaskUpdateItemDye : public TaskDelegate
 {
 public:
-	NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced);
+	NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced, LayerFunctor layerFunctor = LayerFunctor());
 	virtual void Run();
 	virtual void Dispose() {
 		delete this;
@@ -265,6 +275,7 @@ private:
 	ModifiedItemIdentifier m_identifier;
 	UInt32 m_flags;
 	bool m_forced;
+	LayerFunctor m_layerFunctor;
 
 	friend class ItemDataInterface;
 };

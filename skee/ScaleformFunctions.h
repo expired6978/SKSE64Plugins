@@ -28,3 +28,9 @@ class SKSEScaleform_SetItemDyeColor : public GFxFunctionHandler
 public:
 	virtual void	Invoke(Args * args);
 };
+
+class SKSEScaleform_SetItemDyeColors : public GFxFunctionHandler
+{
+public:
+	virtual void	Invoke(Args * args);
+};

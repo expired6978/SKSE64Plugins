@@ -1,3 +1,4 @@
+#include "common/IFileStream.h"
 #include "skse64_common/SafeWrite.h"
 #include "skse64/PluginAPI.h"
 #include "skse64/PapyrusVM.h"
@@ -939,7 +940,7 @@ void UpdateModelColor_Recursive(NiAVObject * object, NiColor *& color, UInt32 sh
 		BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
 		if (shaderProperty && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
 		{
-			BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
+			BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial*>(shaderProperty->material);
 			if (material && material->GetShaderType() == shaderType)
 			{
 				NiExtraData* extraData = shaderProperty->GetExtraData("NO_TINT");
@@ -1279,6 +1280,27 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				return false;
 			});
 			Console_Print("Dumped %d total transforms", totalTransforms);
+		}
+		else if (_strnicmp(buffer2, "tints", MAX_PATH) == 0)
+		{
+			UInt32 mask = 1;
+			for (UInt32 i = 0; i < 32; ++i)
+			{
+				ModifiedItemIdentifier identifier;
+				identifier.SetSlotMask(mask);
+				g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_All, true, [mask](TESObjectARMO* armo, TESObjectARMA* arma, const char* path, NiTexturePtr texture, LayerTarget& layer)
+				{
+					char texturePath[MAX_PATH];
+					_snprintf_s(texturePath, MAX_PATH, "Data\\SKSE\\Plugins\\NiOverride\\Exported\\TintMasks\\%s", path);
+
+					IFileStream::MakeAllDirs(texturePath);
+
+					SaveRenderedDDS(texture, texturePath);
+
+					Console_Print("Dumped result for slot %08X at %s on shape", mask, texturePath, layer.object->m_name);
+				}));
+				mask <<= 1;
+			}
 		}
 #if _DEBUG
 		else if (_strnicmp(buffer2, "nodes", MAX_PATH) == 0)

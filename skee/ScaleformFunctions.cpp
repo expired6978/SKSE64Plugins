@@ -207,6 +207,24 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 					if ((item.type & ModifiedItemIdentifier::kTypeRank) == ModifiedItemIdentifier::kTypeRank)
 						itemData = g_itemDataInterface.GetData(item.rankId);
 
+					// This is an approx color lookup, its possible multiple shapes may have differing color templates but use the same override
+					// we can only show one color so last shape wins
+					if (item.form->formType == TESObjectARMO::kTypeID)
+					{
+						std::map<SInt32, UInt32> colorMap;
+						g_tintMaskInterface.GetTemplateColorMap(actor, static_cast<TESObjectARMO*>(item.form), colorMap);
+
+						GFxValue baseArray;
+						args->movie->CreateArray(&baseArray);
+						for (UInt32 i = 0; i < 15; i++) {
+							GFxValue colorValue;
+							colorValue.SetNumber(colorMap[i]);
+							baseArray.PushBack(&colorValue);
+						}
+
+						itm.SetMember("base", &baseArray);
+					}
+
 					GFxValue colorArray;
 					args->movie->CreateArray(&colorArray);
 					for (UInt32 i = 0; i < 15; i++) {
@@ -361,6 +379,76 @@ void SKSEScaleform_SetItemDyeColor::Invoke(Args * args)
 		g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, 0, maskIndex);
 	else
 		g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, maskIndex, color);
+
+	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
+}
+
+void SKSEScaleform_SetItemDyeColors::Invoke(Args * args)
+{
+	ASSERT(args->numArgs >= 2);
+	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
+	ASSERT(args->args[1].GetType() == GFxValue::kType_Object);
+	ASSERT(args->args[2].GetType() == GFxValue::kType_Array);
+
+	UInt32		formidArg = 0;
+	TESForm		* formArg = NULL;
+
+	if (args->numArgs >= 1) {
+		formidArg = (UInt32)args->args[0].GetNumber();
+		if (formidArg > 0)
+			formArg = LookupFormByID(formidArg);
+	}
+
+	Actor * actor = DYNAMIC_CAST(formArg, TESForm, Actor);
+	if (!actor) {
+		_MESSAGE("%s - Invalid form type (%X)", __FUNCTION__, formidArg);
+		return;
+	}
+
+	ModifiedItemIdentifier identifier;
+	GFxValue param[6];
+
+	if (args->args[1].HasMember("type")) {
+		args->args[1].GetMember("type", &param[0]);
+		identifier.type = param[0].GetNumber();
+	}
+	if (args->args[1].HasMember("uid")) {
+		args->args[1].GetMember("uid", &param[1]);
+		identifier.uid = param[1].GetNumber();
+	}
+	if (args->args[1].HasMember("owner")) {
+		args->args[1].GetMember("owner", &param[2]);
+		identifier.ownerForm = param[2].GetNumber();
+	}
+	if (args->args[1].HasMember("rankId")) {
+		args->args[1].GetMember("rankId", &param[3]);
+		identifier.rankId = param[3].GetNumber();
+	}
+	if (args->args[1].HasMember("slotMask")) {
+		args->args[1].GetMember("slotMask", &param[4]);
+		identifier.slotMask = param[4].GetNumber();
+	}
+	if (args->args[1].HasMember("weaponSlot")) {
+		args->args[1].GetMember("weaponSlot", &param[5]);
+		identifier.weaponSlot = param[5].GetNumber();
+	}
+
+	UInt32 uniqueId = g_itemDataInterface.GetItemUniqueID(actor, identifier, true);
+
+	UInt32 size = args->args[2].GetArraySize();
+	for (UInt32 i = 0; i < size; ++i)
+	{
+		GFxValue element;
+		args->args[2].GetElement(i, &element);
+
+		if (element.GetType() == GFxValue::kType_Undefined || element.GetType() == GFxValue::kType_Null) {
+			g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, 0, i);
+		}
+		else {
+			UInt32 color = element.GetNumber();
+			g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, i, color);
+		}
+	}
 
 	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 }

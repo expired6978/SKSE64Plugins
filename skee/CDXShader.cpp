@@ -420,16 +420,9 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 
 	pDeviceContext->RSSetState(state);
 
-	Microsoft::WRL::ComPtr<ID3D11VertexShader> vs;
-	pDeviceContext->VSGetShader(&vs, nullptr, nullptr);
-	Microsoft::WRL::ComPtr<ID3D11PixelShader> ps;
-	pDeviceContext->PSGetShader(&ps, nullptr, nullptr);
-	Microsoft::WRL::ComPtr<ID3D11GeometryShader> gs;
-	pDeviceContext->GSGetShader(&gs, nullptr, nullptr);
-
-	if(vs.Get() != vshader) pDeviceContext->VSSetShader(vshader, nullptr, 0);
-	if(ps.Get() != pshader) pDeviceContext->PSSetShader(pshader, nullptr, 0);
-	if(gs.Get() != gshader) pDeviceContext->GSSetShader(gshader, nullptr, 0);
+	pDeviceContext->VSSetShader(vshader, nullptr, 0);
+	pDeviceContext->PSSetShader(pshader, nullptr, 0);
+	pDeviceContext->GSSetShader(gshader, nullptr, 0);
 
 	// Set shader texture resource in the pixel shader.
 	pDeviceContext->PSSetShaderResources(0, 5, material->GetTextures());

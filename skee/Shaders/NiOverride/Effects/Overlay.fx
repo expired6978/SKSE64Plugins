@@ -20,12 +20,12 @@ StructuredBuffer<LayerData> layerData : register(t2);
 float4 Blend(float4 a, float4 b)
 {
 	float4 r;
-	r.a = a.a;
 	b.rgb = clamp(b.rgb / b.a, 0, 1);
 	if (a.r > 0.5) r.r = 1 - (1 - 2 * (a.r - 0.5)) * (1 - b.r); else r.r = (2 * a.r) * b.r;
 	if (a.g > 0.5) r.g = 1 - (1 - 2 * (a.g - 0.5)) * (1 - b.g); else r.g = (2 * a.g) * b.g;
 	if (a.b > 0.5) r.b = 1 - (1 - 2 * (a.b - 0.5)) * (1 - b.b); else r.b = (2 * a.b) * b.b;
 	r.rgb = (1 - b.a) * a.rgb + r.rgb * b.a;
+	r.a = a.a;
 	return r;
 }
 

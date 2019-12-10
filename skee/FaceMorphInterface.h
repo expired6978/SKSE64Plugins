@@ -275,6 +275,7 @@ public:
 	std::vector<Tint> tints;
 	std::vector<Morph> customMorphs;
 	std::vector<Texture> faceTextures;
+	BGSTextureSet* headTexture;
 	BSFixedString tintTexture;
 	typedef std::map<SKEEFixedString, std::vector<OverrideVariant>> OverrideData;
 	OverrideData overrideData;

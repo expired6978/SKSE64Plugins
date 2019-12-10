@@ -451,6 +451,7 @@ bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
 	RegisterFunction <SKSEScaleform_GetDyeItems>(root, view, "GetDyeItems");
 	RegisterFunction <SKSEScaleform_GetDyeableItems>(root, view, "GetDyeableItems");
 	RegisterFunction <SKSEScaleform_SetItemDyeColor>(root, view, "SetItemDyeColor");
+	RegisterFunction <SKSEScaleform_SetItemDyeColors>(root, view, "SetItemDyeColors");
 
 	return true;
 }
