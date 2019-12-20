@@ -56,6 +56,7 @@ SKSEScaleformInterface			* g_scaleform = nullptr;
 SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
+SKSETrampolineInterface			* g_trampoline = nullptr;
 
 // Handlers
 InterfaceMap				g_interfaceMap;
@@ -683,6 +684,11 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
 		_ERROR("couldn't get messaging interface");
+	}
+
+	g_trampoline = (SKSETrampolineInterface *)skse->QueryInterface(kInterface_Trampoline);
+	if (!g_trampoline) {
+		_ERROR("couldn't get trampoline interface");
 	}
 
 	// supported runtime version
