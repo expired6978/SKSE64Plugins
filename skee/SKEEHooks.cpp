@@ -1,3 +1,4 @@
+#include "common/IFileStream.h"
 #include "skse64_common/SafeWrite.h"
 #include "skse64/PluginAPI.h"
 #include "skse64/PapyrusVM.h"
@@ -12,6 +13,8 @@
 #include "skse64/NiNodes.h"
 #include "skse64/NiMaterial.h"
 #include "skse64/NiProperties.h"
+
+#include "skse64/ScaleformLoader.h"
 
 #include "SKEEHooks.h"
 #include "PapyrusNiOverride.h"
@@ -1265,6 +1268,11 @@ extern RelocAddr<_QueueGFxMouseEvent> QueueGFxMouseEvent(0x00F37680);
 typedef void (*_DispatchGFxEvent)(const BSFixedString& name, GFxEvent* gfxEvent);
 extern RelocAddr<_DispatchGFxEvent> DispatchGFxEvent(0x00F209A0);
 
+bool RaceSexMenu_LoadMovie_Hooked(GFxLoader* loader, IMenu* menu, GFxMovieView** viewOut, const char* name, int arg4, float arg5)
+{
+	return CALL_MEMBER_FN(loader, LoadMovie)(menu, viewOut, "VR/RaceSex_menu", arg4, arg5);
+}
+
 // RaceMenu EventHandler
 bool MenuEventHandler_Hooked(MenuEventHandler* menuEventHandler, InputEvent* inputEvent)
 {
@@ -1272,9 +1280,16 @@ bool MenuEventHandler_Hooked(MenuEventHandler* menuEventHandler, InputEvent* inp
 		if (*inputEvent->GetControlID() == InputStringHolder::GetSingleton()->accept) {
 			ButtonEvent* t = static_cast<ButtonEvent*>(inputEvent);
 			bool isButtonDown = t->isDown == 1.0f && t->timer == 0.0f;
+			bool isButtonUp = t->isDown == 0.0f && t->timer != 0.0f;
 			float x = (*g_mouseCoords)->x;
 			float y = (*g_mouseCoords)->y;
-			auto gfxEvent = QueueGFxMouseEvent(*g_scaleformGFxEventData, isButtonDown ? GFxEvent::kMouseDown : GFxEvent::kMouseUp, 0, x, y, 0, 0);
+			GFxMouseEvent* gfxEvent = nullptr;
+			if (isButtonDown) {
+				gfxEvent = QueueGFxMouseEvent(*g_scaleformGFxEventData, GFxEvent::kMouseDown, 0, x, y, 0, 0);
+			}
+			else if (isButtonUp) {
+				gfxEvent = QueueGFxMouseEvent(*g_scaleformGFxEventData, GFxEvent::kMouseUp, 0, x, y, 0, 0);
+			}
 			if (gfxEvent) {
 				DispatchGFxEvent(UIStringHolder::GetSingleton()->raceSexMenu, gfxEvent);
 			}
@@ -1292,7 +1307,7 @@ bool InstallSKEEHooks()
 
 	if (!branchTrampoline.IsValid())
 	{
-		if (!branchTrampoline.Create(1024 * 64))
+		if (!branchTrampoline.Create(1024))
 		{
 			_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
 			return false;
@@ -1301,7 +1316,7 @@ bool InstallSKEEHooks()
 	
 	if (!localTrampoline.IsValid())
 	{
-		if (!localTrampoline.Create(1024 * 64, nullptr))
+		if (!localTrampoline.Create(1024, nullptr))
 		{
 			_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 			return false;
@@ -1483,6 +1498,9 @@ bool InstallSKEEHooks()
 
 	RelocAddr <uintptr_t> RaceSexMenu_MenuEventHandler_Target(0x0173F328 + 0x8); // ??_7RaceSexMenu@@6BMenuEventHandler@@@
 	SafeWrite64(RaceSexMenu_MenuEventHandler_Target.GetUIntPtr(), (uintptr_t)MenuEventHandler_Hooked);
+
+	RelocAddr <uintptr_t> RaceSexMenu_LoadMovie_Target(0x008DD500 + 0x66);
+	branchTrampoline.Write5Call(RaceSexMenu_LoadMovie_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_LoadMovie_Hooked);
 
 	if (g_disableFaceGenCache)
 	{

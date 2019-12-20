@@ -41,10 +41,12 @@ public:
 
 	virtual void Run()
 	{
+#if 0
 		NiAVObject::ControllerUpdateContext ctx;
 		ctx.flags = 0;
 		ctx.delta = 0;
 		m_object->UpdateWorldData(&ctx);
+#endif
 	}
 	virtual void Dispose() { delete this; }
 
