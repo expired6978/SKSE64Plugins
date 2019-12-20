@@ -731,6 +731,21 @@ void GetTriangleIndices(NiTriStripsData * strips, UInt16 i, UInt16 v0, UInt16 v1
 	v2 = pusStripLists[i + 2];
 }
 
+NiAVObjectPtr GetRootNode(NiAVObjectPtr object, bool refRoot)
+{
+	NiAVObject * rootNode = object;
+	NiNode* parent = rootNode->m_parent;
+	while (parent)
+	{
+		rootNode = parent;
+		if (rootNode->m_owner)
+			break;
+		parent = parent->m_parent;
+	}
+
+	return rootNode;
+}
+
 void SKSETaskExportTintMask::Run()
 {
 	BSFaceGenNiNode * faceNode = (*g_thePlayer)->GetFaceGenNiNode();

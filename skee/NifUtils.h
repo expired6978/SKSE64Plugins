@@ -4,6 +4,7 @@
 #include "skse64/GameTypes.h"
 
 #include "skse64/NiTypes.h"
+#include "skse64/NiObjects.h"
 
 #include <functional>
 
@@ -79,3 +80,5 @@ NiTransform GetLegacyGeometryTransform(NiGeometry * geometry);
 
 UInt16	GetStripLengthSum(NiTriStripsData * strips);
 void GetTriangleIndices(NiTriStripsData * strips, UInt16 i, UInt16 v0, UInt16 v1, UInt16 v2);
+
+NiAVObjectPtr GetRootNode(NiAVObjectPtr object, bool refRoot = false);

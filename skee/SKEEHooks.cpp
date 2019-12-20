@@ -153,28 +153,20 @@ void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObje
 	}
 }
 
-struct ArmorAddonStack
+NiAVObject * CreateArmorNode_Hooked(Biped * bipedInfo, NiNode * objectRoot, UInt64 unk3_4, BipedParam * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)
 {
-	AddonTreeParameters * params;	// 00
-	UInt64			unk08;		// 08
-	UInt32			unk10;		// 10
-	UInt32			unk14;		// 14
-};
-
-NiAVObject * CreateArmorNode_Hooked(ArmorAddonTree * addonInfo, NiNode * objectRoot, UInt64 unk3_4, AddonTreeParameters * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)/* UInt64 unkPacked, AddonTreeParameters * stackInfo)*/
-{
-	NiAVObject * retVal = CreateArmorNode(addonInfo, objectRoot, unk3_4 >> 32, unk3_4 & 0xFFFFFFFF, unk5, unk6, unk7);
+	NiAVObject * retVal = CreateArmorNode(bipedInfo, objectRoot, unk3_4 >> 32, unk3_4 & 0xFFFFFFFF, unk5, unk6, unk7);
 
 	NiPointer<TESObjectREFR> reference;
-	UInt32 handle = addonInfo->handle;
+	UInt32 handle = bipedInfo->handle;
 	LookupREFRByHandle(handle, reference);
 	if (reference)
-		InstallArmorAddonHook(reference, params, addonInfo->boneTree, retVal);
+		InstallArmorAddonHook(reference, params, bipedInfo->root, retVal);
 
 	return retVal;
 }
 
-void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, NiNode * boneTree, NiAVObject * resultNode)
+void InstallArmorAddonHook(TESObjectREFR * refr, BipedParam * params, NiNode * boneTree, NiAVObject * resultNode)
 {
 	if (!refr) {
 #ifdef _DEBUG
@@ -188,7 +180,7 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 #endif
 		return;
 	}
-	if (!params->armor || !params->addon) {
+	if (!params->data.armor || !params->data.addon) {
 #ifdef _DEBUG
 		_ERROR("%s - Armor or ArmorAddon found, skipping overlays.", __FUNCTION__);
 #endif
@@ -202,8 +194,8 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 	}
 	if (!resultNode) {
 #ifdef _DEBUG
-		UInt32 addonFormid = params->addon ? params->addon->formID : 0;
-		UInt32 armorFormid = params->armor ? params->armor->formID : 0;
+		UInt32 addonFormid = params->data.addon ? params->data.addon->formID : 0;
+		UInt32 armorFormid = params->data.armor ? params->data.armor->formID : 0;
 		_ERROR("%s - Error no node found on Reference (%08X) while attaching ArmorAddon (%08X) of Armor (%08X)", __FUNCTION__, refr->formID, addonFormid, armorFormid);
 #endif
 		return;
@@ -235,9 +227,11 @@ void InstallArmorAddonHook(TESObjectREFR * refr, AddonTreeParameters * params, N
 #endif
 		return;
 	}
-
-	NiPointer<NiAVObject> node = resultNode;
-	g_actorUpdateManager.OnAttach(refr, params->armor, params->addon, node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
+	if (params->data.armor->formType == TESObjectARMO::kTypeID && params->data.addon->formType == TESObjectARMA::kTypeID)
+	{
+		NiPointer<NiAVObject> node = resultNode;
+		g_actorUpdateManager.OnAttach(refr, static_cast<TESObjectARMO*>(params->data.armor), static_cast<TESObjectARMA*>(params->data.addon), node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
+	}
 }
 
 void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate)
@@ -311,43 +305,6 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 			}
 		}
 	}
-}
-
-void ExtraContainerChangesData_Hooked::TransferItemUID_Hooked(BaseExtraList * extraList, TESForm * oldForm, TESForm * newForm, UInt32 unk1)
-{
-	CALL_MEMBER_FN(this, TransferItemUID)(extraList, oldForm, newForm, unk1);
-
-	if (extraList) {
-		if (extraList->HasType(kExtraData_Rank) && !extraList->HasType(kExtraData_UniqueID)) {
-			CALL_MEMBER_FN(this, SetUniqueID)(extraList, oldForm, newForm);
-			ExtraRank * rank = static_cast<ExtraRank*>(extraList->GetByType(kExtraData_Rank));
-			ExtraUniqueID * uniqueId = static_cast<ExtraUniqueID*>(extraList->GetByType(kExtraData_UniqueID));
-			if (rank && uniqueId) {
-				// Re-assign mapping
-				g_itemDataInterface.UpdateUIDByRank(rank->rank, uniqueId->uniqueId, uniqueId->ownerFormId);
-			}
-		}
-	}
-}
-
-bool BSLightingShaderProperty_Hooked::HasFlags_Hooked(UInt32 flags)
-{
-	bool ret = HasFlags(flags);
-	if (material) {
-		if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
-			NiExtraData * tintData = GetExtraData("TINT");
-			if (tintData) {
-				NiBooleanExtraData * boolData = ni_cast(tintData, NiBooleanExtraData);
-				if (boolData) {
-					return boolData->m_data;
-				}
-			}
-
-			return false;
-		}
-	}
-
-	return ret;
 }
 
 SInt32 UpdateHeadState_Enable_Hooked(TESNPC * npc, Actor * actor, UInt32 unk1)
@@ -898,14 +855,15 @@ void UpdateModelColor_Recursive(NiAVObject * object, NiColor *& color, UInt32 sh
 
 void UpdateModelSkin_Hooked(NiAVObject * object, NiColor *& color)
 {
-	if (*g_thePlayer && ((*g_thePlayer)->GetNiRootNode(0) == object || (*g_thePlayer)->GetNiRootNode(1) == object))
+	NiAVObjectPtr rootNode = GetRootNode(object, true);
+	if (rootNode && rootNode->m_owner && rootNode->m_owner->formType == Actor::kTypeID)
 	{
 		UInt32 mask = 1;
 		for (UInt32 i = 0; i < 32; ++i)
 		{
 			ModifiedItemIdentifier identifier;
 			identifier.SetSlotMask(mask);
-			g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_Skin, true));
+			g_task->AddTask(new NIOVTaskUpdateItemDye(static_cast<Actor*>(rootNode->m_owner), identifier, TintMaskInterface::kUpdate_Skin, true));
 			mask <<= 1;
 		}
 	}
@@ -915,14 +873,15 @@ void UpdateModelSkin_Hooked(NiAVObject * object, NiColor *& color)
 
 void UpdateModelHair_Hooked(NiAVObject * object, NiColor *& color)
 {
-	if (*g_thePlayer && ((*g_thePlayer)->GetNiRootNode(0) == object || (*g_thePlayer)->GetNiRootNode(1) == object))
+	NiAVObjectPtr rootNode = GetRootNode(object, true);
+	if (rootNode && rootNode->m_owner && rootNode->m_owner->formType == Actor::kTypeID)
 	{
 		UInt32 mask = 1;
 		for (UInt32 i = 0; i < 32; ++i)
 		{
 			ModifiedItemIdentifier identifier;
 			identifier.SetSlotMask(mask);
-			g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_Hair, true));
+			g_task->AddTask(new NIOVTaskUpdateItemDye(static_cast<Actor*>(rootNode->m_owner), identifier, TintMaskInterface::kUpdate_Hair, true));
 			mask <<= 1;
 		}
 	}
@@ -1573,7 +1532,7 @@ bool InstallSKEEHooks()
 
 			SetInventoryItemModel_Original = (_SetInventoryItemModel)codeBuf;
 
-			branchTrampoline.Write5Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
+			branchTrampoline.Write6Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
 
 			branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
 		}
