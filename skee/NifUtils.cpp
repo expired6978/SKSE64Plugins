@@ -610,9 +610,8 @@ void SKSETaskExportHead::Run()
 
 	rootNode->AttachChild(skinnedNode, true);
 
-	static const int MAX_SIZE = sizeof(NiStream) + 0x200;
-	UInt8 niStreamMemory[MAX_SIZE];
-	memset(niStreamMemory, 0, MAX_SIZE);
+	UInt8 niStreamMemory[sizeof(NiStream)];
+	memset(niStreamMemory, 0, sizeof(NiStream));
 	NiStream * niStream = (NiStream *)niStreamMemory;
 	CALL_MEMBER_FN(niStream, ctor)();
 	CALL_MEMBER_FN(niStream, AddObject)(rootNode);

@@ -78,7 +78,7 @@ float4 WireframePixelShader(PS_INPUT_WIRE input) : SV_TARGET
 
 	// Alpha is computed from the function exp2(-2(x)^2).
 	dist *= dist;
-	float alpha = exp2(-2 * dist);
+	float alpha = exp2(-0.75 * dist);
 
 	// Standard wire color
 	float4 color = wireColor;
