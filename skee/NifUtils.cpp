@@ -548,7 +548,7 @@ void SKSETaskExportHead::Run()
 					for(UInt32 i = 0; i < 8; ++i)
 						newTrishape->unk120[i] = trishape->unk120[i];
 
-					newTrishape->unk110 = trishape->unk110;
+					newTrishape->m_owner = nullptr;
 					newTrishape->unk118 = trishape->unk118;
 					newTrishape->unk11C = trishape->unk11C;
 					newTrishape->unk128 = trishape->unk128;
@@ -616,9 +616,8 @@ void SKSETaskExportHead::Run()
 
 	rootNode->AttachChild(skinnedNode, true);
 
-	static const int MAX_SIZE = sizeof(NiStream) + 0x200;
-	UInt8 niStreamMemory[MAX_SIZE];
-	memset(niStreamMemory, 0, MAX_SIZE);
+	UInt8 niStreamMemory[sizeof(NiStream)];
+	memset(niStreamMemory, 0, sizeof(NiStream));
 	NiStream * niStream = (NiStream *)niStreamMemory;
 	CALL_MEMBER_FN(niStream, ctor)();
 	CALL_MEMBER_FN(niStream, AddObject)(rootNode);

@@ -52,8 +52,8 @@ void SkeletonExtenderInterface::Attach(TESObjectREFR * refr, NiNode * skeleton, 
 NiNode * SkeletonExtenderInterface::LoadTemplate(NiNode * parent, const char * path)
 {
 	NiNode * rootNode = NULL;
-	UInt8 niStreamMemory[0x5B4];
-	memset(niStreamMemory, 0, 0x5B4);
+	UInt8 niStreamMemory[sizeof(NiStream)];
+	memset(niStreamMemory, 0, sizeof(NiStream));
 	NiStream * niStream = (NiStream *)niStreamMemory;
 	CALL_MEMBER_FN(niStream, ctor)();
 

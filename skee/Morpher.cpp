@@ -57,16 +57,16 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 			{
 				UInt8 * vBegin = &vertexBlock[i * vertexSize];
 
-				rawVertices[i].x = (*(float *)vBegin); vBegin += 4;
-				rawVertices[i].y = (*(float *)vBegin); vBegin += 4;
-				rawVertices[i].z = (*(float *)vBegin); vBegin += 4;
+				rawVertices[i].x = (*(float *)vBegin); vBegin += sizeof(float);
+				rawVertices[i].y = (*(float *)vBegin); vBegin += sizeof(float);
+				rawVertices[i].z = (*(float *)vBegin); vBegin += sizeof(float);
 
 				vBegin += 4; // Skip BitangetX
 
 				if (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_UV)
 				{
-					rawUV[i].u = (*(half_float::half *)vBegin); vBegin += 2;
-					rawUV[i].v = (*(half_float::half *)vBegin); vBegin += 2;
+					rawUV[i].u = (*(half_float::half *)vBegin); vBegin += sizeof(half_float::half);
+					rawUV[i].v = (*(half_float::half *)vBegin); vBegin += sizeof(half_float::half);
 				}
 			}
 
@@ -87,34 +87,34 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 				UInt8 * vBegin = &vertexBlock[i * vertexSize];
 
 				// X,Y,Z,BX
-				vBegin += 4;
-				vBegin += 4;
-				vBegin += 4;
+				vBegin += sizeof(float);
+				vBegin += sizeof(float);
+				vBegin += sizeof(float);
 
 				// No need to write bitangentX
-				*(float *)vBegin = rawBitangents[i].x; vBegin += 4;
+				*(float *)vBegin = rawBitangents[i].x; vBegin += sizeof(float);
 
 				// Skip UV write
 				if (hasUV)
 				{
-					vBegin += 4;
+					vBegin += sizeof(half_float::half) + sizeof(half_float::half);
 				}
 
 				if (hasNormals)
 				{
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
+					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
+					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
 
-					*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+					*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
 
 					if (hasTangents)
 					{
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
+						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
+						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
 
-						*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+						*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += sizeof(SInt8);
 					}
 				}
 			}

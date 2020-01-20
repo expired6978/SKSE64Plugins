@@ -20,13 +20,13 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -127,49 +127,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\skse64\GameAPI.cpp" />
-    <ClCompile Include="..\skse64\GameBSExtraData.cpp" />
-    <ClCompile Include="..\skse64\GameData.cpp" />
-    <ClCompile Include="..\skse64\GameEvents.cpp" />
-    <ClCompile Include="..\skse64\GameExtraData.cpp" />
-    <ClCompile Include="..\skse64\GameFormComponents.cpp" />
-    <ClCompile Include="..\skse64\GameForms.cpp" />
-    <ClCompile Include="..\skse64\GameMenus.cpp" />
-    <ClCompile Include="..\skse64\GameObjects.cpp" />
-    <ClCompile Include="..\skse64\GameReferences.cpp" />
-    <ClCompile Include="..\skse64\GameResources.cpp" />
-    <ClCompile Include="..\skse64\GameRTTI.cpp" />
-    <ClCompile Include="..\skse64\GameSettings.cpp" />
-    <ClCompile Include="..\skse64\GameStreams.cpp" />
-    <ClCompile Include="..\skse64\GameThreads.cpp" />
-    <ClCompile Include="..\skse64\GameTypes.cpp" />
-    <ClCompile Include="..\skse64\GameUtilities.cpp" />
-    <ClCompile Include="..\skse64\HashUtil.cpp" />
-    <ClCompile Include="..\skse64\NiExtraData.cpp" />
-    <ClCompile Include="..\skse64\NiGeometry.cpp" />
-    <ClCompile Include="..\skse64\NiMaterial.cpp" />
-    <ClCompile Include="..\skse64\NiNodes.cpp" />
-    <ClCompile Include="..\skse64\NiObjects.cpp" />
-    <ClCompile Include="..\skse64\NiProperties.cpp" />
-    <ClCompile Include="..\skse64\NiRenderer.cpp" />
-    <ClCompile Include="..\skse64\NiRTTI.cpp" />
-    <ClCompile Include="..\skse64\NiSerialization.cpp" />
-    <ClCompile Include="..\skse64\NiTextures.cpp" />
-    <ClCompile Include="..\skse64\NiTypes.cpp" />
-    <ClCompile Include="..\skse64\ObScript.cpp" />
-    <ClCompile Include="..\skse64\PapyrusArgs.cpp" />
-    <ClCompile Include="..\skse64\PapyrusInterfaces.cpp" />
-    <ClCompile Include="..\skse64\PapyrusNativeFunctions.cpp" />
-    <ClCompile Include="..\skse64\PapyrusValue.cpp" />
-    <ClCompile Include="..\skse64\PapyrusVM.cpp" />
-    <ClCompile Include="..\skse64\ScaleformAPI.cpp" />
-    <ClCompile Include="..\skse64\ScaleformCallbacks.cpp" />
     <ClCompile Include="..\skse64\ScaleformLoader.cpp" />
-    <ClCompile Include="..\skse64\ScaleformMovie.cpp" />
-    <ClCompile Include="..\skse64\ScaleformState.cpp" />
-    <ClCompile Include="..\skse64\ScaleformTypes.cpp" />
-    <ClCompile Include="..\skse64\ScaleformValue.cpp" />
-    <ClCompile Include="..\skse64\ScaleformVM.cpp" />
     <ClCompile Include="ActorUpdateManager.cpp" />
     <ClCompile Include="BodyMorphInterface.cpp" />
     <ClCompile Include="CDXBrush.cpp" />
@@ -224,49 +182,7 @@
     <ClCompile Include="Utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\skse64\GameAPI.h" />
-    <ClInclude Include="..\skse64\GameBSExtraData.h" />
-    <ClInclude Include="..\skse64\GameData.h" />
-    <ClInclude Include="..\skse64\GameEvents.h" />
-    <ClInclude Include="..\skse64\GameExtraData.h" />
-    <ClInclude Include="..\skse64\GameFormComponents.h" />
-    <ClInclude Include="..\skse64\GameForms.h" />
-    <ClInclude Include="..\skse64\GameMenus.h" />
-    <ClInclude Include="..\skse64\GameObjects.h" />
-    <ClInclude Include="..\skse64\GameReferences.h" />
-    <ClInclude Include="..\skse64\GameResources.h" />
-    <ClInclude Include="..\skse64\GameRTTI.h" />
-    <ClInclude Include="..\skse64\GameSettings.h" />
-    <ClInclude Include="..\skse64\GameStreams.h" />
-    <ClInclude Include="..\skse64\gamethreads.h" />
-    <ClInclude Include="..\skse64\GameTypes.h" />
-    <ClInclude Include="..\skse64\GameUtilities.h" />
-    <ClInclude Include="..\skse64\HashUtil.h" />
-    <ClInclude Include="..\skse64\NiExtraData.h" />
-    <ClInclude Include="..\skse64\NiGeometry.h" />
-    <ClInclude Include="..\skse64\NiMaterial.h" />
-    <ClInclude Include="..\skse64\NiNodes.h" />
-    <ClInclude Include="..\skse64\NiObjects.h" />
-    <ClInclude Include="..\skse64\NiProperties.h" />
-    <ClInclude Include="..\skse64\NiRenderer.h" />
-    <ClInclude Include="..\skse64\NiRTTI.h" />
-    <ClInclude Include="..\skse64\NiSerialization.h" />
-    <ClInclude Include="..\skse64\NiTextures.h" />
-    <ClInclude Include="..\skse64\NiTypes.h" />
-    <ClInclude Include="..\skse64\ObScript.h" />
-    <ClInclude Include="..\skse64\PapyrusArgs.h" />
-    <ClInclude Include="..\skse64\PapyrusInterfaces.h" />
-    <ClInclude Include="..\skse64\PapyrusNativeFunctions.h" />
-    <ClInclude Include="..\skse64\PapyrusValue.h" />
-    <ClInclude Include="..\skse64\PapyrusVM.h" />
-    <ClInclude Include="..\skse64\ScaleformAPI.h" />
-    <ClInclude Include="..\skse64\ScaleformCallbacks.h" />
     <ClInclude Include="..\skse64\ScaleformLoader.h" />
-    <ClInclude Include="..\skse64\ScaleformMovie.h" />
-    <ClInclude Include="..\skse64\ScaleformState.h" />
-    <ClInclude Include="..\skse64\ScaleformTypes.h" />
-    <ClInclude Include="..\skse64\ScaleformValue.h" />
-    <ClInclude Include="..\skse64\ScaleformVM.h" />
     <ClInclude Include="ActorUpdateManager.h" />
     <ClInclude Include="BodyMorphInterface.h" />
     <ClInclude Include="CDXBrush.h" />
@@ -330,8 +246,8 @@
     <None Include="exports.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\common\common_vc14.vcxproj">
-      <Project>{d4c128a1-73dc-4941-a453-ce55af239ba8}</Project>
+    <ProjectReference Include="..\skse64\skse64.vcxproj">
+      <Project>{639411c0-fc23-4819-a0c5-429a4e5d8a51}</Project>
     </ProjectReference>
     <ProjectReference Include="..\skse64_common\skse64_common.vcxproj">
       <Project>{20c6411c-596f-4b85-be4e-8bc91f59d8a6}</Project>
