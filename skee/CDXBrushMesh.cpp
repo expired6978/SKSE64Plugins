@@ -43,7 +43,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	}
 
 	// Create the vertex array.
-	m_primitive = new ColoredPrimitive[m_vertCount];
+	m_primitive = std::make_unique<ColoredPrimitive[]>(m_vertCount);
 	if (!m_primitive)
 	{
 		_ERROR("%s - Failed to initialize colored primitive with %d vertices", __FUNCTION__, m_vertCount);
@@ -51,7 +51,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	}
 
 	// Create the index array.
-	m_indices = new CDXMeshIndex[m_indexCount];
+	m_indices = std::make_unique<CDXMeshIndex[]>(m_indexCount);
 	if (!m_indices)
 	{
 		_ERROR("%s - Failed to initialize %d indices", __FUNCTION__, m_indexCount);
@@ -84,12 +84,12 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	vertexBufferDesc.StructureByteStride = 0;
 
 	// Give the subresource structure a pointer to the vertex data.
-	vertexData.pSysMem = m_primitive;
+	vertexData.pSysMem = m_primitive.get();
 	vertexData.SysMemPitch = 0;
 	vertexData.SysMemSlicePitch = 0;
 
 	// Now create the vertex buffer.
-	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, &m_vertexBuffer);
+	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, m_vertexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create vertex buffer 1", __FUNCTION__);
@@ -100,7 +100,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	vertexBufferDesc.ByteWidth = sizeof(ColoredPrimitive) * m_sphere.m_vertices.size();
 
 	// Now create the vertex buffer.
-	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, &m_sphere.m_vertexBuffer);
+	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, m_sphere.m_vertexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create vertex buffer 2", __FUNCTION__);
@@ -116,12 +116,12 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	indexBufferDesc.StructureByteStride = 0;
 
 	// Give the subresource structure a pointer to the index data.
-	indexData.pSysMem = m_indices;
+	indexData.pSysMem = m_indices.get();
 	indexData.SysMemPitch = 0;
 	indexData.SysMemSlicePitch = 0;
 
 	// Create the index buffer.
-	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, &m_indexBuffer);
+	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, m_indexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create index buffer 1", __FUNCTION__);
@@ -132,7 +132,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	indexBufferDesc.ByteWidth = sizeof(CDXMeshIndex) * m_sphere.m_indices.size();
 
 	// Create the index buffer.
-	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, &m_sphere.m_indexBuffer);
+	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, m_sphere.m_indexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create index buffer 2", __FUNCTION__);
@@ -184,7 +184,7 @@ bool CDXBrushMesh::Create(CDXD3DDevice * device, bool dashed, XMVECTOR ringColor
 	rasterDesc.SlopeScaledDepthBias = 0.0f;
 
 	// Create the rasterizer state from the description we just filled out.
-	result = pDevice->CreateRasterizerState(&rasterDesc, &m_solidState);
+	result = pDevice->CreateRasterizerState(&rasterDesc, m_solidState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create rasterizer state", __FUNCTION__);

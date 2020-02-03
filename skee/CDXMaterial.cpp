@@ -27,44 +27,21 @@ CDXMaterial::CDXMaterial()
 
 CDXMaterial::~CDXMaterial()
 {
-	if (m_blendingState)
-	{
-		m_blendingState->Release();
-		m_blendingState = nullptr;
-	}
+
 }
 
-void CDXMaterial::Release()
-{
-	SetTexture(0, nullptr);
-	SetTexture(1, nullptr);
-	SetTexture(2, nullptr);
-	SetTexture(3, nullptr);
-	SetTexture(4, nullptr);
-}
-
-void CDXMaterial::SetTexture(int index, ID3D11ShaderResourceView* texture)
+void CDXMaterial::SetTexture(int index, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> texture)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	if(m_pTextures[index])
-		m_pTextures[index]->Release();
 	m_pTextures[index] = texture;
-	if(m_pTextures[index])
-		m_pTextures[index]->AddRef();
 }
 
-ID3D11BlendState* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
+Microsoft::WRL::ComPtr<ID3D11BlendState> CDXMaterial::GetBlendingState(CDXD3DDevice * device)
 {
 	if (m_blendingDirty)
 	{
-		if (m_blendingState)
-		{
-			m_blendingState->Release();
-			m_blendingState = nullptr;
-		}
-
 		D3D11_BLEND_DESC blendStateDescription;
 		// Clear the blend state description.
 		ZeroMemory(&blendStateDescription, sizeof(D3D11_BLEND_DESC));
@@ -80,7 +57,7 @@ ID3D11BlendState* CDXMaterial::GetBlendingState(CDXD3DDevice * device)
 		blendStateDescription.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
 		// Create the blend state using the description.
-		HRESULT result = device->GetDevice()->CreateBlendState(&blendStateDescription, &m_blendingState);
+		HRESULT result = device->GetDevice()->CreateBlendState(&blendStateDescription, m_blendingState.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			return nullptr;

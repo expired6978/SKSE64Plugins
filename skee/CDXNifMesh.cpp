@@ -167,7 +167,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, BSTriShape
 			nifMesh->BuildNormals();
 		}
 
-		CDXNifMaterial * meshMaterial = new CDXNifMaterial;
+		std::shared_ptr<CDXNifMaterial> meshMaterial = std::make_shared<CDXNifMaterial>();
 		meshMaterial->SetWireframeColor(XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
 		meshMaterial->SetShaderFlags1(shaderFlags1);
 		meshMaterial->SetShaderFlags2(shaderFlags2);
@@ -391,7 +391,7 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, NiGeometry *
 					}
 				});
 				
-				CDXMaterial * material = new CDXMaterial;
+				std::shared_ptr<CDXMaterial> material = std::make_shared<CDXMaterial>();
 				material->SetTexture(0, diffuseTexture);
 				material->SetWireframeColor(XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
 				material->SetShaderFlags1(shaderFlags1);

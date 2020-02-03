@@ -10,19 +10,16 @@ CDXEditableScene::CDXEditableScene() : CDXScene()
 
 void CDXEditableScene::CreateBrushes()
 {
-	m_brushes.push_back(new CDXMaskAddBrush);
-	m_brushes.push_back(new CDXMaskSubtractBrush);
-	m_brushes.push_back(new CDXInflateBrush);
-	m_brushes.push_back(new CDXDeflateBrush);
-	m_brushes.push_back(new CDXSmoothBrush);
-	m_brushes.push_back(new CDXMoveBrush);
+	m_brushes.emplace_back(std::make_unique<CDXMaskAddBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXMaskSubtractBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXInflateBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXDeflateBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXSmoothBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXMoveBrush>());
 }
 
 void CDXEditableScene::ReleaseBrushes()
 {
-	for (auto brush : m_brushes)
-		delete brush;
-
 	m_brushes.clear();
 }
 
@@ -41,12 +38,12 @@ void CDXEditableScene::Release()
 
 CDXBrush * CDXEditableScene::GetBrush(CDXBrush::BrushType brushType)
 {
-	for (auto brush : m_brushes) {
+	for (const auto& brush : m_brushes) {
 		if (brush->GetType() == brushType)
-			return brush;
+			return brush.get();
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 CDXBrush * CDXEditableScene::GetCurrentBrush()

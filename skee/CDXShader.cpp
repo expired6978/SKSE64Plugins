@@ -107,7 +107,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
 	// Create the texture sampler state.
-	result = pDevice->CreateSamplerState(&samplerDesc, &m_sampleState);
+	result = pDevice->CreateSamplerState(&samplerDesc, m_sampleState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create sampler state", __FUNCTION__);
@@ -123,7 +123,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	bufferDesc.ByteWidth = sizeof(VertexBuffer);
 
 	// Create the matrix constant buffer pointer so we can access the vertex shader constant buffer from within this class.
-	result = pDevice->CreateBuffer(&bufferDesc, NULL, &m_matrixBuffer);
+	result = pDevice->CreateBuffer(&bufferDesc, NULL, m_matrixBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create matrix buffer", __FUNCTION__);
@@ -133,7 +133,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	bufferDesc.ByteWidth = sizeof(TransformBuffer);
 
 	// Create the matrix constant buffer pointer so we can access the vertex shader constant buffer from within this class.
-	result = pDevice->CreateBuffer(&bufferDesc, NULL, &m_transformBuffer);
+	result = pDevice->CreateBuffer(&bufferDesc, NULL, m_transformBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create transform buffer", __FUNCTION__);
@@ -145,7 +145,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	bufferDesc.ByteWidth = sizeof(MaterialBuffer);
 
 	// Create the constant buffer pointer so we can access the vertex shader constant buffer from within this class.
-	result = pDevice->CreateBuffer(&bufferDesc, NULL, &m_materialBuffer);
+	result = pDevice->CreateBuffer(&bufferDesc, NULL, m_materialBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create material buffer", __FUNCTION__);
@@ -166,7 +166,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	rasterDesc.SlopeScaledDepthBias = 0.0f;
 
 	// Create the rasterizer state from the description we just filled out.
-	result = pDevice->CreateRasterizerState(&rasterDesc, &m_solidState);
+	result = pDevice->CreateRasterizerState(&rasterDesc, m_solidState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create solid rasterizer state", __FUNCTION__);
@@ -194,7 +194,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 #endif
 
 
-	result = pDevice->CreateRasterizerState(&rasterDesc, &m_wireState);
+	result = pDevice->CreateRasterizerState(&rasterDesc, m_wireState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create wire rasterizer state", __FUNCTION__);
@@ -223,7 +223,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	depthDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
 	depthDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
-	pDevice->CreateDepthStencilState(&depthDesc, &m_depthSS);
+	pDevice->CreateDepthStencilState(&depthDesc, m_depthSS.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create depth stencil state", __FUNCTION__);
@@ -245,7 +245,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	blendStateDescription.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
 	// Create the blend state using the description.
-	result = pDevice->CreateBlendState(&blendStateDescription, &m_wireBlendState);
+	result = pDevice->CreateBlendState(&blendStateDescription, m_wireBlendState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create wire blend state", __FUNCTION__);
@@ -350,7 +350,7 @@ bool CDXShader::PSSetMaterialBuffers(CDXD3DDevice * device, MaterialBuffer & par
 	return true;
 }
 
-void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
+void CDXShader::RenderShader(CDXD3DDevice * device, const std::shared_ptr<CDXMaterial>& material)
 {
 	auto pDeviceContext = device->GetDeviceContext();
 	// Set the vertex input layout.
@@ -369,7 +369,7 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 	ID3D11VertexShader* vshader = m_vertexShader.Get();
 	ID3D11PixelShader* pshader = m_pixelShader.Get();
 	ID3D11GeometryShader* gshader = nullptr;
-	ID3D11BlendState * blendingState = material->GetBlendingState(device);
+	ID3D11BlendState * blendingState = material->GetBlendingState(device).Get();
 
 	float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	if (material->IsWireframe())
@@ -425,7 +425,16 @@ void CDXShader::RenderShader(CDXD3DDevice * device, CDXMaterial * material)
 	pDeviceContext->GSSetShader(gshader, nullptr, 0);
 
 	// Set shader texture resource in the pixel shader.
-	pDeviceContext->PSSetShaderResources(0, 5, material->GetTextures());
+
+	auto textures = material->GetTextures();
+	ID3D11ShaderResourceView* resources[] = {
+		textures[0].Get(),
+		textures[1].Get(),
+		textures[2].Get(),
+		textures[3].Get(),
+		textures[4].Get()
+	};
+	pDeviceContext->PSSetShaderResources(0, 5, resources);
 
 	// Set the sampler state in the pixel shader.
 

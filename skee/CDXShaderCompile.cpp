@@ -26,13 +26,12 @@ HRESULT CompileShaderFromData(LPCVOID pSrcData, _In_ SIZE_T SrcDataSize, _In_opt
 
 	char name[MAX_PATH];
 	const char * versions[] = {
-		"43",
-		"42",
-		"44",
-		"45",
-		"46",
 		"47",
-		"46e"
+		"46e",
+		"45",
+		"44",
+		"43",
+		"42"
 	};
 
 	HMODULE d3dcompiler = 0;

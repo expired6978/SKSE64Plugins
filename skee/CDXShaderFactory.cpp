@@ -22,7 +22,7 @@ bool CDXShaderFactory::CreatePixelShader(CDXD3DDevice * device, CDXShaderFile * 
 		}
 
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreatePixelShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, &pixelShader);
+		result = pDevice->CreatePixelShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, pixelShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create pixel shader", __FUNCTION__);
@@ -32,7 +32,7 @@ bool CDXShaderFactory::CreatePixelShader(CDXD3DDevice * device, CDXShaderFile * 
 	else if (result == E_NOINTERFACE && precompiledFile && precompiledFile->GetBufferSize())
 	{
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreatePixelShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, &pixelShader);
+		result = pDevice->CreatePixelShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, pixelShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create pixel shader", __FUNCTION__);
@@ -74,7 +74,7 @@ bool CDXShaderFactory::CreateVertexShader(CDXD3DDevice * device, CDXShaderFile *
 		}
 
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreateVertexShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, &vertexShader);
+		result = pDevice->CreateVertexShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, vertexShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
@@ -92,7 +92,7 @@ bool CDXShaderFactory::CreateVertexShader(CDXD3DDevice * device, CDXShaderFile *
 	else if (result == E_NOINTERFACE && precompiledFile && precompiledFile->GetBufferSize())
 	{
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreateVertexShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, &vertexShader);
+		result = pDevice->CreateVertexShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, vertexShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create vertex shader", __FUNCTION__);
@@ -100,7 +100,7 @@ bool CDXShaderFactory::CreateVertexShader(CDXD3DDevice * device, CDXShaderFile *
 		}
 
 		// Create the vertex input layout.
-		result = pDevice->CreateInputLayout(polygonLayout, numElements, precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), &layout);
+		result = pDevice->CreateInputLayout(polygonLayout, numElements, precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), layout.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create input layout for vertex shader", __FUNCTION__);
@@ -139,7 +139,7 @@ bool CDXShaderFactory::CreateGeometryShader(CDXD3DDevice * device, CDXShaderFile
 		}
 
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreateGeometryShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, &geometryShader);
+		result = pDevice->CreateGeometryShader(shaderBuffer->GetBufferPointer(), shaderBuffer->GetBufferSize(), NULL, geometryShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create geometry shader", __FUNCTION__);
@@ -149,7 +149,7 @@ bool CDXShaderFactory::CreateGeometryShader(CDXD3DDevice * device, CDXShaderFile
 	else if (result == E_NOINTERFACE && precompiledFile && precompiledFile->GetBufferSize())
 	{
 		// Create the vertex shader from the buffer.
-		result = pDevice->CreateGeometryShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, &geometryShader);
+		result = pDevice->CreateGeometryShader(precompiledFile->GetBuffer(), precompiledFile->GetBufferSize(), NULL, geometryShader.ReleaseAndGetAddressOf());
 		if (FAILED(result))
 		{
 			_ERROR("%s - Failed to create geometry shader", __FUNCTION__);

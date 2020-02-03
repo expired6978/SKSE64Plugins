@@ -162,11 +162,15 @@ public:
 	virtual bool IsDyeable(TESObjectARMO * armor);
 
 	virtual void GetTemplateColorMap(TESObjectREFR* actor, TESObjectARMO * armor, std::map<SInt32, UInt32>& colorMap);
+	virtual void GetSlotTextureIndexMap(TESObjectREFR* actor, TESObjectARMO* armor, std::map<SInt32, UInt32>& slotTextureIndexMap);
 
 	virtual void LoadMods();
 
 	void CreateTintsFromData(TESObjectREFR * refr, std::map<SInt32, CDXNifTextureRenderer::MaskData> & masks, const LayerTarget & layerTarget, ItemAttributeDataPtr & overrides, UInt32 & flags);
 	void ParseTintData(LPCTSTR filePath);
+
+protected:
+	void VisitTemplateData(TESObjectREFR* refr, TESObjectARMO* armor, std::function<void(MaskTriShapeMap*)> functor);
 
 private:
 	// Inherited via IAddonAttachmentInterface

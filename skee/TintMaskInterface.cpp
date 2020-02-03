@@ -615,10 +615,10 @@ bool TintMaskInterface::IsDyeable(TESObjectARMO * armor)
 	return false;
 }
 
-void TintMaskInterface::GetTemplateColorMap(TESObjectREFR* refr, TESObjectARMO * armor, std::map<SInt32, UInt32>& colorMap)
+void TintMaskInterface::VisitTemplateData(TESObjectREFR* refr, TESObjectARMO* armor, std::function<void(MaskTriShapeMap*)> functor)
 {
 	UInt8 gender = 0;
-	TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
+	TESNPC* actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
 	if (actorBase) {
 		Actor* actor = static_cast<Actor*>(refr);
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
@@ -634,57 +634,91 @@ void TintMaskInterface::GetTemplateColorMap(TESObjectREFR* refr, TESObjectARMO *
 			auto shapeMap = m_modelMap.GetTriShapeMap(m_modelMap.GetModelPath(gender, false, armor, addon));
 			if (shapeMap)
 			{
-				if (shapeMap->IsRemappable())
+				functor(shapeMap);
+			}
+		}
+	}
+}
+
+void TintMaskInterface::GetTemplateColorMap(TESObjectREFR* refr, TESObjectARMO * armor, std::map<SInt32, UInt32>& colorMap)
+{
+	VisitTemplateData(refr, armor, [&](auto shapeMap)
+	{
+		if (shapeMap->IsRemappable())
+		{
+			for (auto& shape : *shapeMap)
+			{
+				// Try all textures, though we probably only care about the diffuse
+				for (auto& layer : shape.second)
 				{
-					for (auto& shape : *shapeMap)
+					for (auto& slot : layer.second.slots)
 					{
-						// Try all textures, though we probably only care about the diffuse
-						for (auto& layer : shape.second)
+						colorMap[slot.first] = 0;
+
+						auto cit = layer.second.colors.find(slot.second);
+						if (cit != layer.second.colors.end())
 						{
-							for (auto& slot : layer.second.slots)
-							{
-								colorMap[slot.first] = 0;
-
-								auto cit = layer.second.colors.find(slot.second);
-								if (cit != layer.second.colors.end())
-								{
-									colorMap[slot.first] = cit->second & 0xFFFFFF;
-								}
-
-								auto ait = layer.second.alphas.find(slot.second);
-								if (ait != layer.second.alphas.end())
-								{
-									colorMap[slot.first] |= UInt32(ait->second * 255) << 24;
-								}
-							}
+							colorMap[slot.first] = cit->second & 0xFFFFFF;
 						}
-					}
-				}
-				else
-				{
-					// Try all shapes in this nif
-					for (auto& shape : *shapeMap)
-					{
-						// Try all textures, though we probably only care about the diffuse
-						for (auto& layer : shape.second)
-						{
-							// For each color mapping extract the template color and alpha
-							for (auto& color : layer.second.colors)
-							{
-								colorMap[color.first] = color.second & 0xFFFFFF;
 
-								auto it = layer.second.alphas.find(color.first);
-								if (it != layer.second.alphas.end())
-								{
-									colorMap[color.first] |= UInt32(it->second * 255) << 24;
-								}
-							}
+						auto ait = layer.second.alphas.find(slot.second);
+						if (ait != layer.second.alphas.end())
+						{
+							colorMap[slot.first] |= UInt32(ait->second * 255) << 24;
 						}
 					}
 				}
 			}
 		}
-	}
+		else
+		{
+			// Try all shapes in this nif
+			for (auto& shape : *shapeMap)
+			{
+				// Try all textures, though we probably only care about the diffuse
+				for (auto& layer : shape.second)
+				{
+					// For each color mapping extract the template color and alpha
+					for (auto& color : layer.second.colors)
+					{
+						colorMap[color.first] = color.second & 0xFFFFFF;
+
+						auto it = layer.second.alphas.find(color.first);
+						if (it != layer.second.alphas.end())
+						{
+							colorMap[color.first] |= UInt32(it->second * 255) << 24;
+						}
+					}
+				}
+			}
+		}
+	});
+}
+
+
+void TintMaskInterface::GetSlotTextureIndexMap(TESObjectREFR* refr, TESObjectARMO* armor, std::map<SInt32, UInt32>& slotTextureIndexMap)
+{
+	VisitTemplateData(refr, armor, [&](auto shapeMap)
+	{
+		if (shapeMap->IsRemappable())
+		{
+			for (auto& shape : *shapeMap)
+			{
+				// Try all textures, though we probably only care about the diffuse
+				for (auto& layer : shape.second)
+				{
+					SInt32 textureIndex = 0;
+					if (sscanf_s(layer.first, "%d", &textureIndex))
+					{
+						for (auto& slot : layer.second.slots)
+						{
+							slotTextureIndexMap[slot.first] = textureIndex;
+						}
+					}
+				}
+			}
+		}
+	});
 }
 
 void TintMaskInterface::LoadMods()

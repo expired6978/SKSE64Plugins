@@ -7,6 +7,8 @@
 #include "CDXRenderState.h"
 #include "skse64/NiTypes.h"
 
+#include <wrl/client.h>
+
 class CDXD3DDevice;
 class BSRenderTargetGroup;
 class BSScaleformImageLoader;
@@ -28,7 +30,7 @@ public:
 
 	bool CreateRenderTarget(CDXD3DDevice * device, UInt32 width, UInt32 height);
 
-	ID3D11RenderTargetView* GetRenderTargetView() { return m_renderTargetView; }
+	Microsoft::WRL::ComPtr<ID3D11RenderTargetView> GetRenderTargetView() { return m_renderTargetView; }
 	NiTexture* GetTexture() { return m_renderTexture; }
 
 	void SetWorkingActor(Actor * actor) { m_actor = actor; }
@@ -39,18 +41,15 @@ public:
 
 	void ReleaseImport();
 
-	void SetWorldOffset(CDXVec offset);
-
-
 protected:
 	Actor*						m_actor;
 	NiPointer<NiNode>			m_importRoot;
-	ID3D11RenderTargetView*		m_renderTargetView;
+	Microsoft::WRL::ComPtr<ID3D11RenderTargetView>		m_renderTargetView;
 	NiPointer<NiTexture>		m_renderTexture;
 
-	ID3D11Texture2D*			m_depthStencilBuffer;
-	ID3D11DepthStencilState*	m_depthStencilState;
-	ID3D11DepthStencilView*		m_depthStencilView;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D>			m_depthStencilBuffer;
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState>	m_depthStencilState;
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilView>	m_depthStencilView;
 };
 
 #endif
