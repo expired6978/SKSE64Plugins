@@ -83,20 +83,13 @@ bool SaveRenderedDDS(NiTexture * pkTexture, const char * pcFileName)
 		return false;
 	}
 
-	auto image = si.GetImage(0, 0, 0);
-	if (!image)
-	{
-		_ERROR("%s - Failed to acquire image from scratch", __FUNCTION__);
-		return false;
-	}
-
 	size_t len = strlen(pcFileName) + 1;
 	wchar_t * fileName = new wchar_t[len];
 	memset(fileName, 0, sizeof(len) * 2);
 	size_t converted = 0;
 	mbstowcs_s(&converted, fileName, len, pcFileName, len * 2);
-					
-	res = DirectX::SaveToDDSFile(*image, DirectX::DDS_FLAGS_NONE, fileName);
+
+	res = DirectX::SaveToDDSFile(si.GetImages(), si.GetImageCount(), si.GetMetadata(), DirectX::DDS_FLAGS_NONE, fileName);
 	if (FAILED(res))
 	{
 		delete[] fileName;

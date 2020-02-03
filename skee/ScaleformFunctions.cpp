@@ -373,12 +373,18 @@ void SKSEScaleform_SetItemDyeColor::Invoke(Args * args)
 		args->args[1].GetMember("weaponSlot", &param[5]);
 		identifier.weaponSlot = param[5].GetNumber();
 	}
-
+	std::map<SInt32, UInt32> slotTextureIndexMap;
 	UInt32 uniqueId = g_itemDataInterface.GetItemUniqueID(actor, identifier, true);
+	TESForm* dyedItem = g_itemDataInterface.GetFormFromUniqueID(uniqueId);
+	if (dyedItem && dyedItem->formType == TESObjectARMO::kTypeID)
+	{
+		g_tintMaskInterface.GetSlotTextureIndexMap(actor, static_cast<TESObjectARMO*>(dyedItem), slotTextureIndexMap);
+	}
+
 	if (clear)
-		g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, 0, maskIndex);
+		g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, slotTextureIndexMap[maskIndex], maskIndex);
 	else
-		g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, maskIndex, color);
+		g_itemDataInterface.SetItemTextureLayerColor(uniqueId, slotTextureIndexMap[maskIndex], maskIndex, color);
 
 	g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 }
@@ -433,7 +439,14 @@ void SKSEScaleform_SetItemDyeColors::Invoke(Args * args)
 		identifier.weaponSlot = param[5].GetNumber();
 	}
 
+	std::map<SInt32, UInt32> slotTextureIndexMap;
+	
 	UInt32 uniqueId = g_itemDataInterface.GetItemUniqueID(actor, identifier, true);
+	TESForm* dyedItem = g_itemDataInterface.GetFormFromUniqueID(uniqueId);
+	if (dyedItem && dyedItem->formType == TESObjectARMO::kTypeID)
+	{
+		g_tintMaskInterface.GetSlotTextureIndexMap(actor, static_cast<TESObjectARMO*>(dyedItem), slotTextureIndexMap);
+	}
 
 	UInt32 size = args->args[2].GetArraySize();
 	for (UInt32 i = 0; i < size; ++i)
@@ -442,11 +455,11 @@ void SKSEScaleform_SetItemDyeColors::Invoke(Args * args)
 		args->args[2].GetElement(i, &element);
 
 		if (element.GetType() == GFxValue::kType_Undefined || element.GetType() == GFxValue::kType_Null) {
-			g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, 0, i);
+			g_itemDataInterface.ClearItemTextureLayerColor(uniqueId, slotTextureIndexMap[i], i);
 		}
 		else {
 			UInt32 color = element.GetNumber();
-			g_itemDataInterface.SetItemTextureLayerColor(uniqueId, 0, i, color);
+			g_itemDataInterface.SetItemTextureLayerColor(uniqueId, slotTextureIndexMap[i], i, color);
 		}
 	}
 

@@ -43,15 +43,13 @@ public:
 		float padding3 = 0.0f;
 	};
 
-	void RenderShader(CDXD3DDevice * device, CDXMaterial * material);
+	void RenderShader(CDXD3DDevice * device, const std::shared_ptr<CDXMaterial>& material);
 
 	bool VSSetShaderBuffer(CDXD3DDevice * device, VertexBuffer & params);
 	bool VSSetTransformBuffer(CDXD3DDevice * device, TransformBuffer & transform);
 	bool PSSetMaterialBuffers(CDXD3DDevice * device, MaterialBuffer & material);
 
 protected:
-	void OutputShaderErrorMessage(ID3D10Blob* errorMessage, std::stringstream & output);
-
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
 

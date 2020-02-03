@@ -49,12 +49,12 @@ CDXNifScene::CDXNifScene() : CDXEditableScene()
 
 void CDXNifScene::CreateBrushes()
 {
-	m_brushes.push_back(new CDXNifMaskAddBrush);
-	m_brushes.push_back(new CDXNifMaskSubtractBrush);
-	m_brushes.push_back(new CDXNifInflateBrush);
-	m_brushes.push_back(new CDXNifDeflateBrush);
-	m_brushes.push_back(new CDXNifSmoothBrush);
-	m_brushes.push_back(new CDXNifMoveBrush);
+	m_brushes.emplace_back(std::make_unique<CDXNifMaskAddBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXNifMaskSubtractBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXNifInflateBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXNifDeflateBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXNifSmoothBrush>());
+	m_brushes.emplace_back(std::make_unique<CDXNifMoveBrush>());
 }
 
 bool CDXNifScene::Setup(const CDXInitParams & initParams)
@@ -158,7 +158,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 	renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 	renderTargetViewDesc.Texture2D.MipSlice = 0;
 
-	result = device->CreateRenderTargetView(rendererData->texture, &renderTargetViewDesc, &m_renderTargetView);
+	result = device->CreateRenderTargetView(rendererData->texture, &renderTargetViewDesc, m_renderTargetView.ReleaseAndGetAddressOf());
 	if (FAILED(result)) {
 		_ERROR("%s - Failed to create render target view.", __FUNCTION__);
 		return false;
@@ -200,7 +200,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 	depthBufferDesc.MiscFlags = 0;
 
 	// Create the texture for the depth buffer using the filled out description.
-	result = device->CreateTexture2D(&depthBufferDesc, NULL, &m_depthStencilBuffer);
+	result = device->CreateTexture2D(&depthBufferDesc, NULL, m_depthStencilBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result)) {
 		_ERROR("%s - Failed to create DepthStencilBuffer", __FUNCTION__);
 		return false;
@@ -231,7 +231,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 	depthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
 	// Create the depth stencil state.
-	result = device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilState);
+	result = device->CreateDepthStencilState(&depthStencilDesc, m_depthStencilState.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create DepthStencilState", __FUNCTION__);
@@ -247,7 +247,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 	depthStencilViewDesc.Texture2D.MipSlice = 0;
 
 	// Create the depth stencil view.
-	result = device->CreateDepthStencilView(m_depthStencilBuffer, &depthStencilViewDesc, &m_depthStencilView);
+	result = device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &depthStencilViewDesc, m_depthStencilView.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create DepthStencilView", __FUNCTION__);
@@ -265,27 +265,13 @@ void CDXNifScene::Release()
 		UInt8 ret = imageLoader->ReleaseVirtualImage(m_renderTexture);
 		m_renderTexture = nullptr;
 	}
-	if (m_renderTargetView) {
-		m_renderTargetView->Release();
-		m_renderTargetView = nullptr;
-	}
-
+	
+	m_renderTargetView = nullptr;
 	ReleaseImport();
-
 	m_actor = nullptr;
-
-	if (m_depthStencilBuffer) {
-		m_depthStencilBuffer->Release();
-		m_depthStencilBuffer = nullptr;
-	}
-	if (m_depthStencilState) {
-		m_depthStencilState->Release();
-		m_depthStencilState = nullptr;
-	}
-	if (m_depthStencilView) {
-		m_depthStencilView->Release();
-		m_depthStencilView = nullptr;
-	}
+	m_depthStencilBuffer = nullptr;
+	m_depthStencilState = nullptr;
+	m_depthStencilView = nullptr;
 
 	CDXEditableScene::Release();
 }
@@ -317,10 +303,10 @@ void CDXNifScene::Begin(CDXCamera * camera, CDXD3DDevice * device)
 	// Create the viewport.
 	deviceContext->RSSetViewports(1, &viewport);
 
-	deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView);
+	deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView.Get());
 
 	// Set the depth stencil state.
-	deviceContext->OMSetDepthStencilState(m_depthStencilState, 1);
+	deviceContext->OMSetDepthStencilState(m_depthStencilState.Get(), 1);
 
 	float color[4];
 	// Setup the color to clear the buffer to.
@@ -330,10 +316,10 @@ void CDXNifScene::Begin(CDXCamera * camera, CDXD3DDevice * device)
 	color[3] = g_sculptBackgroundA;
 
 	// Clear the back buffer.
-	deviceContext->ClearRenderTargetView(m_renderTargetView, color);
+	deviceContext->ClearRenderTargetView(m_renderTargetView.Get(), color);
 
 	// Clear the depth buffer.
-	deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	deviceContext->ClearDepthStencilView(m_depthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
 
 void CDXNifScene::End(CDXCamera * camera, CDXD3DDevice * device)

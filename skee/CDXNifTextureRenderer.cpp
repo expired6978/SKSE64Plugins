@@ -87,10 +87,10 @@ bool CDXNifTextureRenderer::ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<
 	LeaveCriticalSection(&g_renderManager->lock);
 
 	output = CreateSourceTexture(name);
-	NiTexture::RendererData * sourceData = new NiTexture::RendererData(m_bitmapWidth, m_bitmapHeight);
-	sourceData->texture = m_renderTargetTexture.Get();
+	NiTexture::RendererData * sourceData = new NiTexture::RendererData(GetWidth(), GetHeight());
+	sourceData->texture = GetTexture().Get();
 	sourceData->texture->AddRef();
-	sourceData->resourceView = m_shaderResourceView.Get();
+	sourceData->resourceView = GetResourceView().Get();
 	sourceData->resourceView->AddRef();
 	output->rendererData = sourceData;
 

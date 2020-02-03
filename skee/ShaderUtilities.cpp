@@ -757,7 +757,7 @@ NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial * material, UInt32 i
 		}
 		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_GlowMap)
 		{
-			return &static_cast<BSLightingShaderMaterialFacegen*>(material)->unkB0;
+			return &static_cast<BSLightingShaderMaterialGlowmap*>(material)->glowMap;
 		}
 		else
 		{
@@ -775,7 +775,7 @@ NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial * material, UInt32 i
 		{
 			return &static_cast<BSLightingShaderMaterialParallax*>(material)->unkA0;
 		}
-		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_Parallax || material->GetShaderType() == BSShaderMaterial::kShaderType_ParallaxOcc)
+		else if (material->GetShaderType() == BSShaderMaterial::kShaderType_ParallaxOcc)
 		{
 			return &static_cast<BSLightingShaderMaterialParallaxOcc*>(material)->unkA0;
 		}

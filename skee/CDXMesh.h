@@ -5,6 +5,7 @@
 #endif
 
 #include <functional>
+#include <memory>
 
 #include "CDXTypes.h"
 
@@ -35,8 +36,8 @@ public:
 	void SetVisible(bool visible);
 	virtual bool IsVisible() const;
 
-	void SetMaterial(CDXMaterial * material);
-	CDXMaterial * GetMaterial();
+	void SetMaterial(const std::shared_ptr<CDXMaterial>& material);
+	std::shared_ptr<CDXMaterial> GetMaterial();
 
 	enum LockMode
 	{
@@ -74,14 +75,14 @@ protected:
 	};
 	union
 	{
-		CDXMeshVert			* m_vertices;
-		ColoredPrimitive	* m_primitive;
+		std::unique_ptr<CDXMeshVert[]>		m_vertices{};
+		std::unique_ptr<ColoredPrimitive[]> m_primitive;
 	};
 	Microsoft::WRL::ComPtr<ID3D11Buffer>	m_indexBuffer;
 	UInt32					m_indexCount;
-	CDXMeshIndex		*	m_indices;
+	std::unique_ptr<CDXMeshIndex[]>	m_indices;
 	D3D_PRIMITIVE_TOPOLOGY	m_topology;
-	CDXMaterial				* m_material;
+	std::shared_ptr<CDXMaterial> m_material;
 	CDXMatrix				m_transform;
 	CDXD3DDevice		*	m_pDevice;
 

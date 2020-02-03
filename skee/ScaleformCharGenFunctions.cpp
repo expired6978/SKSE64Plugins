@@ -968,7 +968,7 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 				if (extraParts.find(headPart) != extraParts.end()) // Is one of the hair parts toggle visibility
 					mesh->SetVisible(false);
 					
-				CDXMaterial * material = mesh->GetMaterial();
+				auto material = mesh->GetMaterial();
 				if (material)
 					material->SetWireframeColor(DirectX::XMFLOAT4(((colors[i] >> 16) & 0xFF) / 255.0, ((colors[i] >> 8) & 0xFF) / 255.0, (colors[i] & 0xFF) / 255.0, 1.0f));
 
@@ -1136,7 +1136,7 @@ void SKSEScaleform_GetBrushes::Invoke(Args * args)
 {
 	args->movie->CreateArray(args->result);
 
-	for (auto brush : g_World.GetBrushes()) {
+	for (const auto& brush : g_World.GetBrushes()) {
 		GFxValue object;
 		args->movie->CreateObject(&object);
 		RegisterNumber(&object, "type", brush->GetType());
@@ -1204,7 +1204,7 @@ void SKSEScaleform_GetMeshes::Invoke(Args * args)
 			RegisterBool(&object, "morphable", mesh->IsMorphable());
 			RegisterNumber(&object, "vertices", mesh->GetVertexCount());
 
-			CDXMaterial * material = mesh->GetMaterial();
+			auto material = mesh->GetMaterial();
 			if (material) {
 				DirectX::XMFLOAT4 fColor = material->GetWireframeColor();
 				UInt32 color = 0xFF000000 | (UInt32)(fColor.x * 255) << 16 | (UInt32)(fColor.y * 255) << 8 | (UInt32)(fColor.z * 255);
@@ -1238,7 +1238,7 @@ void SKSEScaleform_SetMeshData::Invoke(Args * args)
 		mesh->SetLocked(locked.GetBool());
 		mesh->SetShowWireframe(wireframe.GetBool());
 		mesh->SetVisible(visible.GetBool());
-		CDXMaterial * material = mesh->GetMaterial();
+		auto material = mesh->GetMaterial();
 		if (material) {
 			UInt32 color = wfColor.GetNumber();
 			material->SetWireframeColor(DirectX::XMFLOAT4(((color >> 16) & 0xFF) / 255.0, ((color >> 8) & 0xFF) / 255.0, (color & 0xFF) / 255.0, 1.0f));

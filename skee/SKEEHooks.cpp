@@ -46,7 +46,7 @@
 
 extern PluginHandle			g_pluginHandle;
 
-extern SKSETaskInterface		* g_task;
+extern SKSETaskInterface	* g_task;
 extern SKSETrampolineInterface	* g_trampoline;
 
 extern ItemDataInterface	g_itemDataInterface;
@@ -234,6 +234,8 @@ void InstallArmorAddonHook(TESObjectREFR * refr, BipedParam * params, NiNode * b
 		NiPointer<NiAVObject> node = resultNode;
 		g_actorUpdateManager.OnAttach(refr, static_cast<TESObjectARMO*>(params->data.armor), static_cast<TESObjectARMA*>(params->data.addon), node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
 	}
+
+	
 }
 
 void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate)
@@ -1194,7 +1196,44 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 
 			Console_Print("Dumped actor");
 		}
-		
+		else if (_strnicmp(buffer2, "equipped", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping nodes requires a reference");
+				return false;
+			}
+			for (int k = 0; k <= 1; ++k)
+			{
+				auto weightModel = thisObj->GetBiped(k);
+				_MESSAGE("Biped Set %d", k);
+				if (weightModel && weightModel->bipedData)
+				{
+					for (int i = 0; i < 42; ++i)
+					{
+						_MESSAGE("Biped 1 Slot: %d Armor: %08X Arma: %08X", i, weightModel->bipedData->unk10[i].armor ? weightModel->bipedData->unk10[i].armor->formID : 0, weightModel->bipedData->unk10[i].addon ? weightModel->bipedData->unk10[i].addon->formID : 0);
+						TESForm* armor = weightModel->bipedData->unk10[i].armor;
+						NiAVObject* node = weightModel->bipedData->unk10[i].object;
+						if (armor && armor->formType == TESObjectARMO::kTypeID)
+						{
+							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
+						}
+						//DumpClass(&weightModel->weightData->unk10[i], sizeof(ActorWeightData::EquipSlot) / 8);
+					}
+					for (int i = 0; i < 42; ++i)
+					{
+						_MESSAGE("Biped 2 Slot: %d Armor: %08X Arma: %08X", i, weightModel->bipedData->unk13C0[i].armor ? weightModel->bipedData->unk13C0[i].armor->formID : 0, weightModel->bipedData->unk13C0[i].addon ? weightModel->bipedData->unk13C0[i].addon->formID : 0);
+						TESForm* armor = weightModel->bipedData->unk13C0[i].armor;
+						NiAVObject* node = weightModel->bipedData->unk13C0[i].object;
+						if (armor && armor->formType == TESObjectARMO::kTypeID)
+						{
+							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
+						}
+						//DumpClass(&weightModel->weightData->unk10[i], sizeof(ActorWeightData::EquipSlot) / 8);
+					}
+				}
+			}
+			
+		}
 #endif
 	}
 	
@@ -1269,7 +1308,7 @@ bool InstallSKEEHooks()
 	if (g_trampoline) {
 		void* branch = g_trampoline->AllocateFromBranchPool(g_pluginHandle, TRAMPOLINE_SIZE);
 		if (!branch) {
-			_ERROR("couldn't acquire branch trampoline from SKSE. this is fatal. skipping remainder of init process.");
+			_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
 			return false;
 		}
 
@@ -1277,7 +1316,7 @@ bool InstallSKEEHooks()
 
 		void* local = g_trampoline->AllocateFromLocalPool(g_pluginHandle, TRAMPOLINE_SIZE);
 		if (!local) {
-			_ERROR("couldn't acquire codegen buffer from SKSE. this is fatal. skipping remainder of init process.");
+			_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
 			return false;
 		}
 

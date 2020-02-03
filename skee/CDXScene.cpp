@@ -10,16 +10,13 @@ using namespace DirectX;
 
 CDXScene::CDXScene()
 {
-	m_shader = new CDXShader;
+	m_shader = std::make_unique<CDXShader>();
 	m_visible = true;
 }
 
 CDXScene::~CDXScene()
 {
-	if(m_shader) {
-		delete m_shader;
-		m_shader = NULL;
-	}
+
 }
 
 void CDXScene::Release()
@@ -93,7 +90,7 @@ void CDXScene::Render(CDXCamera * camera, CDXD3DDevice * device)
 
 	for(auto mesh : m_meshes) {
 		if(mesh->IsVisible()) {
-			mesh->Render(device, m_shader);
+			mesh->Render(device, m_shader.get());
 		}
 	}
 }

@@ -7,7 +7,9 @@
 #include "CDXBrush.h"
 #include "CDXTypes.h"
 
-typedef std::vector<CDXBrush*> CDXBrushList;
+#include <memory>
+
+typedef std::vector<std::unique_ptr<CDXBrush>> CDXBrushList;
 
 class CDXEditableScene : public CDXScene
 {

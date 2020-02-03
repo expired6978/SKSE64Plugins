@@ -37,7 +37,7 @@ public:
 		{
 			struct BlendData
 			{
-				UInt32		dummy;
+				unsigned long		dummy;
 				TextureType	type;
 			} blendData;
 			XMINT2 data;
@@ -65,10 +65,10 @@ public:
 	bool UpdateConstantBuffer(CDXD3DDevice * device);
 	bool UpdateStructuredBuffer(CDXD3DDevice * device, const LayerData & layerData);
 
-	int GetWidth() const { return m_bitmapWidth; }
-	int GetHeight() const { return m_bitmapHeight; }
-	Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() { return m_renderTargetTexture; }
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetResourceView() { return m_shaderResourceView; };
+	int GetWidth() const { return m_dstDesc.Width; }
+	int GetHeight() const { return m_dstDesc.Height; }
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture();
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetResourceView();
 
 	void AddLayer(const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> & texture, const TextureType & type, const std::string & technique, const XMFLOAT4 & maskColor);
 
@@ -79,6 +79,11 @@ protected:
 	CDXPixelShaderCache * m_shaderCache;
 
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>	m_source;
+
+	void RenderShaders(CDXD3DDevice * device, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> sourceView);
+
+	bool SplitSubresources(CDXD3DDevice * device, D3D11_TEXTURE2D_DESC desc, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> source, std::vector<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>>& resources);
+	bool CreateSubresourceDestination(CDXD3DDevice * device, D3D11_TEXTURE2D_DESC desc, Microsoft::WRL::ComPtr<ID3D11Texture2D>& outTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& outResource);
 
 	struct ResourceData
 	{
@@ -104,9 +109,11 @@ protected:
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>	m_shaderResourceView;
 	Microsoft::WRL::ComPtr<ID3D11Texture2D>				m_intermediateTexture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>	m_intermediateResourceView;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D>				m_multiTexture;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>	m_multiResourceView;
 
 	int m_vertexCount;
 	int m_indexCount;
-	int m_bitmapWidth;
-	int m_bitmapHeight;
+	D3D11_TEXTURE2D_DESC	m_srcDesc;
+	D3D11_TEXTURE2D_DESC	m_dstDesc;
 };

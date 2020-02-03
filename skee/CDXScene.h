@@ -5,6 +5,7 @@
 
 #include "CDXTypes.h"
 #include <vector>
+#include <memory>
 
 class CDXCamera;
 class CDXD3DDevice;
@@ -38,13 +39,13 @@ public:
 	void AddMesh(CDXMesh * mesh);
 	bool Pick(CDXCamera * camera, int x, int y, CDXPicker & picker);
 
-	CDXShader	* GetShader() { return m_shader; }
+	CDXShader	* GetShader() { return m_shader.get(); }
 	void SetVisible(bool visible) { m_visible = visible; }
 	bool IsVisible() const { return m_visible; }
 
 protected:
 	bool m_visible;
-	CDXShader * m_shader;
+	std::unique_ptr<CDXShader> m_shader;
 	CDXMeshList m_meshes;
 };
 

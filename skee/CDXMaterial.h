@@ -8,6 +8,7 @@
 #include <mutex>
 #include <d3d11_3.h>
 #include <DirectXMath.h>
+#include <wrl/client.h>
 
 #define DeclareFlags(type) \
 	private: \
@@ -70,12 +71,10 @@ public:
 	CDXMaterial();
 	~CDXMaterial();
 
-	void Release();
+	void SetTexture(int index, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> texture);
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>* GetTextures() { return m_pTextures; }
 
-	void SetTexture(int index, ID3D11ShaderResourceView* texture);
-	ID3D11ShaderResourceView** GetTextures() { return m_pTextures; }
-
-	ID3D11BlendState* GetBlendingState(CDXD3DDevice * device);
+	Microsoft::WRL::ComPtr<ID3D11BlendState> GetBlendingState(CDXD3DDevice * device);
 
 	void SetWireframeColor(DirectX::XMFLOAT4 color);
 	DirectX::XMFLOAT4 & GetWireframeColor();
@@ -163,8 +162,8 @@ public:
 	bool HasTintMask() const { return m_pTextures[4] != nullptr; }
 
 protected:
-	ID3D11ShaderResourceView * m_pTextures[5];
-	ID3D11BlendState* m_blendingState;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pTextures[5];
+	Microsoft::WRL::ComPtr<ID3D11BlendState> m_blendingState;
 	bool m_blendingDirty;
 
 	DirectX::XMFLOAT4 m_wireframeColor;

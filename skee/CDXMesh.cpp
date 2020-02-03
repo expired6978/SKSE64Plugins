@@ -21,20 +21,10 @@ CDXMesh::CDXMesh()
 
 CDXMesh::~CDXMesh()
 {
-	if (m_material) {
-		m_material->Release();
-		delete m_material;
-		m_material = nullptr;
-	}
 
-	delete[] m_vertices;
-	m_vertices = 0;
-
-	delete[] m_indices;
-	m_indices = 0;
 }
 
-void CDXMesh::SetMaterial(CDXMaterial * material)
+void CDXMesh::SetMaterial(const std::shared_ptr<CDXMaterial>& material)
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -42,7 +32,7 @@ void CDXMesh::SetMaterial(CDXMaterial * material)
 	m_material = material;
 }
 
-CDXMaterial * CDXMesh::GetMaterial()
+std::shared_ptr<CDXMaterial> CDXMesh::GetMaterial()
 {
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
@@ -186,12 +176,12 @@ CDXMeshVert * CDXMesh::LockVertices(const LockMode type)
 		}
 	}
 
-	return m_vertices;
+	return m_vertices.get();
 }
 
 CDXMeshIndex * CDXMesh::LockIndices()
 {
-	return m_indices;
+	return m_indices.get();
 }
 
 void CDXMesh::UnlockVertices(const LockMode type)
@@ -205,7 +195,7 @@ void CDXMesh::UnlockVertices(const LockMode type)
 void CDXMesh::UnlockIndices(bool write)
 {
 	if(write)
-		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer.Get(), 0, nullptr, m_indices, 0, 0);
+		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer.Get(), 0, nullptr, m_indices.get(), 0, 0);
 }
 
 bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
@@ -306,7 +296,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	}
 
 	// Create the vertex array.
-	m_vertices = new CDXMeshVert[m_vertCount];
+	m_vertices = std::make_unique<CDXMeshVert[]>(m_vertCount);
 	if (!m_vertices)
 	{
 		_ERROR("%s - Failed to create vertex array", __FUNCTION__);
@@ -314,7 +304,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	}
 
 	// Create the index array.
-	m_indices = new CDXMeshIndex[m_indexCount];
+	m_indices = std::make_unique<CDXMeshIndex[]>(m_indexCount);
 	if (!m_indices)
 	{
 		_ERROR("%s - Failed to create index array", __FUNCTION__);
@@ -322,7 +312,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	}
 
 	// Load the vertex array and index array with data.
-	fillFunction(m_vertices, m_indices);
+	fillFunction(m_vertices.get(), m_indices.get());
 	
 	// Set up the description of the static vertex buffer.
 	vertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -333,21 +323,19 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	vertexBufferDesc.StructureByteStride = 0;
 
 	// Give the subresource structure a pointer to the vertex data.
-	vertexData.pSysMem = m_vertices;
+	vertexData.pSysMem = m_vertices.get();
 	vertexData.SysMemPitch = 0;
 	vertexData.SysMemSlicePitch = 0;
 
 	// Now create the vertex buffer.
-	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, &m_vertexBuffer);
+	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, m_vertexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create vertex buffer", __FUNCTION__);
 		return false;
 	}
 
-	// We don't need this buffer after we create the mesh
-	delete m_vertices;
-	m_vertices = nullptr;
+	m_vertices.release();
 
 	// Set up the description of the static index buffer.
 	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -358,12 +346,12 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, UInt32 vertexCount, UInt3
 	indexBufferDesc.StructureByteStride = 0;
 
 	// Give the subresource structure a pointer to the index data.
-	indexData.pSysMem = m_indices;
+	indexData.pSysMem = m_indices.get();
 	indexData.SysMemPitch = 0;
 	indexData.SysMemSlicePitch = 0;
 
 	// Create the index buffer.
-	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, &m_indexBuffer);
+	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, m_indexBuffer.ReleaseAndGetAddressOf());
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create index buffer", __FUNCTION__);
