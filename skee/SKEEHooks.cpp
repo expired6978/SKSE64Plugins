@@ -120,6 +120,9 @@ RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x00888290);
 typedef void*(*_GetHeadParts)(void * unk1, void * unk2);
 RelocAddr <_GetHeadParts> GetHeadParts(0x00165660);
 
+typedef void(*_TransferItemUID)(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1);
+_TransferItemUID TransferItemUID_Original = nullptr;
+
 void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObject * resultNode1, NiAVObject * resultNode2, UInt32 firstPerson)
 {
 	if (!actor) {
@@ -1044,6 +1047,23 @@ void SetNewInventoryItemModel_Hooked(Inventory3DManager * inventoryManager, TESF
 	SetNewInventoryItemModel(inventoryManager, form1, form2, node);
 }
 
+void TransferItemUID_Hooked(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1)
+{
+	TransferItemUID_Original(extraContainerChangeData, extraList, oldForm, newForm, unk1);
+
+	if (extraList) {
+		if (extraList->HasType(kExtraData_Rank) && !extraList->HasType(kExtraData_UniqueID)) {
+			CALL_MEMBER_FN(extraContainerChangeData, SetUniqueID)(extraList, oldForm, newForm);
+			ExtraRank* rank = static_cast<ExtraRank*>(extraList->GetByType(kExtraData_Rank));
+			ExtraUniqueID* uniqueId = static_cast<ExtraUniqueID*>(extraList->GetByType(kExtraData_UniqueID));
+			if (rank && uniqueId) {
+				// Re-assign mapping
+				g_itemDataInterface.UpdateUIDByRank(rank->rank, uniqueId->uniqueId, uniqueId->ownerFormId);
+			}
+		}
+	}
+}
+
 bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESObjectREFR * thisObj, TESObjectREFR* containingObj, Script* scriptObj, ScriptLocals* locals, double& result, UInt32& opcodeOffsetPtr)
 {
 	char buffer[MAX_PATH];
@@ -1273,6 +1293,38 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				}));
 				mask <<= 1;
 			}
+		}
+		else if (_strnicmp(buffer2, "itemdata", MAX_PATH) == 0)
+		{
+			g_itemDataInterface.ForEachItemAttribute([](const ItemAttribute& item)
+			{
+				_MESSAGE("Item UID: %d ID: %d Owner: %08X Form: %08X", item.uid, item.rank, item.ownerForm, item.formId);
+				gLog.Indent();
+				for (auto& tintData : item.data->m_tintData)
+				{
+					_MESSAGE("Tint Index: %d", tintData.first);
+					gLog.Indent();
+					for (auto& color : tintData.second.m_colorMap)
+					{
+						_MESSAGE("ColorIndex: %d Color: %08X", color.first, color.second);
+					}
+					for (auto& blend : tintData.second.m_blendMap)
+					{
+						_MESSAGE("BlendIndex: %d Blend: %s", blend.first, blend.second->c_str());
+					}
+					for (auto& texture : tintData.second.m_textureMap)
+					{
+						_MESSAGE("TextureIndex: %d Texture: %s", texture.first, texture.second->c_str());
+					}
+					for (auto& type : tintData.second.m_typeMap)
+					{
+						_MESSAGE("TypeIndex: %d Type: %d", type.first, type.second);
+					}
+					gLog.Outdent();
+				}
+				gLog.Outdent();
+				Console_Print("Item UID: %d ID: %d Owner: %08X Form: %08X", item.uid, item.rank, item.ownerForm, item.formId);
+			});
 		}
 #if _DEBUG
 		else if (_strnicmp(buffer2, "nodes", MAX_PATH) == 0)
@@ -1619,6 +1671,35 @@ bool InstallSKEEHooks()
 
 			g_branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
 		}
+	}
+
+	{
+		RelocAddr<_TransferItemUID> TransferItemUID_Reloc(ExtraContainerChanges::Data::TransferItemUID_Address);
+		struct TransferItemUID_Code : Xbyak::CodeGenerator {
+			TransferItemUID_Code(void* buf, uintptr_t transferUIDAddress) : Xbyak::CodeGenerator(4096, buf)
+			{
+				Xbyak::Label retnLabel;
+
+				push(rbx);
+				push(rbp);
+				push(rsi);
+				push(rdi);
+				push(r14);
+
+				jmp(ptr[rip + retnLabel]);
+
+				L(retnLabel);
+				dq(transferUIDAddress + 7);
+			}
+		};
+
+		void* codeBuf = g_localTrampoline.StartAlloc();
+		TransferItemUID_Code code(codeBuf, TransferItemUID_Reloc.GetUIntPtr());
+		g_localTrampoline.EndAlloc(code.getCurr());
+
+		TransferItemUID_Original = (_TransferItemUID)codeBuf;
+
+		g_branchTrampoline.Write6Branch(TransferItemUID_Reloc.GetUIntPtr(), (uintptr_t)TransferItemUID_Hooked);
 	}
 
 	ObScriptCommand * hijackedCommand = nullptr;
