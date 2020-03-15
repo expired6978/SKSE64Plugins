@@ -230,6 +230,8 @@ public:
 
 	void UpdateInventoryItemDye(UInt32 rankId, TESObjectARMO * armor, NiAVObject * rootNode);
 
+	void ForEachItemAttribute(std::function<void(const ItemAttribute&)> functor);
+
 	enum
 	{
 		kInvalidRank = 0

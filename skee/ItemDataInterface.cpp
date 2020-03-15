@@ -610,6 +610,15 @@ void ItemDataInterface::UpdateInventoryItemDye(UInt32 rankId, TESObjectARMO * ar
 	g_task->AddTask(new NIOVTaskDeferredMask((*g_thePlayer), false, armor, nullptr, rootNode, rankId ? g_itemDataInterface.GetData(rankId) : nullptr));
 }
 
+void ItemDataInterface::ForEachItemAttribute(std::function<void(const ItemAttribute&)> functor)
+{
+	SimpleLocker lock(&m_lock);
+	for (auto& attribute : m_data)
+	{
+		functor(attribute);
+	}
+}
+
 void ItemDataInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
 {
 	UInt32 armorMask = armor->bipedObject.GetSlotMask();
