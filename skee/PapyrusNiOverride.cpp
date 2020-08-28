@@ -1081,6 +1081,7 @@ namespace papyrusNiOverride
 		return g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, &transform);
 	}
 
+
 	void AddNodeTransformScale(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name, float fScale)
 	{
 		if (!refr)
@@ -1114,6 +1115,56 @@ namespace papyrusNiOverride
 		return g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, 0);
 	}
 
+	bool HasNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
+	{
+		if (!refr)
+			return false;
+
+		OverrideVariant overrideVariant = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+		if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	void AddNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name, UInt32 iScaleMode)
+	{
+		if (!refr)
+			return;
+
+		if (name == BSFixedString("")) {
+			_ERROR("%s - Cannot add empty key for node \"%s\".", __FUNCTION__, node.data);
+			return;
+		}
+
+		OverrideVariant scaleMode;
+		PackValue<UInt32>(&scaleMode, OverrideVariant::kParam_NodeTransformScaleMode, 0, &iScaleMode);
+		g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, name, scaleMode);
+	}
+
+	UInt32 GetNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
+	{
+		if (!refr)
+			return 0;
+
+		OverrideVariant overrideVariant = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+		if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
+		{
+			return overrideVariant.data.u;
+		}
+
+		return -1;
+	}
+
+	bool RemoveNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
+	{
+		if (!refr)
+			return false;
+
+		return g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+	}
 
 	bool HasNodeTransformRotation(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
 	{
@@ -2045,10 +2096,10 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->RegisterFunction(
 		new NativeFunction5<StaticFunctionTag, bool, TESObjectREFR *, bool, bool, BSFixedString, BSFixedString>("RemoveNodeTransformScale", "NiOverride", papyrusNiOverride::RemoveNodeTransformScale, registry));
 
+	// Rotation Transforms
 	registry->RegisterFunction(
 		new NativeFunction5<StaticFunctionTag, bool, TESObjectREFR *, bool, bool, BSFixedString, BSFixedString>("HasNodeTransformRotation", "NiOverride", papyrusNiOverride::HasNodeTransformRotation, registry));
 
-	// Rotation Transforms
 	registry->RegisterFunction(
 		new NativeFunction6<StaticFunctionTag, void, TESObjectREFR *, bool, bool, BSFixedString, BSFixedString, VMArray<float>>("AddNodeTransformRotation", "NiOverride", papyrusNiOverride::AddNodeTransformRotation, registry));
 
@@ -2057,6 +2108,20 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 
 	registry->RegisterFunction(
 		new NativeFunction5<StaticFunctionTag, bool, TESObjectREFR *, bool, bool, BSFixedString, BSFixedString>("RemoveNodeTransformRotation", "NiOverride", papyrusNiOverride::RemoveNodeTransformRotation, registry));
+
+	// ScaleMode Transforms
+	registry->RegisterFunction(
+		new NativeFunction5<StaticFunctionTag, bool, TESObjectREFR*, bool, bool, BSFixedString, BSFixedString>("HasNodeTransformScaleMode", "NiOverride", papyrusNiOverride::HasNodeTransformScaleMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction6<StaticFunctionTag, void, TESObjectREFR*, bool, bool, BSFixedString, BSFixedString, UInt32>("AddNodeTransformScaleMode", "NiOverride", papyrusNiOverride::AddNodeTransformScaleMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction5<StaticFunctionTag, UInt32, TESObjectREFR*, bool, bool, BSFixedString, BSFixedString>("GetNodeTransformScaleMode", "NiOverride", papyrusNiOverride::GetNodeTransformScaleMode, registry));
+
+	registry->RegisterFunction(
+		new NativeFunction5<StaticFunctionTag, bool, TESObjectREFR*, bool, bool, BSFixedString, BSFixedString>("RemoveNodeTransformScaleMode", "NiOverride", papyrusNiOverride::RemoveNodeTransformScaleMode, registry));
+
 
 	registry->RegisterFunction(
 		new NativeFunction1<StaticFunctionTag, void, TESObjectREFR *>("UpdateAllReferenceTransforms", "NiOverride", papyrusNiOverride::UpdateAllReferenceTransforms, registry));
@@ -2290,7 +2355,7 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->SetFunctionFlags("NiOverride", "SetItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "GetItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "ClearItemTextureLayerType", VMClassRegistry::kFunctionFlag_NoWait);
-	registry->SetFunctionFlags("NiOverride", "UpdateItemTextureLayer", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "UpdateItemTextureLayers", VMClassRegistry::kFunctionFlag_NoWait);
 
 	registry->SetFunctionFlags("NiOverride", "IsFormDye", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "GetFormDyeColor", VMClassRegistry::kFunctionFlag_NoWait);

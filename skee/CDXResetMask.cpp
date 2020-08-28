@@ -8,16 +8,18 @@ CDXResetMask::CDXResetMask(CDXMesh * mesh)
 	m_mesh = mesh;
 
 	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
-
-	for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {		
-		if (XMVector3NotEqual(XMLoadFloat3(&pVertices[i].Color), COLOR_UNSELECTED)) {
-			m_previous[i] = pVertices[i].Color;
-			XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
-			XMStoreFloat3(&m_current[i], COLOR_UNSELECTED);
+	if (pVertices)
+	{
+		for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {
+			if (XMVector3NotEqual(XMLoadFloat3(&pVertices[i].Color), COLOR_UNSELECTED)) {
+				m_previous[i] = pVertices[i].Color;
+				XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
+				XMStoreFloat3(&m_current[i], COLOR_UNSELECTED);
+			}
 		}
-	}
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+		m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	}
 }
 
 CDXResetMask::~CDXResetMask()
@@ -34,6 +36,8 @@ CDXUndoCommand::UndoType CDXResetMask::GetUndoType()
 void CDXResetMask::Redo()
 {
 	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	if (!pVertices)
+		return;
 
 	// Do what we have now
 	for (auto it : m_current)
@@ -45,6 +49,8 @@ void CDXResetMask::Redo()
 void CDXResetMask::Undo()
 {
 	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	if (!pVertices)
+		return;
 
 	// Undo what we did
 	for (auto it : m_previous)

@@ -268,6 +268,8 @@ void CDXMoveStroke::Undo()
 void CDXMoveStroke::Update(CDXStroke::Info * info)
 {
 	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	if (!pVertices)
+		return;
 
 	m_previous.emplace(info->index, XMLoadFloat3(&pVertices[info->index].Position));
 	CDXVec newPosition = m_previous[info->index] + ((MoveInfo*)info)->offset * (float)(info->strength * info->falloff);

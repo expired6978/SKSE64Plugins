@@ -320,20 +320,20 @@ CDXNifResetSculpt::CDXNifResetSculpt(CDXNifMesh * mesh) : CDXUndoCommand()
 				auto sculptHost = sculptTarget->GetSculptHost(SculptData::GetHostByPart(headPart), false);
 				if (sculptHost) {
 					CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
-					for (auto it : *sculptHost) {
-						// Skip masked vertices
-						CDXColor color;
-						XMStoreFloat3(&color, COLOR_SELECTED);
+					if (pVertices) {
 
-						if (XMVector3Equal(XMLoadFloat3(&pVertices[it.first].Color), XMLoadFloat3(&color)))
-							continue;
-						// Store it in the NPC mapped data
-						auto delta = XMLoadFloat3((XMFLOAT3*)&it.second);
-						XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), delta));
-						m_current.emplace(it.first, XMVectorNegate(delta));
+						for (auto it : *sculptHost) {
+							// Skip masked vertices
+							if (XMVector3Equal(XMLoadFloat3(&pVertices[it.first].Color), COLOR_SELECTED))
+								continue;
+							// Store it in the NPC mapped data
+							auto delta = XMLoadFloat3((const XMFLOAT3*)&it.second);
+							XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), delta));
+							m_current.emplace(it.first, XMVectorNegate(delta));
+						}
+
+						m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 					}
-
-					m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 				}
 			}
 		}
@@ -470,28 +470,25 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, NiAVObject * sourc
 
 					if (srcNumVertices == dstNumVertices && srcGeometry && dstGeometry) {
 						CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+						if (pVertices) {
+							for (UInt32 i = 0; i < srcNumVertices; i++) {
+								// Skip masked vertices
+								if (XMVector3Equal(XMLoadFloat3(&pVertices[i].Color), COLOR_SELECTED))
+									continue;
 
-						CDXColor color;
-						XMStoreFloat3(&color, COLOR_SELECTED);
+								NiPoint3* srcVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(srcGeometry) + (srcStride * i));
+								NiPoint3* dstVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(dstGeometry) + (dstStride * i));
 
-						for (UInt32 i = 0; i < srcNumVertices; i++) {
+								NiPoint3 diff = (srcTransform * (*srcVertex)) - (dstTransform * (*dstVertex));
+								XMVECTOR diffVector = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&diff));
 
-							// Skip masked vertices
-							if (XMVector3Equal(XMLoadFloat3(&pVertices[i].Color), XMLoadFloat3(&color)))
-								continue;
+								XMStoreFloat3(&pVertices[i].Position, XMVectorAdd(XMLoadFloat3(&pVertices[i].Position), diffVector));
 
-							NiPoint3 * srcVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(srcGeometry) + (srcStride * i));
-							NiPoint3 * dstVertex = reinterpret_cast<NiPoint3*>(reinterpret_cast<UInt8*>(dstGeometry) + (dstStride * i));
+								m_current.emplace(i, diffVector);
+							}
 
-							NiPoint3 diff = (srcTransform * (*srcVertex)) - (dstTransform * (*dstVertex));
-							XMVECTOR diffVector = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&diff));
-
-							XMStoreFloat3(&pVertices[i].Position, XMVectorAdd(XMLoadFloat3(&pVertices[i].Position), diffVector));
-							
-							m_current.emplace(i, diffVector);
+							m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 						}
-
-						m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
 					}
 
 					if (srcLock) srcLock->Release();

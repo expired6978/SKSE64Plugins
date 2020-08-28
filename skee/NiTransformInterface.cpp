@@ -661,6 +661,22 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 						float fScaleValue = 1.0;
 						NiTransform combinedTransform;
 						if (!reset) {
+							UInt16 scaleMode = g_scaleMode;
+							std::map<StringTableItem, OverrideSet*> scaleModes;
+							for (auto dit = ait->second.begin(); dit != ait->second.end(); ++dit) {
+								scaleModes.emplace(dit->first, &dit->second);
+							}
+							if (!scaleModes.empty())
+							{
+								OverrideSet* overrideSet = scaleModes.rbegin()->second;
+								OverrideVariant value;
+								value.key = OverrideVariant::kParam_NodeTransformScaleMode;
+								auto& it = overrideSet->find(value);
+								if (it != overrideSet->end()) {
+									scaleMode = it->data.i;
+								}
+							}
+
 							for (auto dit = ait->second.begin(); dit != ait->second.end(); ++dit) {// Loop Keys
 								NiTransform localTransform;
 								GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformPosition, &localTransform);
@@ -668,11 +684,11 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 								GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformRotation, &localTransform);
 								combinedTransform = combinedTransform * localTransform;
 
-								if (g_scaleMode == 1 || g_scaleMode == 2)
+								if (scaleMode == 1 || scaleMode == 2)
 								{
 									fScaleValue += localTransform.scale;
 								}
-								if (g_scaleMode == 3 && localTransform.scale > fScaleValue)
+								if (scaleMode == 3 && localTransform.scale > fScaleValue)
 								{
 									fScaleValue = localTransform.scale;
 								}
@@ -685,11 +701,11 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 									target = BSFixedString(it->str ? it->str->c_str() : "");
 								}
 							}
-							if (g_scaleMode == 1)
+							if (scaleMode == 1)
 							{
 								combinedTransform.scale = fScaleValue / (float)(ait->second.size() + 1);
 							}
-							if (g_scaleMode == 2 || g_scaleMode == 3)
+							if (scaleMode == 2 || scaleMode == 3)
 							{
 								combinedTransform.scale = fScaleValue;
 							}

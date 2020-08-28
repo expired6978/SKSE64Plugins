@@ -91,7 +91,7 @@ public:
 	virtual void ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true) = 0;
 	virtual void UpdateModelWeight(TESObjectREFR * refr, bool immediate = false) = 0;
 
-	virtual void SetCacheLimit(UInt32 limit) = 0;
+	virtual void SetCacheLimit(size_t limit) = 0;
 	virtual bool HasMorphs(TESObjectREFR * actor) = 0;
 	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor) = 0;
 
@@ -101,4 +101,5 @@ public:
 	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, const char * morphKey) = 0;
 	virtual void VisitStrings(StringVisitor & visitor) = 0;
 	virtual void VisitActors(ActorVisitor & visitor) = 0;
+	virtual size_t ClearMorphCache() = 0;
 };

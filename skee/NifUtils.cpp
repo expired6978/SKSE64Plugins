@@ -190,7 +190,7 @@ void ExportTintMaskDDS(Actor * actor, BSFixedString filePath)
 
 BGSTextureSet * GetTextureSetForPart(TESNPC * npc, BGSHeadPart * headPart)
 {
-	BGSTextureSet * textureSet = NULL;
+	BGSTextureSet * textureSet = nullptr;
 	if (headPart->type == BGSHeadPart::kTypeFace) {
 		if (npc->headData)
 			textureSet = npc->headData->headTexture;
@@ -204,7 +204,7 @@ BGSTextureSet * GetTextureSetForPart(TESNPC * npc, BGSHeadPart * headPart)
 std::pair<BGSTextureSet*, BGSHeadPart*> GetTextureSetForPartByName(TESNPC * npc, BSFixedString partName)
 {
 	UInt32 numHeadParts = 0;
-	BGSHeadPart ** headParts = NULL;
+	BGSHeadPart ** headParts = nullptr;
 	if (CALL_MEMBER_FN(npc, HasOverlays)()) {
 		numHeadParts = GetNumActorBaseOverlays(npc);
 		headParts = GetActorBaseOverlays(npc);
@@ -217,13 +217,11 @@ std::pair<BGSTextureSet*, BGSHeadPart*> GetTextureSetForPartByName(TESNPC * npc,
 	{
 		BGSHeadPart * headPart = headParts[i];
 		if (headPart && headPart->partName == partName) {
-			BGSTextureSet * textureSet = nullptr;
-			textureSet = GetTextureSetForPart(npc, headPart);
-			return std::make_pair(textureSet, headPart);
+			return std::make_pair(GetTextureSetForPart(npc, headPart), headPart);
 		}
 	}
 
-	return std::make_pair<BGSTextureSet*, BGSHeadPart*>(NULL, NULL);
+	return std::make_pair<BGSTextureSet*, BGSHeadPart*>(nullptr, nullptr);
 }
 
 SKSETaskExportHead::SKSETaskExportHead(Actor * actor, BSFixedString nifPath, BSFixedString ddsPath) : m_nifPath(nifPath), m_ddsPath(ddsPath)
@@ -377,33 +375,35 @@ void SKSETaskExportHead::Run()
 			if (newGeometry)
 			{
 				auto textureData = GetTextureSetForPartByName(actorBase, newGeometry->m_name);
-				if (textureData.first && textureData.second) {
-					BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(newGeometry->m_spEffectState);
-					if (shaderProperty) {
-						if (ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty)) {
-							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(shaderProperty);
-							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(shaderProperty->material);
-							if (material && material->textureSet) {
+
+				BSShaderProperty* shaderProperty = niptr_cast<BSShaderProperty>(newGeometry->m_spEffectState);
+				if (shaderProperty) {
+					if (ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+						BSLightingShaderProperty* lightingShader = static_cast<BSLightingShaderProperty*>(shaderProperty);
+						BSLightingShaderMaterial* material = static_cast<BSLightingShaderMaterial*>(shaderProperty->material);
+						if (material && material->textureSet) {
+							if (textureData.first) {
 								for (UInt32 i = 0; i < BGSTextureSet::kNumTextures; i++)
 									material->textureSet->SetTexturePath(i, textureData.first->textureSet.GetTexturePath(i));
-
-								if (textureData.second->type == BGSHeadPart::kTypeFace)
-									material->textureSet->SetTexturePath(6, m_ddsPath.data);
 							}
+
+							if (textureData.second && textureData.second->type == BGSHeadPart::kTypeFace)
+								material->textureSet->SetTexturePath(6, m_ddsPath.data);
 						}
 					}
+				}
 
-					// Save the previous tint mask
-					BSShaderProperty * originalShaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
-					if (originalShaderProperty) {
-						if (ni_is_type(originalShaderProperty->GetRTTI(), BSLightingShaderProperty)) {
-							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(originalShaderProperty);
-							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(originalShaderProperty->material);
-							if (material) {
-								if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
-									BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
-									SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
-								}
+				// Save the previous tint mask
+				BSShaderProperty * originalShaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+				if (originalShaderProperty) {
+					if (ni_is_type(originalShaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+						BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(originalShaderProperty);
+						BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(originalShaderProperty->material);
+						if (material) {
+							if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
+								BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
+								IFileStream::MakeAllDirs(m_ddsPath.data);
+								SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
 							}
 						}
 					}
@@ -559,33 +559,35 @@ void SKSETaskExportHead::Run()
 			if (newGeometry)
 			{
 				auto textureData = GetTextureSetForPartByName(actorBase, newGeometry->m_name);
-				if (textureData.first && textureData.second) {
-					BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(newGeometry->m_spEffectState);
-					if (shaderProperty) {
-						if (ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty)) {
-							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(shaderProperty);
-							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(shaderProperty->material);
-							if (material && material->textureSet) {
+
+				BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(newGeometry->m_spEffectState);
+				if (shaderProperty) {
+					if (ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+						BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(shaderProperty);
+						BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(shaderProperty->material);
+						if (material && material->textureSet) {
+							if (textureData.first) {
 								for (UInt32 i = 0; i < BGSTextureSet::kNumTextures; i++)
 									material->textureSet->SetTexturePath(i, textureData.first->textureSet.GetTexturePath(i));
-
-								if (textureData.second->type == BGSHeadPart::kTypeFace)
-									material->textureSet->SetTexturePath(6, m_ddsPath.data);
 							}
+
+							if (textureData.second && textureData.second->type == BGSHeadPart::kTypeFace)
+								material->textureSet->SetTexturePath(6, m_ddsPath.data);
 						}
 					}
+				}
 
-					// Save the previous tint mask
-					BSShaderProperty * originalShaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
-					if (originalShaderProperty) {
-						if (ni_is_type(originalShaderProperty->GetRTTI(), BSLightingShaderProperty)) {
-							BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(originalShaderProperty);
-							BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(originalShaderProperty->material);
-							if (material) {
-								if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
-									BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
-									SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
-								}
+				// Save the previous tint mask
+				BSShaderProperty * originalShaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+				if (originalShaderProperty) {
+					if (ni_is_type(originalShaderProperty->GetRTTI(), BSLightingShaderProperty)) {
+						BSLightingShaderProperty * lightingShader = static_cast<BSLightingShaderProperty *>(originalShaderProperty);
+						BSLightingShaderMaterial * material = static_cast<BSLightingShaderMaterial *>(originalShaderProperty->material);
+						if (material) {
+							if (material->GetShaderType() == BSShaderMaterial::kShaderType_FaceGen) {
+								BSLightingShaderMaterialFacegen * maskedMaterial = static_cast<BSLightingShaderMaterialFacegen *>(material);
+								IFileStream::MakeAllDirs(m_ddsPath.data);
+								SaveRenderedDDS(niptr_cast<NiRenderedTexture>(maskedMaterial->renderedTexture), m_ddsPath.data);
 							}
 						}
 					}

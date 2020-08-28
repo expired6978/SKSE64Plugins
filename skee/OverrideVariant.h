@@ -53,6 +53,7 @@ public:
 		kParam_NodeTransformScale = kParam_NodeTransformStart,
 		kParam_NodeTransformPosition,
 		kParam_NodeTransformRotation,
+		kParam_NodeTransformScaleMode,
 		kParam_NodeTransformEnd = kParam_NodeTransformRotation,
 
 		kParam_NodeDestination = 40

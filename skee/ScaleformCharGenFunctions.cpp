@@ -628,6 +628,16 @@ void SKSEScaleform_ClearSculptData::Invoke(Args * args)
 	}
 }
 
+void CreateHeadPartObject(GFxValue& object, GFxMovieView* movie, BGSHeadPart* headPart)
+{
+	RegisterString(&object, movie, "partName", headPart->partName.data);
+	RegisterNumber(&object, "partFlags", headPart->partFlags);
+	RegisterNumber(&object, "partType", headPart->type);
+	RegisterString(&object, movie, "modelPath", headPart->model.GetModelName());
+	RegisterString(&object, movie, "chargenMorphPath", headPart->chargenMorph.GetModelName());
+	RegisterString(&object, movie, "raceMorphPath", headPart->raceMorph.GetModelName());
+}
+
 
 void SKSEScaleform_GetHeadParts::Invoke(Args * args)
 {
@@ -638,21 +648,25 @@ void SKSEScaleform_GetHeadParts::Invoke(Args * args)
 
 	PlayerCharacter * player = (*g_thePlayer);
 	TESNPC * actorBase = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);
-	for(UInt32 i = 0; i < actorBase->numHeadParts; i++)
+
+	UInt32 numHeadParts = actorBase->numHeadParts;
+	BGSHeadPart** headParts = actorBase->headparts;
+	if (CALL_MEMBER_FN(actorBase, HasOverlays)())
+	{
+		numHeadParts = std::max((UInt32)actorBase->numHeadParts, GetNumActorBaseOverlays(actorBase));
+		headParts = GetActorBaseOverlays(actorBase);
+	}
+
+	for(UInt32 i = 0; i < numHeadParts; i++)
 	{
 		GFxValue partData;
 		args->movie->CreateObject(&partData);
 
-		BGSHeadPart * headPart = actorBase->headparts[i];
+		BGSHeadPart * headPart = i < actorBase->numHeadParts ? actorBase->headparts[i] : headParts[i];
 
 		GFxValue headPartData;
 		args->movie->CreateObject(&headPartData);
-		RegisterString(&headPartData, args->movie, "partName", headPart->partName.data);
-		RegisterNumber(&headPartData, "partFlags", headPart->partFlags);
-		RegisterNumber(&headPartData, "partType", headPart->type);
-		RegisterString(&headPartData, args->movie, "modelPath", headPart->model.GetModelName());
-		RegisterString(&headPartData, args->movie, "chargenMorphPath", headPart->chargenMorph.GetModelName());
-		RegisterString(&headPartData, args->movie, "raceMorphPath", headPart->raceMorph.GetModelName());
+		CreateHeadPartObject(headPartData, args->movie, headPart);
 		partData.SetMember("base", &headPartData);
 
 		// Get the overlay, if there is one
@@ -661,12 +675,7 @@ void SKSEScaleform_GetHeadParts::Invoke(Args * args)
 			if(overlayPart) {
 				GFxValue overlayPartData;
 				args->movie->CreateObject(&overlayPartData);
-				RegisterString(&overlayPartData, args->movie, "partName", overlayPart->partName.data);
-				RegisterNumber(&overlayPartData, "partFlags", overlayPart->partFlags);
-				RegisterNumber(&overlayPartData, "partType", overlayPart->type);
-				RegisterString(&overlayPartData, args->movie, "modelPath", overlayPart->model.GetModelName());
-				RegisterString(&overlayPartData, args->movie, "chargenMorphPath", overlayPart->chargenMorph.GetModelName());
-				RegisterString(&overlayPartData, args->movie, "raceMorphPath", overlayPart->raceMorph.GetModelName());
+				CreateHeadPartObject(overlayPartData, args->movie, overlayPart);
 				partData.SetMember("overlay", &overlayPartData);
 			}
 		}
@@ -914,7 +923,7 @@ void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 
 	for(UInt32 i = 0; i < rootFaceGen->m_children.m_emptyRunStart; i++)
 	{
-		for(UInt32 h = 0; h < actorBase->numHeadParts; h++) {
+		for(UInt32 h = 0; h < numHeadParts; h++) {
 			BGSHeadPart * headPart = headParts[h];
 			if (!headPart)
 				continue;

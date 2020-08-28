@@ -177,6 +177,9 @@ CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditab
 {
 	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::WRITE);
 	CDXHitIndexMap hitVertex;
+	if (!pVertices)
+		return hitVertex;
+
 	for (UInt16 i = 0; i < mesh->GetVertexCount(); i++) {
 		if (FilterVertex(mesh, pVertices, i))
 			continue;

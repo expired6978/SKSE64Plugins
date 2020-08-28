@@ -407,9 +407,6 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 		}
 	}
 	_DMESSAGE("%s - Loaded %dms", __FUNCTION__, sw.Stop());
-
-	PlayerCharacter * player = (*g_thePlayer);
-	g_task->AddTask(new SKSETaskApplyMorphs(player));
 	
 	g_firstLoad = true;
 
@@ -557,6 +554,7 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 
 			GetEventDispatcherList()->uniqueIdChangeDispatcher.AddEventSink(&g_itemDataInterface);
+			GetEventDispatcherList()->loadGameEventDispatcher.AddEventSink(&g_actorUpdateManager);
 
 			g_tintMaskInterface.LoadMods();
 			g_morphInterface.LoadMods();
@@ -742,7 +740,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("General", "bParallelMorphing", &g_parallelMorphing);
 	SKEE64GetConfigValue("General", "uTintHairSlot", &g_tintHairSlot);
 
-	UInt32 bodyMorphMemoryLimit = 256000000;
+	UInt64 bodyMorphMemoryLimit = 256000000;
 	if (SKEE64GetConfigValue("General", "uBodyMorphMemoryLimit", &bodyMorphMemoryLimit))
 	{
 		g_bodyMorphInterface.SetCacheLimit(bodyMorphMemoryLimit);

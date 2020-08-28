@@ -194,7 +194,7 @@ public:
 		memoryUsage = sizeof(TriShapeMap);
 	}
 
-	UInt32 memoryUsage;
+	size_t memoryUsage;
 };
 
 class MorphFileCache
@@ -230,10 +230,11 @@ public:
 	void UpdateMorphs(TESObjectREFR * refr, bool deferUpdate = false);
 
 	void Shrink();
+	size_t Clear();
 
 private:
-	UInt32 memoryLimit;
-	UInt32 totalMemory;
+	size_t memoryLimit;
+	size_t totalMemory;
 };
 
 class NIOVTaskUpdateModelWeight : public TaskDelegate
@@ -355,7 +356,7 @@ public:
 	virtual void ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true) override { Impl_ApplyBodyMorphs(refr, deferUpdate); }
 	virtual void UpdateModelWeight(TESObjectREFR * refr, bool immediate = false) override { Impl_UpdateModelWeight(refr, immediate); }
 
-	virtual void SetCacheLimit(UInt32 limit) override { Impl_SetCacheLimit(limit); }
+	virtual void SetCacheLimit(size_t limit) override { Impl_SetCacheLimit(limit); }
 	virtual bool HasMorphs(TESObjectREFR * actor) override { return Impl_HasMorphs(actor); }
 	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor) override { return Impl_EvaluateBodyMorphs(actor); }
 
@@ -365,6 +366,8 @@ public:
 	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, const char * morphKey) override { Impl_ClearBodyMorphKeys(actor, morphKey); }
 	virtual void VisitStrings(StringVisitor & visitor) override { Impl_VisitStrings([&visitor](SKEEFixedString key) { visitor.Visit(key); }); }
 	virtual void VisitActors(ActorVisitor & visitor) override { Impl_VisitActors([&visitor](TESObjectREFR* actor) { visitor.Visit(actor); }); }
+
+	virtual size_t ClearMorphCache() override;
 
 	void LoadMods();
 
@@ -389,7 +392,7 @@ private:
 	void Impl_ApplyBodyMorphs(TESObjectREFR * refr, bool deferUpdate = true);
 	void Impl_UpdateModelWeight(TESObjectREFR * refr, bool immediate = false);
 
-	void Impl_SetCacheLimit(UInt32 limit);
+	void Impl_SetCacheLimit(size_t limit);
 	bool Impl_HasMorphs(TESObjectREFR * actor);
 
 	bool Impl_ReadBodyMorphs(SKEEFixedString filePath);

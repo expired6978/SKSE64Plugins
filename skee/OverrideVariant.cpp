@@ -31,6 +31,7 @@ template <> void PackValue <UInt32>(OverrideVariant * dst, UInt16 key, UInt8 ind
 	{
 		case OverrideVariant::kParam_ShaderEmissiveColor:
 		case OverrideVariant::kParam_ShaderTintColor:
+		case OverrideVariant::kParam_NodeTransformScaleMode:
 		dst->SetInt(key, index, *src);
 		break;
 		default:
@@ -44,6 +45,7 @@ template <> void PackValue <SInt32>(OverrideVariant * dst, UInt16 key, UInt8 ind
 	{
 		case OverrideVariant::kParam_ShaderEmissiveColor:
 		case OverrideVariant::kParam_ShaderTintColor:
+		case OverrideVariant::kParam_NodeTransformScaleMode:
 		dst->SetInt(key, index, *src);
 		break;
 		default:
@@ -217,7 +219,10 @@ template <> void UnpackValue <SKEEFixedString>(SKEEFixedString * dst, OverrideVa
 	switch (src->type)
 	{
 		case OverrideVariant::kType_String:
-		*dst = *src->str;
+		{
+			auto str = src->str;
+			*dst = str ? str->c_str() : "";
+		}
 		break;
 		default:
 		*dst = "";
@@ -229,13 +234,13 @@ template <> void UnpackValue <BSFixedString>(BSFixedString * dst, OverrideVarian
 {
 	switch (src->type)
 	{
-	case OverrideVariant::kType_String:
-	{
-		auto str = src->str;
-		*dst = str ? str->c_str() : "";
-	}
-	break;
-	default:
+		case OverrideVariant::kType_String:
+		{
+			auto str = src->str;
+			*dst = str ? str->c_str() : "";
+		}
+		break;
+		default:
 		*dst = "";
 		break;
 	}

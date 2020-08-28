@@ -40,11 +40,14 @@ extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
 
-void ProcessTaskInterface_AddTask(TaskDelegate * cmd);
-
 UInt32 BodyMorphInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
+}
+
+size_t BodyMorphInterface::ClearMorphCache()
+{
+	return morphCache.Clear();
 }
 
 void BodyMorphInterface::LoadMods()
@@ -787,13 +790,23 @@ void MorphCache::Shrink()
 			return (a.second.accessed < b.second.accessed);
 		});
 
-		UInt32 size = it->second.vertexMap.memoryUsage;
+		size_t size = it->second.vertexMap.memoryUsage;
 		m_data.erase(it);
 		totalMemory -= size;
 	}
 
 	if (m_data.size() == 0) // Just in case we erased but messed up
 		totalMemory = sizeof(MorphCache);
+}
+
+size_t MorphCache::Clear()
+{
+	size_t usage = totalMemory;
+	Lock();
+	totalMemory = 0;
+	m_data.clear();
+	Release();
+	return usage;
 }
 
 bool MorphCache::CacheFile(const char * relativePath)
@@ -1078,7 +1091,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 	return false;
 }
 
-void BodyMorphInterface::Impl_SetCacheLimit(UInt32 limit)
+void BodyMorphInterface::Impl_SetCacheLimit(size_t limit)
 {
 	morphCache.memoryLimit = limit;
 }
@@ -1419,7 +1432,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 			continue;
 
 		std::vector<std::string> side = std::explode(str, '=');
-		if (side.size() < 2) {
+		if (side.size() < 1) {
 			_ERROR("%s - Error - Morph has no left-hand side.\tLine (%d) [%s]", __FUNCTION__, lineCount, filePath.c_str());
 			continue;
 		}
@@ -1441,7 +1454,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 			}
 		}
 
-		std::string rSide = std::trim(side[1]);
+		std::string rSide = side.size() > 1 ? std::trim(side[1]) : "";
 
 		std::vector<std::string> form = std::explode(lProperties[0], '|');
 		if (form.size() < 2) {

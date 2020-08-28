@@ -1151,6 +1151,11 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 
 			Console_Print("Erased and reverted all overlays");
 		}
+		else if (_strnicmp(buffer2, "bodymorph-cache", MAX_PATH) == 0)
+		{
+			size_t freedMem = g_bodyMorphInterface.ClearMorphCache();
+			Console_Print("Erased %I64u bytes from BodyMorph Cache", freedMem);
+		}
 	}
 	else if (_strnicmp(buffer, "preset-save", MAX_PATH) == 0)
 	{

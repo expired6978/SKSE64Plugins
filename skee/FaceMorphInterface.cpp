@@ -30,6 +30,7 @@
 
 #include "StringTable.h"
 #include "ShaderUtilities.h"
+#include "Utilities.h"
 
 #include "OverrideVariant.h"
 #include "OverrideInterface.h"
@@ -751,6 +752,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 	PlayerCharacter * player = (*g_thePlayer);
 	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
 	TESRace * race = npc->race.race;
+	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	// Wipe the HeadPart list and replace it with the default race list
 	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
@@ -854,7 +856,12 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 		g_morphInterface.SetMorphValue(npc, morph.name, morph.value);
 
 	g_overrideInterface.RemoveAllReferenceNodeOverrides(actor);
-		g_overlayInterface.RevertOverlays(actor, true);
+	
+	g_overlayInterface.RevertOverlays(actor, true);
+	if (!g_overlayInterface.HasOverlays(actor))
+	{
+		g_overlayInterface.AddOverlays(actor);
+	}
 
 	if ((applyType & kPresetApplyOverrides) == kPresetApplyOverrides)
 	{
@@ -863,6 +870,8 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 				g_overrideInterface.AddNodeOverride(actor, gender == 1 ? true : false, nodes.first, value);
 			}
 		}
+
+		g_overrideInterface.SetHandleNodeProperties(handle, false);
 	}
 
 	if ((applyType & kPresetApplySkinOverrides) == kPresetApplySkinOverrides)
@@ -874,6 +883,8 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 				}
 			}
 		}
+
+		g_overrideInterface.SetHandleSkinProperties(handle, false);
 	}
 
 	g_transformInterface.RemoveAllReferenceTransforms(actor);
@@ -889,10 +900,10 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 				}
 			}
 		}
+
+		g_transformInterface.UpdateNodeAllTransforms(actor);
 	}
-	g_transformInterface.UpdateNodeAllTransforms(actor);
-
-
+	
 	g_bodyMorphInterface.ClearMorphs(actor);
 
 	if ((applyType & kPresetApplyBodyMorphs) == kPresetApplyBodyMorphs)
@@ -901,9 +912,9 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 			for (auto & keys : morph.second)
 				g_bodyMorphInterface.SetMorph(actor, morph.first, keys.first, keys.second);
 		}
-	}
 
-	g_bodyMorphInterface.UpdateModelWeight(actor);
+		g_bodyMorphInterface.UpdateModelWeight(actor);
+	}
 }
 
 bool MorphMap::Visit(const SKEEFixedString & key, Visitor & visitor)

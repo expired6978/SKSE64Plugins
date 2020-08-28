@@ -13,6 +13,7 @@
 
 #include "skse64/PapyrusEvents.h"
 
+#include "ActorUpdateManager.h"
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "ShaderUtilities.h"
@@ -20,6 +21,7 @@
 #include "NifUtils.h"
 #include "Utilities.h"
 
+extern ActorUpdateManager	g_actorUpdateManager;
 extern SKSETaskInterface	* g_task;
 extern SKSEMessagingInterface * g_messaging;
 extern TintMaskInterface	g_tintMaskInterface;
@@ -1127,7 +1129,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 	{
 		if (uniqueTasks.find(task) != uniqueTasks.end())
 		{
-			g_task->AddTask(task);
+			g_actorUpdateManager.AddDyeUpdate(task);
 		}
 		else
 		{

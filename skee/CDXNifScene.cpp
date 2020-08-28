@@ -303,7 +303,8 @@ void CDXNifScene::Begin(CDXCamera * camera, CDXD3DDevice * device)
 	// Create the viewport.
 	deviceContext->RSSetViewports(1, &viewport);
 
-	deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilView.Get());
+	ID3D11RenderTargetView* views[] = { m_renderTargetView.Get() };
+	deviceContext->OMSetRenderTargets(1, views, m_depthStencilView.Get());
 
 	// Set the depth stencil state.
 	deviceContext->OMSetDepthStencilState(m_depthStencilState.Get(), 1);
