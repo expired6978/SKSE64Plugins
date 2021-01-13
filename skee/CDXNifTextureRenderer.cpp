@@ -69,7 +69,7 @@ bool CDXNifTextureRenderer::ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<
 			float r = ((mask.second.color >> 16) & 0xFF) / 255.0f;
 			float g = ((mask.second.color >> 8) & 0xFF) / 255.0f;
 			float b = (mask.second.color & 0xFF) / 255.0f;
-			AddLayer((texture && texture->rendererData) ? texture->rendererData->resourceView : nullptr, static_cast<TextureType>(mask.second.textureType), mask.second.technique.c_str(), XMFLOAT4(r, g, b, a));
+			AddLayer((texture && texture->rendererData) ? texture->rendererData->resourceView : nullptr, mask.second.textureType, mask.second.technique.c_str(), XMFLOAT4(r, g, b, a));
 		}
 
 		if (texture) {

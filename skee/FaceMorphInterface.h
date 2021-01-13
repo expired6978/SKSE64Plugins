@@ -452,3 +452,16 @@ public:
 private:
 	UInt32			m_formId;
 };
+
+class SKSETaskApplyMorphNormals : public TaskDelegate
+{
+public:
+	virtual void Run();
+	virtual void Dispose() { delete this; }
+
+	SKSETaskApplyMorphNormals(NiPointer<NiAVObject> faceNode, bool updateModel = true);
+
+protected:
+	NiPointer<NiAVObject> m_faceNode;
+	bool m_updateModel;
+};

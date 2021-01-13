@@ -11,6 +11,7 @@
 #include "ItemDataInterface.h"
 #include "IPluginInterface.h"
 
+#include "NifUtils.h"
 #include "Utilities.h"
 
 extern SKSETaskInterface* g_task;
@@ -24,6 +25,7 @@ extern bool	g_playerOnly;
 extern bool	g_enableBodyGen;
 extern bool	g_enableAutoTransforms;
 extern bool	g_enableBodyInit;
+extern bool g_isReverting;
 
 EventResult ActorUpdateManager::ReceiveEvent(TESObjectLoadedEvent * evn, EventDispatcher<TESObjectLoadedEvent>* dispatcher)
 {
@@ -37,12 +39,28 @@ EventResult ActorUpdateManager::ReceiveEvent(TESObjectLoadedEvent * evn, EventDi
 						UInt32 total = g_bodyMorphInterface.EvaluateBodyMorphs(reference);
 						if (total) {
 							_DMESSAGE("%s - ObjectLoad applied %d morph(s) to %s", __FUNCTION__, total, CALL_MEMBER_FN(reference, GetReferenceName)());
-							g_bodyMorphInterface.UpdateModelWeight(reference);
+
+							if (g_isReverting)
+							{
+								AddBodyUpdate(evn->formId);
+							}
+							else
+							{
+								g_bodyMorphInterface.UpdateModelWeight(reference);
+							}
+							
 						}
 					}
 
 					if (g_enableAutoTransforms) {
-						g_transformInterface.SetHandleNodeTransforms(VirtualMachine::GetHandle(form, TESObjectREFR::kTypeID));
+						if (g_isReverting)
+						{
+							AddTransformUpdate(evn->formId);
+						}
+						else
+						{
+							g_transformInterface.SetTransforms(evn->formId);
+						}
 					}
 				}
 			}
@@ -71,66 +89,7 @@ EventResult ActorUpdateManager::ReceiveEvent(TESInitScriptEvent * evn, EventDisp
 
 EventResult ActorUpdateManager::ReceiveEvent(TESLoadGameEvent* evn, EventDispatcher<TESLoadGameEvent>* dispatcher)
 {
-	PlayerCharacter* player = (*g_thePlayer);
-	g_task->AddTask(new SKSETaskApplyMorphs(player));
-
-	for (UInt64 handle : m_bodyUpdates)
-	{
-		auto refr = static_cast<TESObjectREFR*>(VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID));
-		if (refr)
-		{
-			g_bodyMorphInterface.UpdateModelWeight(refr);
-		}
-	}
-
-	for (UInt64 handle : m_transformUpdates)
-	{
-		g_transformInterface.SetHandleNodeTransforms(handle);
-	}
-
-	for (UInt64 handle : m_overlayUpdates)
-	{
-		auto refr = static_cast<TESObjectREFR*>(VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID));
-		if (refr)
-		{
-			g_overlayInterface.AddOverlays(refr);
-		}
-	}
-
-	for (UInt64 handle : m_overrideNodeUpdates)
-	{
-		g_overrideInterface.SetHandleNodeProperties(handle, false);
-	}
-
-	for (UInt64 handle : m_overrideWeapUpdates)
-	{
-		g_overrideInterface.SetHandleWeaponProperties(handle, false);
-	}
-
-	for (UInt64 handle : m_overrideAddonUpdates)
-	{
-		g_overrideInterface.SetHandleProperties(handle, false);
-	}
-
-	for (UInt64 handle : m_overrideSkinUpdates)
-	{
-		g_overrideInterface.SetHandleSkinProperties(handle, false);
-	}
-
-	for (NIOVTaskUpdateItemDye* task : m_dyeUpdates)
-	{
-		g_task->AddTask(task);
-	}
-
-	m_bodyUpdates.clear();
-	m_transformUpdates.clear();
-	m_overlayUpdates.clear();
-	m_overrideNodeUpdates.clear();
-	m_overrideWeapUpdates.clear();
-	m_overrideAddonUpdates.clear();
-	m_overrideSkinUpdates.clear();
-	m_dyeUpdates.clear();
-
+	Flush();
 	return kEvent_Continue;
 }
 
@@ -162,42 +121,107 @@ void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, T
 	}
 }
 
-void ActorUpdateManager::AddBodyUpdate(UInt64 handle)
+void ActorUpdateManager::AddBodyUpdate(UInt32 formId)
 {
-	m_bodyUpdates.emplace(handle);
+	m_bodyUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddTransformUpdate(UInt64 handle)
+void ActorUpdateManager::AddTransformUpdate(UInt32 formId)
 {
-	m_transformUpdates.emplace(handle);
+	m_transformUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddOverlayUpdate(UInt64 handle)
+void ActorUpdateManager::AddOverlayUpdate(UInt32 formId)
 {
-	m_overlayUpdates.emplace(handle);
+	m_overlayUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddNodeOverrideUpdate(UInt64 handle)
+void ActorUpdateManager::AddNodeOverrideUpdate(UInt32 formId)
 {
-	m_overrideNodeUpdates.emplace(handle);
+	m_overrideNodeUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddWeaponOverrideUpdate(UInt64 handle)
+void ActorUpdateManager::AddWeaponOverrideUpdate(UInt32 formId)
 {
-	m_overrideWeapUpdates.emplace(handle);
+	m_overrideWeapUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddAddonOverrideUpdate(UInt64 handle)
+void ActorUpdateManager::AddAddonOverrideUpdate(UInt32 formId)
 {
-	m_overrideAddonUpdates.emplace(handle);
+	m_overrideAddonUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddSkinOverrideUpdate(UInt64 handle)
+void ActorUpdateManager::AddSkinOverrideUpdate(UInt32 formId)
 {
-	m_overrideSkinUpdates.emplace(handle);
+	m_overrideSkinUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddDyeUpdate(NIOVTaskUpdateItemDye* itemUpdateTask)
+void ActorUpdateManager::AddDyeUpdate_Internal(NIOVTaskUpdateItemDye* itemUpdateTask)
 {
 	m_dyeUpdates.emplace(itemUpdateTask);
+}
+
+void ActorUpdateManager::Flush()
+{
+	PlayerCharacter* player = (*g_thePlayer);
+	g_task->AddTask(new SKSETaskApplyMorphs(player));
+
+	for (UInt32 formId : m_bodyUpdates)
+	{
+		auto refr = LookupFormByID(formId);
+		if (refr && refr->formType == Character::kTypeID)
+		{
+			g_bodyMorphInterface.UpdateModelWeight(static_cast<TESObjectREFR*>(refr), false);
+		}
+	}
+
+	for (UInt32 formId : m_transformUpdates)
+	{
+		g_transformInterface.SetTransforms(formId, false);
+	}
+
+	for (UInt32 formId : m_overlayUpdates)
+	{
+		auto refr = LookupFormByID(formId);
+		if (refr && refr->formType == Character::kTypeID)
+		{
+			g_overlayInterface.AddOverlays(static_cast<TESObjectREFR*>(refr));
+		}
+	}
+
+	for (UInt32 formId : m_overrideNodeUpdates)
+	{
+		g_overrideInterface.SetNodeProperties(formId, false);
+	}
+
+	for (UInt32 formId : m_overrideWeapUpdates)
+	{
+		g_overrideInterface.SetWeaponProperties(formId, false);
+	}
+
+	for (UInt32 formId : m_overrideAddonUpdates)
+	{
+		g_overrideInterface.SetProperties(formId, false);
+	}
+
+	for (UInt32 formId : m_overrideSkinUpdates)
+	{
+		g_overrideInterface.SetSkinProperties(formId, false);
+	}
+
+	for (NIOVTaskUpdateItemDye* task : m_dyeUpdates)
+	{
+		g_task->AddTask(task);
+	}
+
+	m_bodyUpdates.clear();
+	m_transformUpdates.clear();
+	m_overlayUpdates.clear();
+	m_overrideNodeUpdates.clear();
+	m_overrideWeapUpdates.clear();
+	m_overrideAddonUpdates.clear();
+	m_overrideSkinUpdates.clear();
+	m_dyeUpdates.clear();
+
+	g_isReverting = false;
 }

@@ -648,6 +648,8 @@ void ItemDataInterface::Revert()
 		TESObjectARMO * armor = DYNAMIC_CAST(itemForm, TESForm, TESObjectARMO);
 		if (actor && armor) {
 			ModifiedItemIdentifier identifier;
+			identifier.SetRankID(itemAttribute.rank);
+			identifier.SetUniqueID(itemAttribute.uid, itemAttribute.ownerForm);
 			identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
 			m_loadQueue.push_back(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, true));
 		}
@@ -966,7 +968,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 	{
 		// If the task was queued from a previous save we need to resolve the actor's formId first
 		UInt32 newItemForm = 0;
-		if (!intfc->ResolveFormId(task->m_formId, &newItemForm)) {
+		if (!ResolveAnyForm(intfc, task->m_formId, &newItemForm)) {
 			_WARNING("%s - actor %08X could not be found, skipping dye update", __FUNCTION__, task->m_formId);
 			continue;
 		}
@@ -1041,7 +1043,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						newOwnerHandle = newOwnerForm;
 
 						UInt32 newItemForm = 0;
-						if (!intfc->ResolveFormId(itemForm, &newItemForm)) {
+						if (!ResolveAnyForm(intfc, itemForm, &newItemForm)) {
 							_WARNING("%s - item %08X could not be found, skipping", __FUNCTION__, itemForm);
 							continue;
 						}
@@ -1087,14 +1089,20 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						m_data.push_back({rankId, uid, ownerFormId, itemFormId, data});
 						Release();
 
-						TESForm * ownerForm = LookupFormByID(ownerFormId);
+						TESForm* ownerForm = LookupFormByID(ownerFormId);
+						Actor* actor = DYNAMIC_CAST(ownerForm, TESForm, Actor);
 						TESForm * itemForm = LookupFormByID(itemFormId);
-
-						Actor * actor = DYNAMIC_CAST(ownerForm, TESForm, Actor);
-						TESObjectARMO * armor = DYNAMIC_CAST(itemForm, TESForm, TESObjectARMO);
-						if (actor && armor) {
+						if (actor)
+						{
 							ModifiedItemIdentifier identifier;
-							identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
+							identifier.SetRankID(rankId);
+							identifier.SetUniqueID(uid, ownerFormId);
+
+							TESObjectARMO* armor = DYNAMIC_CAST(itemForm, TESForm, TESObjectARMO);
+							if (armor) {
+								identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
+							}
+
 							m_loadQueue.push_back(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 						}
 					}
@@ -1113,7 +1121,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 	{
 		if (a->GetActor() == b->GetActor())
 		{
-			return a->GetSlotMask() < b->GetSlotMask();
+			return a->GetRankID() < b->GetRankID();
 		}
 		return a->GetActor() < b->GetActor();
 	});
@@ -1121,15 +1129,16 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 	std::unordered_set<NIOVTaskUpdateItemDye*> uniqueTasks;
 	std::unique_copy(m_loadQueue.begin(), m_loadQueue.end(), std::inserter(uniqueTasks, uniqueTasks.end()), [](NIOVTaskUpdateItemDye * a, NIOVTaskUpdateItemDye * b)
 	{
-		return a->GetActor() == b->GetActor() && a->GetSlotMask() == b->GetSlotMask();
+		return a->GetActor() == b->GetActor() && a->GetRankID() == b->GetRankID();
 	});
 
 	// Push the loads onto the task queue
 	for (auto & task : m_loadQueue)
 	{
-		if (uniqueTasks.find(task) != uniqueTasks.end())
+		auto foundTask = uniqueTasks.find(task);
+		if (foundTask != uniqueTasks.end())
 		{
-			g_actorUpdateManager.AddDyeUpdate(task);
+			g_actorUpdateManager.AddDyeUpdate_Internal(task);
 		}
 		else
 		{

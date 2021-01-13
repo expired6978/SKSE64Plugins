@@ -1,6 +1,7 @@
 #include "NiTransformInterface.h"
 #include "ShaderUtilities.h"
 #include "SkeletonExtender.h"
+#include "ActorUpdateManager.h"
 #include "StringTable.h"
 #include "NifUtils.h"
 #include "Utilities.h"
@@ -23,6 +24,7 @@ extern StringTable					g_stringTable;
 extern bool							g_enableEquippableTransforms;
 extern UInt16						g_scaleMode;
 extern SkeletonExtenderInterface	g_skeletonExtenderInterface;
+extern ActorUpdateManager			g_actorUpdateManager;
 
 UInt32 NiTransformInterface::GetVersion()
 {
@@ -125,7 +127,7 @@ void NodeTransformRegistrationMapHolder::Save(SKSESerializationInterface* intfc,
 	}
 }
 
-bool NodeTransformRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable)
+bool NodeTransformRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, UInt32 * outFormId, const StringIdMap & stringTable)
 {
 	bool error = false;
 
@@ -148,30 +150,31 @@ bool NodeTransformRegistrationMapHolder::Load(SKSESerializationInterface* intfc,
 
 	UInt64 newHandle = 0;
 	if (!ResolveAnyHandle(intfc, handle, &newHandle)) {
-		*outHandle = 0;
+		*outFormId = 0;
 		return error;
 	}
 
-	// Invalid handle
-	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
-	if (!refr) {
-		*outHandle = 0;
+	UInt32 formId = newHandle & 0xFFFFFFFFF;
+
+	TESForm* form = LookupFormByID(formId);
+	if (!form || form->formType != Character::kTypeID) {
+		*outFormId = 0;
 		return error;
 	}
 
 	if (reg.empty()) {
-		*outHandle = 0;
+		*outFormId = 0;
 		return error;
 	}
 
-	*outHandle = newHandle;
+	*outFormId = formId;
 
 	Lock();
-	m_data[newHandle] = reg;
+	m_data[formId] = reg;
 	Release();
 
 #ifdef _DEBUG
-	_MESSAGE("%s - Loaded Handle %016llX", __FUNCTION__, newHandle);
+	_MESSAGE("%s - Loaded FormId %08X", __FUNCTION__, formId);
 #endif
 
 	//SetHandleProperties(newHandle, false);
@@ -181,21 +184,21 @@ bool NodeTransformRegistrationMapHolder::Load(SKSESerializationInterface* intfc,
 class NIOVTaskUpdateReference : public TaskDelegate
 {
 public:
-	NIOVTaskUpdateReference(UInt64 handle, NiTransformInterface * xFormInterface)
+	NIOVTaskUpdateReference(UInt32 formId, NiTransformInterface * xFormInterface)
 	{
-		m_handle = handle;
+		m_formId = formId;
 		m_interface = xFormInterface;
 	}
 	virtual void Run()
 	{
-		m_interface->SetHandleNodeTransforms(m_handle, true);
+		m_interface->SetTransforms(m_formId, true);
 	}
 	virtual void Dispose()
 	{
 		delete this;
 	}
 
-	UInt64 m_handle;
+	UInt32 m_formId;
 	NiTransformInterface * m_interface;
 };
 
@@ -226,20 +229,13 @@ void NiTransformInterface::Save(SKSESerializationInterface * intfc, UInt32 kVers
 }
 bool NiTransformInterface::Load(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable)
 {
-	UInt64 handle = 0;
-	if (!transformData.Load(intfc, kVersion, &handle, stringTable))
+	UInt32 formId = 0;
+	if (!transformData.Load(intfc, kVersion, &formId, stringTable))
 	{
-		RemoveInvalidTransforms(handle);
-		RemoveNamedTransforms(handle, "internal");
+		RemoveInvalidTransforms(formId);
+		RemoveNamedTransforms(formId, "internal");
 
-		NIOVTaskUpdateReference * updateTask = new NIOVTaskUpdateReference(handle, this);
-		if (g_task) {
-			g_task->AddTask(updateTask);
-		}
-		else {
-			updateTask->Run();
-			updateTask->Dispose();
-		}
+		g_actorUpdateManager.AddTransformUpdate(formId);
 	}
 
 	return false;
@@ -249,9 +245,8 @@ bool NiTransformInterface::AddNodeTransform(TESObjectREFR * refr, bool firstPers
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
-	transformData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].erase(value);
-	transformData.m_data[handle][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].insert(value);
+	transformData.m_data[refr->formID][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].erase(value);
+	transformData.m_data[refr->formID][isFemale ? 1 : 0][firstPerson ? 1 : 0][g_stringTable.GetString(node)][g_stringTable.GetString(name)].insert(value);
 	return true;
 }
 
@@ -262,9 +257,8 @@ bool NiTransformInterface::RemoveNodeTransform(TESObjectREFR * refr, bool firstP
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 
-	auto & it = transformData.m_data.find(handle);
+	auto & it = transformData.m_data.find(refr->formID);
 	if (it != transformData.m_data.end())
 	{
 		auto & ait = it->second[gender][fp].find(g_stringTable.GetString(node));
@@ -282,9 +276,9 @@ bool NiTransformInterface::RemoveNodeTransform(TESObjectREFR * refr, bool firstP
 	return false;
 }
 
-void NiTransformInterface::RemoveInvalidTransforms(UInt64 handle)
+void NiTransformInterface::RemoveInvalidTransforms(UInt32 formId)
 {
-	auto & it = transformData.m_data.find(handle);
+	auto & it = transformData.m_data.find(formId);
 	if (it != transformData.m_data.end())
 	{
 		for (UInt8 gender = 0; gender <= 1; gender++)
@@ -310,11 +304,11 @@ void NiTransformInterface::RemoveInvalidTransforms(UInt64 handle)
 	}
 }
 
-void NiTransformInterface::RemoveNamedTransforms(UInt64 handle, SKEEFixedString name)
+void NiTransformInterface::RemoveNamedTransforms(UInt32 formId, SKEEFixedString name)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	auto & it = transformData.m_data.find(handle);
+	auto & it = transformData.m_data.find(formId);
 	if (it != transformData.m_data.end())
 	{
 		for (UInt8 gender = 0; gender <= 1; gender++)
@@ -338,7 +332,7 @@ void NiTransformInterface::Revert()
 {
 	// Revert all transforms to their base data
 	for (auto & it : transformData.m_data) {
-		SetHandleNodeTransforms(it.first, false, true);
+		SetTransforms(it.first, false, true);
 	}
 
 	SimpleLocker lock(&transformData.m_lock);
@@ -349,8 +343,7 @@ void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR * refr)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
-	auto & it = transformData.m_data.find(handle);
+	auto & it = transformData.m_data.find(refr->formID);
 	if (it != transformData.m_data.end())
 	{
 		transformData.m_data.erase(it);
@@ -363,8 +356,7 @@ bool NiTransformInterface::RemoveNodeTransformComponent(TESObjectREFR * refr, bo
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
-	auto & it = transformData.m_data.find(handle);
+	auto & it = transformData.m_data.find(refr->formID);
 	if (it != transformData.m_data.end())
 	{
 		auto & ait = it->second[gender][fp].find(g_stringTable.GetString(node));
@@ -395,9 +387,8 @@ void NiTransformInterface::VisitNodes(TESObjectREFR * refr, bool firstPerson, bo
 
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
 
-	auto & it = transformData.m_data.find(handle); // Find ActorHandle
+	auto & it = transformData.m_data.find(refr->formID); // Find ActorHandle
 	if (it != transformData.m_data.end())
 	{
 		for (auto node : it->second[gender][fp]) {
@@ -414,8 +405,7 @@ bool NiTransformInterface::VisitNodeTransforms(TESObjectREFR * refr, bool firstP
 	bool ret = false;
 	UInt8 gender = isFemale ? 1 : 0;
 	UInt8 fp = firstPerson ? 1 : 0;
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
-	auto & it = transformData.m_data.find(handle); // Find ActorHandle
+	auto & it = transformData.m_data.find(refr->formID); // Find ActorHandle
 	if (it != transformData.m_data.end())
 	{
 		NiPointer<NiNode> root = refr->GetNiRootNode(fp);
@@ -560,15 +550,20 @@ bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR * refr, bool f
 
 void NiTransformInterface::UpdateNodeAllTransforms(TESObjectREFR * refr)
 {
-	UInt64 handle = VirtualMachine::GetHandle(refr, refr->formType);
-	SetHandleNodeTransforms(handle);
+	SetTransforms(refr->formID);
 }
 
-void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate, bool reset)
+void NiTransformInterface::SetTransforms(UInt32 formId, bool immediate, bool reset)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
-	TESObjectREFR * refr = (TESObjectREFR *)VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID);
+	TESForm* form = LookupFormByID(formId);
+	if (!form || form->formType != Character::kTypeID)
+	{
+		return;
+	}
+
+	TESObjectREFR * refr = static_cast<TESObjectREFR*>(form);
 	if (!refr) {
 		return;
 	}
@@ -578,7 +573,7 @@ void NiTransformInterface::SetHandleNodeTransforms(UInt64 handle, bool immediate
 	if (actorBase)
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
-	auto & it = transformData.m_data.find(handle); // Find ActorHandle
+	auto & it = transformData.m_data.find(formId); // Find ActorHandle
 	if (it != transformData.m_data.end())
 	{
 		std::unordered_map<NiAVObject*, NiNode*> nodeMovement;

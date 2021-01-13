@@ -2,18 +2,11 @@
 #include "OverrideVariant.h"
 #include "NifUtils.h"
 
-#include "skse64/PluginAPI.h"
-
-#include "skse64/GameThreads.h"
-#include "skse64/GameReferences.h"
 #include "skse64/GameObjects.h"
-#include "skse64/GameRTTI.h"
-#include "skse64/GameExtraData.h"
 
-#include "skse64/NiProperties.h"
-#include "skse64/NiMaterial.h"
+#include "skse64/NiNodes.h"
 #include "skse64/NiGeometry.h"
-#include "skse64/NiRTTI.h"
+#include "skse64/NiProperties.h"
 #include "skse64/NiControllers.h"
 #include "skse64/NiExtraData.h"
 
@@ -411,323 +404,6 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 	}
 }
 
-class MatchBySlot : public FormMatcher
-{
-	UInt32 m_mask;
-public:
-	MatchBySlot(UInt32 slot) : 
-	  m_mask(slot) 
-	  {
-
-	  }
-
-	  bool Matches(TESForm* pForm) const {
-		  if (pForm) {
-			  BGSBipedObjectForm* pBip = DYNAMIC_CAST(pForm, TESForm, BGSBipedObjectForm);
-			  if (pBip) {
-				  return (pBip->data.parts & m_mask) != 0;
-			  }
-		  }
-		  return false;
-	  }
-};
-
-TESForm* GetSkinForm(Actor* thisActor, UInt32 mask)
-{
-	TESForm * equipped = GetWornForm(thisActor, mask); // Check equipped item
-	if(!equipped) {
-		TESNPC * actorBase = DYNAMIC_CAST(thisActor->baseForm, TESForm, TESNPC);
-		if(actorBase) {
-			equipped = actorBase->skinForm.skin; // Check ActorBase
-		}
-		if (!equipped) {
-			// Check the actor's race
-			TESRace * race = thisActor->race;
-			if (!race) {
-				// Check the actor base's race
-				race = actorBase->race.race;
-			}
-
-			if (race) {
-				equipped = race->skin.skin; // Check Race
-			}
-		}
-	}
-
-	return equipped;
-}
-
-TESForm* GetWornForm(Actor* thisActor, UInt32 mask)
-{
-	MatchBySlot matcher(mask);	
-	ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisActor->extraData.GetByType(kExtraData_ContainerChanges));
-	if (pContainerChanges) {
-		EquipData eqD = pContainerChanges->FindEquipped(matcher);
-		return eqD.pForm;
-	}
-	return nullptr;
-}
-
-void VisitAllWornItems(Actor* thisActor, UInt32 mask, std::function<void(InventoryEntryData*)> functor)
-{
-	struct VisitEquippedStack
-	{
-		VisitEquippedStack(FormMatcher& matcher, std::function<void(InventoryEntryData*)>& results) : m_matcher(matcher), m_results(results) { }
-
-		bool Accept(InventoryEntryData* pEntryData)
-		{
-			if (pEntryData)
-			{
-				// quick check - needs an extendData or can't be equipped
-				ExtendDataList* pExtendList = pEntryData->extendDataList;
-				if (pExtendList && m_matcher.Matches(pEntryData->type))
-				{
-					for (ExtendDataList::Iterator it = pExtendList->Begin(); !it.End(); ++it)
-					{
-						BaseExtraList * pExtraDataList = it.Get();
-
-						if (pExtraDataList)
-						{
-							if (pExtraDataList->HasType(kExtraData_Worn) || pExtraDataList->HasType(kExtraData_WornLeft))
-							{
-								m_results(pEntryData);
-								return true;
-							}
-						}
-					}
-				}
-			}
-			return true;
-		}
-		UInt32 mask;
-		FormMatcher& m_matcher;
-		std::function<void(InventoryEntryData*)>& m_results;
-	};
-
-	ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisActor->extraData.GetByType(kExtraData_ContainerChanges));
-	if (pContainerChanges) {
-		if (pContainerChanges->data && pContainerChanges->data->objList) {
-			MatchBySlot matcher(mask);
-			VisitEquippedStack visitStack(matcher, functor);
-			pContainerChanges->data->objList->Visit(visitStack);
-		}
-	}
-}
-
-BSGeometry * GetFirstShaderType(NiAVObject * object, UInt32 shaderType)
-{
-	NiNode * node = object->GetAsNiNode();
-	if(node)
-	{
-		for(UInt32 i = 0; i < node->m_children.m_emptyRunStart; i++)
-		{
-			NiAVObject * object = node->m_children.m_data[i];
-			if(object) {
-				BSGeometry * skin = GetFirstShaderType(object, shaderType);
-				if(skin)
-					return skin;
-			}
-		}
-	}
-	else
-	{
-		BSGeometry * geometry = object->GetAsBSGeometry();
-		if(geometry)
-		{
-			BSShaderProperty * shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
-			if(shaderProperty && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
-			{
-				// Find first geometry if the type is any
-				if(shaderType == 0xFFFF)
-					return geometry;
-
-				BSLightingShaderMaterial * material = (BSLightingShaderMaterial *)shaderProperty->material;
-				if(material && material->GetShaderType() == shaderType)
-				{
-					return geometry;
-				}
-			}
-		}
-	}
-
-	return nullptr;
-}
-
-void VisitGeometry(NiAVObject * parent, GeometryVisitor * visitor)
-{
-	NiNode * node = parent->GetAsNiNode();
-	if(node)
-	{
-		for(UInt32 i = 0; i < node->m_children.m_emptyRunStart; i++)
-		{
-			NiAVObject * object = node->m_children.m_data[i];
-			if(object) {
-				VisitGeometry(object, visitor);
-			}
-		}
-	}
-	else
-	{
-		BSGeometry * geometry = parent->GetAsBSGeometry();
-		if(geometry)
-			visitor->Accept(geometry);
-	}
-}
-
-bool NiExtraDataFinder::Accept(NiAVObject * object)
-{
-	m_data = object->GetExtraData(m_name.data);
-	if(m_data)
-		return true;
-
-	return false;
-};
-
-NiExtraData * FindExtraData(NiAVObject * object, BSFixedString name)
-{
-	if (!object)
-		return NULL;
-
-	NiExtraData * extraData = NULL;
-	VisitObjects(object, [&](NiAVObject*object)
-	{
-		extraData = object->GetExtraData(name.data);
-		if (extraData)
-			return true;
-
-		return false;
-	});
-
-	return extraData;
-}
-
-void VisitEquippedNodes(Actor* actor, UInt32 slotMask, std::function<void(TESObjectARMO*,TESObjectARMA*,NiAVObject*,bool)> functor)
-{
-	std::unordered_set<TESObjectARMO*> equippedSlots;
-	VisitAllWornItems(actor, slotMask, [&](InventoryEntryData* itemData)
-	{
-		TESObjectARMO* armor = itemData->type->formType == TESObjectARMO::kTypeID ? static_cast<TESObjectARMO*>(itemData->type) : nullptr;
-		if (armor)
-		{
-			equippedSlots.insert(armor);
-		}
-	});
-
-	for (auto & armor : equippedSlots) {
-		for (UInt32 i = 0; i < armor->armorAddons.count; i++) {
-			TESObjectARMA* arma = nullptr;
-			if (armor->armorAddons.GetNthItem(i, arma)) {
-				if (arma->isValidRace(actor->race)) { // Only search AAs that fit this race
-					VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiNode * skeletonRoot, NiAVObject * armorNode) {
-						functor(armor, arma, armorNode, isFirstPerson);
-					});
-				}
-			}
-		}
-	}
-}
-
-void VisitArmorAddon(Actor * actor, TESObjectARMO * armor, TESObjectARMA * arma, std::function<void(bool, NiNode*,NiAVObject*)> functor)
-{
-	char addonString[MAX_PATH];
-	memset(addonString, 0, MAX_PATH);
-	arma->GetNodeName(addonString, actor, armor, -1);
-
-	BSFixedString rootName("NPC Root [Root]");
-
-	NiNode * skeletonRoot[2];
-	skeletonRoot[0] = actor->GetNiRootNode(0);
-	skeletonRoot[1] = actor->GetNiRootNode(1);
-
-		// Skip second skeleton, it's the same as the first
-	if (skeletonRoot[1] == skeletonRoot[0])
-		skeletonRoot[1] = nullptr;
-
-	for (UInt32 i = 0; i <= 1; i++)
-	{
-		if (skeletonRoot[i])
-		{
-			NiAVObject * root = skeletonRoot[i]->GetObjectByName(&rootName.data);
-			if (root)
-			{
-				NiNode * rootNode = root->GetAsNiNode();
-				if (rootNode)
-				{
-					BSFixedString addonName(addonString); // Find the Armor name from the root
-
-					// DFS search for the node by name, then traverse all siblings incase the same armor appears twice
-					NiAVObject * armorNode = skeletonRoot[i]->GetObjectByName(&addonName.data);
-					if (armorNode && armorNode->m_parent)
-					{
-						auto parent = armorNode->m_parent;
-						for (int j = 0; j < parent->m_children.m_emptyRunStart; ++j)
-						{
-							auto childNode = parent->m_children.m_data[j];
-							if (childNode && BSFixedString(childNode->m_name) == addonName)
-							{
-								functor(i == 1, rootNode, childNode);
-							}
-						}
-					}
-
-					
-				}
-#ifdef _DEBUG
-				else {
-					_DMESSAGE("%s - Failed to locate addon node for Armor: %08X on Actor: %08X", __FUNCTION__, armor->formID, actor->formID);
-				}
-#endif
-			}
-		}
-	}
-}
-
-bool ResolveAnyForm(SKSESerializationInterface * intfc, UInt32 handle, UInt32 * newHandle)
-{
-	if (((handle & 0xFF000000) >> 24) != 0xFF) {
-		// Skip if handle is no longer valid.
-		if (!intfc->ResolveFormId(handle, newHandle)) {
-			return false;
-		}
-	}
-	else { // This will resolve game-created forms
-		TESForm * formCheck = LookupFormByID(handle & 0xFFFFFFFF);
-		if (!formCheck) {
-			return false;
-		}
-		TESObjectREFR * refr = DYNAMIC_CAST(formCheck, TESForm, TESObjectREFR);
-		if (!refr || (refr && (refr->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted)) {
-			return false;
-		}
-		*newHandle = handle;
-	}
-
-	return true;
-}
-
-bool ResolveAnyHandle(SKSESerializationInterface * intfc, UInt64 handle, UInt64 * newHandle)
-{
-	if (((handle & 0xFF000000) >> 24) != 0xFF) {
-		// Skip if handle is no longer valid.
-		if (!intfc->ResolveHandle(handle, newHandle)) {
-			return false;
-		}
-	}
-	else { // This will resolve game-created forms
-		TESForm * formCheck = LookupFormByID(handle & 0xFFFFFFFF);
-		if (!formCheck) {
-			return false;
-		}
-		TESObjectREFR * refr = DYNAMIC_CAST(formCheck, TESForm, TESObjectREFR);
-		if (!refr || (refr && (refr->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted)) {
-			return false;
-		}
-		*newHandle = handle;
-	}
-
-	return true;
-}
-
 SKEEFixedString GetSanitizedPath(const SKEEFixedString & path)
 {
 	std::string fullPath = path;
@@ -896,3 +572,20 @@ void DumpNodeChildren(NiAVObject * node)
 	}
 }
 #endif
+
+void NIOVTaskUpdateWorldData::Run()
+{
+	NiAVObject::ControllerUpdateContext ctx;
+	ctx.flags = 0;
+	ctx.delta = 0;
+	m_object->UpdateWorldData(&ctx);
+}
+
+void NIOVTaskMoveNode::Run()
+{
+	NiPointer<NiNode> currentParent = m_object->m_parent;
+	if (currentParent)
+		currentParent->RemoveChild(m_object);
+	if (m_destination)
+		m_destination->AttachChild(m_object, true);
+}

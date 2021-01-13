@@ -5,6 +5,7 @@ class NiAVObject;
 class TESObjectARMO;
 class TESObjectARMA;
 class NiNode;
+class NiAVObject;
 
 class IPluginInterface
 {
@@ -102,4 +103,24 @@ public:
 	virtual void VisitStrings(StringVisitor & visitor) = 0;
 	virtual void VisitActors(ActorVisitor & visitor) = 0;
 	virtual size_t ClearMorphCache() = 0;
+};
+
+class IAttachmentInterface : public IPluginInterface
+{
+public:
+	virtual bool AttachMesh(TESObjectREFR* ref, const char* nifPath, const char* name, bool firstPerson, bool replace, const char** filter, UInt32 filterSize, NiAVObject*& out, char* err, size_t errBufLen) = 0;
+	virtual bool DetachMesh(TESObjectREFR* ref, const char* name, bool firstPerson) = 0;
+};
+
+class IActorUpdateManager : public IPluginInterface
+{
+public:
+	virtual void AddBodyUpdate(UInt32 formId) = 0;
+	virtual void AddTransformUpdate(UInt32 formId) = 0;
+	virtual void AddOverlayUpdate(UInt32 formId) = 0;
+	virtual void AddNodeOverrideUpdate(UInt32 formId) = 0;
+	virtual void AddWeaponOverrideUpdate(UInt32 formId) = 0;
+	virtual void AddAddonOverrideUpdate(UInt32 formId) = 0;
+	virtual void AddSkinOverrideUpdate(UInt32 formId) = 0;
+	virtual void Flush() = 0;
 };

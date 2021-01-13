@@ -23,7 +23,7 @@ public:
 		XMFLOAT2 texture;
 	};
 
-	enum class TextureType
+	enum class TextureType : UInt8
 	{
 		Normal = 0,
 		Mask,
@@ -37,8 +37,8 @@ public:
 		{
 			struct BlendData
 			{
-				unsigned long		dummy;
-				TextureType	type;
+				UInt32		dummy;
+				UInt32		type;
 			} blendData;
 			XMINT2 data;
 		} blending;

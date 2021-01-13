@@ -4,6 +4,8 @@
 #include "skse64_common/skse_version.h"
 
 #include "ScaleformCharGenFunctions.h"
+#include "ScaleformUtils.h"
+
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
 
@@ -102,6 +104,8 @@ void SKSEScaleform_SavePreset::Invoke(Args * args)
 
 void SKSEScaleform_LoadPreset::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_String);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Object);
@@ -151,6 +155,8 @@ const char * GetGameSettingString(const char * key)
 
 void SKSEScaleform_ReadPreset::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_String);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Object);
@@ -329,6 +335,8 @@ void SKSEScaleform_ReloadSliders::Invoke(Args * args)
 
 void SKSEScaleform_GetSliderData::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Number);
@@ -451,6 +459,8 @@ void SKSEScaleform_ExportHead::Invoke(Args * args)
 
 void SKSEScaleform_ImportHead::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_String);
 
@@ -630,6 +640,8 @@ void SKSEScaleform_ClearSculptData::Invoke(Args * args)
 
 void CreateHeadPartObject(GFxValue& object, GFxMovieView* movie, BGSHeadPart* headPart)
 {
+	using namespace ScaleformUtils;
+
 	RegisterString(&object, movie, "partName", headPart->partName.data);
 	RegisterNumber(&object, "partFlags", headPart->partFlags);
 	RegisterNumber(&object, "partType", headPart->type);
@@ -808,6 +820,8 @@ void SKSEScaleform_SetRaceSexCameraPos::Invoke(Args * args)
 
 void SKSEScaleform_CreateMorphEditor::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	Microsoft::WRL::ComPtr<ID3D11DeviceContext> pDeviceContext = g_renderManager->context;
 	Microsoft::WRL::ComPtr<ID3D11Device> pDevice;
 	pDeviceContext->GetDevice(&pDevice);
@@ -1116,6 +1130,8 @@ void SKSEScaleform_SetCurrentBrush::Invoke(Args * args)
 
 void SKSEScaleform_GetBrushes::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	args->movie->CreateArray(args->result);
 
 	for (const auto& brush : g_World.GetBrushes()) {
@@ -1171,6 +1187,8 @@ void SKSEScaleform_SetBrushData::Invoke(Args * args)
 
 void SKSEScaleform_GetMeshes::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	args->movie->CreateArray(args->result);
 
 	for (UInt32 i = 0; i < g_World.GetNumMeshes(); i++) {
@@ -1330,6 +1348,8 @@ void ReadFileDirectory(const char * lpFolder, const char ** lpFilePattern, UInt3
 
 void SKSEScaleform_GetExternalFiles::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_String);
 	ASSERT(args->args[1].GetType() == GFxValue::kType_Array);

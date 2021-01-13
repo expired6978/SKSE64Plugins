@@ -173,6 +173,7 @@ protected:
 	void VisitTemplateData(TESObjectREFR* refr, TESObjectARMO* armor, std::function<void(MaskTriShapeMap*)> functor);
 
 private:
+	bool GetActorHairColor(Actor* actor, NiColorA& color);
 	// Inherited via IAddonAttachmentInterface
 	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;
 

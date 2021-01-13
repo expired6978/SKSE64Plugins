@@ -1,5 +1,7 @@
 #include "BodyMorphInterface.h"
 #include "OverlayInterface.h"
+#include "AttachmentInterface.h"
+#include "ActorUpdateManager.h"
 #include "ShaderUtilities.h"
 #include "StringTable.h"
 #include "Utilities.h"
@@ -31,6 +33,7 @@
 
 #include "Morpher.h"
 
+extern ActorUpdateManager				g_actorUpdateManager;
 extern BodyMorphInterface				g_bodyMorphInterface;
 extern OverlayInterface					g_overlayInterface;
 extern StringTable						g_stringTable;
@@ -39,10 +42,33 @@ extern bool								g_parallelMorphing;
 extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
+extern bool								g_enableBodyNormalRecalculate;
+extern bool								g_isReverting;
 
 UInt32 BodyMorphInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
+}
+
+std::vector<SKEEFixedString> BodyMorphInterface::GetCachedMorphNames()
+{
+	std::vector<SKEEFixedString> morphList;
+	std::unordered_set<SKEEFixedString> morphNames;
+	morphCache.ForEachMorphFile([&](const SKEEFixedString& filePath, const MorphFileCache& morphFile)
+	{
+		morphFile.ForEachShape([&](const SKEEFixedString& shapeName, const BodyMorphMap& morphMap)
+		{
+			morphMap.ForEachMorph([&](const SKEEFixedString& morphName, const auto vertexData)
+			{
+				if (!morphNames.count(morphName))
+				{
+					morphList.push_back(morphName);
+					morphNames.emplace(morphName);
+				}
+			});
+		});
+	});
+	return morphList;
 }
 
 size_t BodyMorphInterface::ClearMorphCache()
@@ -414,6 +440,14 @@ bool BodyMorphMap::HasMorphs(TESObjectREFR * refr) const
 	return false;
 }
 
+void BodyMorphMap::ForEachMorph(std::function<void(const SKEEFixedString&, const std::pair<TriShapeVertexDataPtr, TriShapeVertexDataPtr>&)> functor) const
+{
+	for (auto& morph : *this)
+	{
+		functor(morph.first, morph.second);
+	}
+}
+
 #include <fstream>
 #include <regex>
 #include <d3d11.h>
@@ -572,7 +606,11 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									// Applies all morphs for this shape
 									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
 
-									NormalApplicator applicator(bodyGeometry, newSkinPartition);
+									if (g_enableBodyNormalRecalculate)
+									{
+										NormalApplicator applicator(bodyGeometry, newSkinPartition);
+										applicator.Apply();
+									}
 
 									// Propagate the data to the other partitions
 									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
@@ -603,6 +641,14 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 				}
 			}
 		}
+	}
+}
+
+void MorphFileCache::ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const
+{
+	for (auto it : vertexMap)
+	{
+		functor(it.first, it.second);
 	}
 }
 
@@ -703,26 +749,6 @@ private:
 	FoundItems	m_found;
 };
 
-TESObjectARMO * GetActorSkin(Actor * actor)
-{
-	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
-	if (npc) {
-		if (npc->skinForm.skin)
-			return npc->skinForm.skin;
-	}
-	TESRace * actorRace = actor->race;
-	if (actorRace)
-		return actorRace->skin.skin;
-
-	if (npc) {
-		actorRace = npc->race.race;
-		if (actorRace)
-			return actorRace->skin.skin;
-	}
-
-	return NULL;
-}
-
 void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 {
 	if(!refr)
@@ -764,10 +790,29 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 			}
 		}
 	}
+
+	BSFixedString attachmentName(AttachmentInterface::ATTACHMENT_HOLDER);
+	VisitSkeletalRoots(refr, [&](NiNode* rootNode, bool isFirstPerson)
+	{
+		NiAVObject* attachmentNode = rootNode->GetObjectByName(&attachmentName.data);
+		if (attachmentNode)
+		{
+			ApplyMorphs(refr, attachmentNode, false, deferUpdate);
+		}
+	});
+
 #ifndef _NO_REATTACH
 	//CALL_MEMBER_FN(actor->processManager, SetEquipFlag)(ActorProcessManager::kFlags_Unk01 | ActorProcessManager::kFlags_Unk02 | ActorProcessManager::kFlags_Mobile);
 	//CALL_MEMBER_FN(actor->processManager, UpdateEquipment)(actor);
 #endif
+}
+
+void MorphCache::ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const
+{
+	for (auto& it : m_data)
+	{
+		functor(it.first, it.second);
+	}
 }
 
 SKEEFixedString MorphCache::CreateTRIPath(const char * relativePath)
@@ -1788,8 +1833,16 @@ void BodyMorphInterface::Impl_VisitActors(std::function<void(TESObjectREFR*)> fu
 
 void BodyMorphInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
 {
-	if (HasMorphs(refr)) {
-		ApplyVertexDiff(refr, object, true);
+	if (HasMorphs(refr))
+	{
+		if (g_isReverting)
+		{
+			g_actorUpdateManager.AddBodyUpdate(refr->formID);
+		}
+		else
+		{
+			ApplyVertexDiff(refr, object, true);
+		}
 	}
 }
 
@@ -2024,7 +2077,7 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion, co
 						// If the keys were mapped by mod name, skip them if they arent in load order
 						std::string strKey(keyName->c_str());
 						SKEEFixedString ext(strKey.substr(strKey.find_last_of(".") + 1).c_str());
-						if (ext == SKEEFixedString("esp") || ext == SKEEFixedString("esm"))
+						if (ext == SKEEFixedString("esp") || ext == SKEEFixedString("esm") || ext == SKEEFixedString("esl"))
 						{
 							if (!DataHandler::GetSingleton()->LookupModByName(keyName->c_str()))
 								continue;
@@ -2111,7 +2164,7 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 	if (kVersion >= BodyMorphInterface::kSerializationVersion3)
 	{
 		// Skip if handle is no longer valid.
-		if (!intfc->ResolveFormId(formId, &newFormId))
+		if (!ResolveAnyForm(intfc, formId, &newFormId))
 			return false;
 	}
 	else
@@ -2138,11 +2191,15 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 			_DMESSAGE("%s - Loaded MorphSet Handle %08llX actor %s", __FUNCTION__, newFormId, CALL_MEMBER_FN(refr, GetReferenceName)());
 #endif
 
-			g_bodyMorphInterface.UpdateModelWeight(refr);
+			g_actorUpdateManager.AddBodyUpdate(newFormId);
+		}
+		else if (refr)
+		{
+			_WARNING("%s - Discarding morphs for %08llX form is not an actor or reference (%d)", __FUNCTION__, newFormId, refr->formType);
 		}
 		else
 		{
-			_WARNING("%s - Discarding morphs for %08llX form is not an actor", __FUNCTION__, newFormId);
+			_WARNING("%s - Discarding morphs for %08llX form is invalid", __FUNCTION__, newFormId);
 		}
 	}
 

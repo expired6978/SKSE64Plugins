@@ -21,14 +21,14 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class NodeTransformRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<MultiRegistration<NodeTransformKeys, 2>,2>>>
+class NodeTransformRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt32, MultiRegistration<MultiRegistration<NodeTransformKeys, 2>,2>>>
 {
 	friend class NiTransformInterface;
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<MultiRegistration<NodeTransformKeys, 2>,2>> RegMap;
+	typedef std::unordered_map<UInt32, MultiRegistration<MultiRegistration<NodeTransformKeys, 2>,2>> RegMap;
 
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt32 * outFormId, const StringIdMap & stringTable);
 };
 
 // Node names are hashed here due to some case where the node "NPC" gets overwritten for some unknown reason
@@ -78,9 +78,9 @@ public:
 
 	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
 	
-	void RemoveInvalidTransforms(UInt64 handle);
-	void RemoveNamedTransforms(UInt64 handle, SKEEFixedString name);
-	void SetHandleNodeTransforms(UInt64 handle, bool immediate = false, bool reset = false);
+	void RemoveInvalidTransforms(UInt32 formId);
+	void RemoveNamedTransforms(UInt32 formId, SKEEFixedString name);
+	void SetTransforms(UInt32 formId, bool immediate = false, bool reset = false);
 
 	NodeTransformRegistrationMapHolder	transformData;
 	NodeTransformCache					transformCache;

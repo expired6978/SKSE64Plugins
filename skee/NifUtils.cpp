@@ -4,12 +4,14 @@
 #include <unordered_map>
 
 #include "common/IFileStream.h"
+#include "skse64/PluginAPI.h"
 
 #include "skse64/GameRTTI.h"
 #include "skse64/GameReferences.h"
 #include "skse64/GameObjects.h"
 #include "skse64/GameData.h"
 #include "skse64/GameStreams.h"
+#include "skse64/GameExtraData.h"
 
 #include "skse64/NiRTTI.h"
 #include "skse64/NiObjects.h"
@@ -23,6 +25,7 @@
 #include <wrl/client.h>
 #include <d3d11_4.h>
 #include <DirectXTex.h>
+#include <unordered_set>
 
 extern bool g_exportSkinToBone;
 
@@ -644,6 +647,36 @@ bool VisitObjects(NiAVObject * parent, std::function<bool(NiAVObject*)> functor)
 	return false;
 }
 
+bool VisitGeometry(NiAVObject* parent, std::function<bool(BSGeometry*)> functor)
+{
+	return VisitObjects(parent, [&functor](NiAVObject* object)
+	{
+		BSGeometry* geometry = object->GetAsBSGeometry();
+		if (geometry)
+		{
+			if (functor(geometry))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	});
+}
+
+bool VisitGeometry(NiAVObject* object, GeometryVisitor* visitor)
+{
+	return VisitGeometry(object, [&](BSGeometry* geometry)
+	{
+		if (visitor->Accept(geometry))
+		{
+			return true;
+		}
+
+		return false;
+	});
+}
+
 NiTransform GetGeometryTransform(BSGeometry * geometry)
 {
 	NiTransform transform = geometry->m_localTransform;
@@ -736,6 +769,363 @@ NiAVObjectPtr GetRootNode(NiAVObjectPtr object, bool refRoot)
 	return rootNode;
 }
 
+TESObjectARMO* GetActorSkin(Actor* actor)
+{
+	TESNPC* npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
+	if (npc) {
+		if (npc->skinForm.skin)
+			return npc->skinForm.skin;
+	}
+	TESRace* actorRace = actor->race;
+	if (actorRace)
+		return actorRace->skin.skin;
+
+	if (npc) {
+		actorRace = npc->race.race;
+		if (actorRace)
+			return actorRace->skin.skin;
+	}
+
+	return NULL;
+}
+
+class MatchBySlot : public FormMatcher
+{
+	UInt32 m_mask;
+public:
+	MatchBySlot(UInt32 slot) :
+		m_mask(slot)
+	{
+
+	}
+
+	bool Matches(TESForm* pForm) const {
+		if (pForm) {
+			BGSBipedObjectForm* pBip = DYNAMIC_CAST(pForm, TESForm, BGSBipedObjectForm);
+			if (pBip) {
+				return (pBip->data.parts & m_mask) != 0;
+			}
+		}
+		return false;
+	}
+};
+
+TESForm* GetSkinForm(Actor* thisActor, UInt32 mask)
+{
+	TESForm* equipped = GetWornForm(thisActor, mask); // Check equipped item
+	if (!equipped) {
+		TESNPC* actorBase = DYNAMIC_CAST(thisActor->baseForm, TESForm, TESNPC);
+		if (actorBase) {
+			equipped = actorBase->skinForm.skin; // Check ActorBase
+		}
+		if (!equipped) {
+			// Check the actor's race
+			TESRace* race = thisActor->race;
+			if (!race) {
+				// Check the actor base's race
+				race = actorBase->race.race;
+			}
+
+			if (race) {
+				equipped = race->skin.skin; // Check Race
+			}
+		}
+	}
+
+	return equipped;
+}
+
+TESForm* GetWornForm(Actor* thisActor, UInt32 mask)
+{
+	MatchBySlot matcher(mask);
+	ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisActor->extraData.GetByType(kExtraData_ContainerChanges));
+	if (pContainerChanges) {
+		EquipData eqD = pContainerChanges->FindEquipped(matcher);
+		return eqD.pForm;
+	}
+	return nullptr;
+}
+
+void VisitAllWornItems(Actor* thisActor, UInt32 mask, std::function<void(InventoryEntryData*)> functor)
+{
+	struct VisitEquippedStack
+	{
+		VisitEquippedStack(FormMatcher& matcher, std::function<void(InventoryEntryData*)>& results) : m_matcher(matcher), m_results(results) { }
+
+		bool Accept(InventoryEntryData* pEntryData)
+		{
+			if (pEntryData)
+			{
+				// quick check - needs an extendData or can't be equipped
+				ExtendDataList* pExtendList = pEntryData->extendDataList;
+				if (pExtendList && m_matcher.Matches(pEntryData->type))
+				{
+					for (ExtendDataList::Iterator it = pExtendList->Begin(); !it.End(); ++it)
+					{
+						BaseExtraList* pExtraDataList = it.Get();
+
+						if (pExtraDataList)
+						{
+							if (pExtraDataList->HasType(kExtraData_Worn) || pExtraDataList->HasType(kExtraData_WornLeft))
+							{
+								m_results(pEntryData);
+								return true;
+							}
+						}
+					}
+				}
+			}
+			return true;
+		}
+		UInt32 mask;
+		FormMatcher& m_matcher;
+		std::function<void(InventoryEntryData*)>& m_results;
+	};
+
+	ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisActor->extraData.GetByType(kExtraData_ContainerChanges));
+	if (pContainerChanges) {
+		if (pContainerChanges->data && pContainerChanges->data->objList) {
+			MatchBySlot matcher(mask);
+			VisitEquippedStack visitStack(matcher, functor);
+			pContainerChanges->data->objList->Visit(visitStack);
+		}
+	}
+}
+
+BSGeometry* GetFirstShaderType(NiAVObject* object, UInt32 shaderType)
+{
+	BSGeometry* foundGeometry = nullptr;
+	VisitGeometry(object, [&foundGeometry, shaderType](BSGeometry* geometry)
+	{
+		BSShaderProperty* shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+		if (shaderProperty && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
+		{
+			// Find first geometry if the type is any
+			if (shaderType == 0xFFFF)
+			{
+				foundGeometry = geometry;
+				return true;
+			}
+
+			BSLightingShaderMaterial* material = (BSLightingShaderMaterial*)shaderProperty->material;
+			if (material && material->GetShaderType() == shaderType)
+			{
+				foundGeometry = geometry;
+				return true;
+			}
+		}
+
+		return false;
+	});
+
+	return foundGeometry;
+}
+
+bool NiExtraDataFinder::Accept(NiAVObject* object)
+{
+	m_data = object->GetExtraData(m_name.data);
+	if (m_data)
+		return true;
+
+	return false;
+};
+
+NiExtraData* FindExtraData(NiAVObject* object, BSFixedString name)
+{
+	if (!object)
+		return NULL;
+
+	NiExtraData* extraData = NULL;
+	VisitObjects(object, [&](NiAVObject* object)
+	{
+		extraData = object->GetExtraData(name.data);
+		if (extraData)
+			return true;
+
+		return false;
+	});
+
+	return extraData;
+}
+
+void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNode*, NiAVObject*)> functor)
+{
+	for (SInt32 k = 0; k <= 1; ++k)
+	{
+		auto weightModel = refr->GetBiped(k);
+		if (weightModel && weightModel->bipedData)
+		{
+			for (int i = 0; i < 42; ++i)
+			{
+				NiAVObject* node = weightModel->bipedData->unk10[i].object;
+				if (node)
+				{
+					functor(k == 1, i, refr->GetNiRootNode(k), node);
+				}
+			}
+			for (int i = 0; i < 42; ++i)
+			{
+				NiAVObject* node = weightModel->bipedData->unk13C0[i].object;
+				if (node)
+				{
+					functor(k == 1, i, refr->GetNiRootNode(k), node);
+				}
+			}
+		}
+	}
+}
+
+void VisitEquippedNodes(Actor* actor, UInt32 slotMask, std::function<void(TESObjectARMO*, TESObjectARMA*, NiAVObject*, bool)> functor)
+{
+	std::unordered_set<TESObjectARMO*> equippedSlots;
+	VisitAllWornItems(actor, slotMask, [&](InventoryEntryData* itemData)
+	{
+		TESObjectARMO* armor = itemData->type->formType == TESObjectARMO::kTypeID ? static_cast<TESObjectARMO*>(itemData->type) : nullptr;
+		if (armor)
+		{
+			equippedSlots.insert(armor);
+		}
+	});
+
+	TESObjectARMO* skin = GetActorSkin(actor);
+	if (skin)
+		equippedSlots.insert(skin);
+
+	for (auto& armor : equippedSlots) {
+		for (UInt32 i = 0; i < armor->armorAddons.count; i++) {
+			TESObjectARMA* arma = nullptr;
+			if (armor->armorAddons.GetNthItem(i, arma)) {
+				if (arma->isValidRace(actor->race)) { // Only search AAs that fit this race
+					VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiNode* skeletonRoot, NiAVObject* armorNode) {
+						functor(armor, arma, armorNode, isFirstPerson);
+					});
+				}
+			}
+		}
+	}
+}
+
+void VisitSkeletalRoots(TESObjectREFR* ref, std::function<void(NiNode*, bool)> functor)
+{
+	BSFixedString rootName("NPC Root [Root]");
+
+	NiNode* skeletonRoot[2];
+	skeletonRoot[0] = ref->GetNiRootNode(0);
+	skeletonRoot[1] = ref->GetNiRootNode(1);
+
+	// Skip second skeleton, it's the same as the first
+	if (skeletonRoot[1] == skeletonRoot[0])
+		skeletonRoot[1] = nullptr;
+
+	for (UInt32 i = 0; i <= 1; i++)
+	{
+		if (skeletonRoot[i])
+		{
+			NiAVObject* root = skeletonRoot[i]->GetObjectByName(&rootName.data);
+			if (root)
+			{
+				NiNode* rootNode = root->GetAsNiNode();
+				if (rootNode)
+				{
+					functor(rootNode, i == 1);
+				}
+			}
+		}
+	}
+}
+
+void VisitArmorAddon(Actor* actor, TESObjectARMO* armor, TESObjectARMA* arma, std::function<void(bool, NiNode*, NiAVObject*)> functor)
+{
+	char addonString[MAX_PATH];
+	memset(addonString, 0, MAX_PATH);
+	arma->GetNodeName(addonString, actor, armor, -1);
+
+	BSFixedString addonName(addonString);
+
+	std::unordered_set<NiAVObject*> touched;
+
+	VisitBipedNodes(actor, [&](bool isFirstPerson, UInt32 slot, NiNode* rootNode, NiAVObject* object)
+	{
+		if (object->m_name == addonName.data && !touched.count(object))
+		{
+			touched.emplace(object);
+			functor(isFirstPerson, rootNode, object);
+		}
+	});
+
+	VisitSkeletalRoots(actor, [&](NiNode* rootNode, bool isFirstPerson)
+	{
+		// DFS search for the node by name, then traverse all siblings incase the same armor appears twice
+		NiAVObject* armorNode = rootNode->GetObjectByName(&addonName.data);
+		if (armorNode && armorNode->m_parent)
+		{
+			auto parent = armorNode->m_parent;
+			for (int j = 0; j < parent->m_children.m_emptyRunStart; ++j)
+			{
+				auto childNode = parent->m_children.m_data[j];
+				if (childNode && childNode->m_name == addonName.data && !touched.count(childNode))
+				{
+					touched.emplace(childNode);
+					functor(isFirstPerson, rootNode, childNode);
+				}
+			}
+		}	
+	});
+
+#ifdef _DEBUG
+	for (auto& node : touched)
+	{
+		_DMESSAGE("%s - Touched node %s for Armor: %08X on Actor: %08X", __FUNCTION__, node->m_name, armor->formID, actor->formID);
+	}
+#endif
+}
+
+bool ResolveAnyForm(SKSESerializationInterface* intfc, UInt32 handle, UInt32* newHandle)
+{
+	if (((handle & 0xFF000000) >> 24) != 0xFF) {
+		// Skip if handle is no longer valid.
+		if (!intfc->ResolveFormId(handle, newHandle)) {
+			return false;
+		}
+	}
+	else { // This will resolve game-created forms
+		TESForm* formCheck = LookupFormByID(handle & 0xFFFFFFFF);
+		if (!formCheck) {
+			return false;
+		}
+		TESObjectREFR* refr = DYNAMIC_CAST(formCheck, TESForm, TESObjectREFR);
+		if (!refr || (refr && (refr->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted)) {
+			return false;
+		}
+		*newHandle = handle;
+	}
+
+	return true;
+}
+
+bool ResolveAnyHandle(SKSESerializationInterface* intfc, UInt64 handle, UInt64* newHandle)
+{
+	if (((handle & 0xFF000000) >> 24) != 0xFF) {
+		// Skip if handle is no longer valid.
+		if (!intfc->ResolveHandle(handle, newHandle)) {
+			return false;
+		}
+	}
+	else { // This will resolve game-created forms
+		TESForm* formCheck = LookupFormByID(handle & 0xFFFFFFFF);
+		if (!formCheck) {
+			return false;
+		}
+		TESObjectREFR* refr = DYNAMIC_CAST(formCheck, TESForm, TESObjectREFR);
+		if (!refr || (refr && (refr->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted)) {
+			return false;
+		}
+		*newHandle = handle;
+	}
+
+	return true;
+}
+
 void SKSETaskExportTintMask::Run()
 {
 	BSFaceGenNiNode * faceNode = (*g_thePlayer)->GetFaceGenNiNode();
@@ -765,4 +1155,31 @@ void SKSEUpdateFaceModel::Run()
 SKSEUpdateFaceModel::SKSEUpdateFaceModel(Actor * actor)
 {
 	m_formId = actor->formID;
+}
+
+NifStreamWrapper::NifStreamWrapper()
+{
+	CALL_MEMBER_FN(reinterpret_cast<NiStream*>(mem), ctor)();
+}
+
+NifStreamWrapper::~NifStreamWrapper()
+{
+	CALL_MEMBER_FN(reinterpret_cast<NiStream*>(mem), dtor)();
+}
+
+bool NifStreamWrapper::LoadStream(NiBinaryStream* stream)
+{
+	return reinterpret_cast<NiStream*>(mem)->LoadStream(stream);
+}
+
+bool NifStreamWrapper::VisitObjects(std::function<bool(NiObject*)> functor)
+{
+	NiStream* stream = reinterpret_cast<NiStream*>(mem);
+	for (UInt32 i = 0; i < stream->m_rootObjects.m_emptyRunStart; ++i)
+	{
+		if(stream->m_rootObjects.m_data[i] && functor(stream->m_rootObjects.m_data[i]))
+			return true;
+	}
+	
+	return false;
 }

@@ -179,6 +179,7 @@ public:
 
 	void ApplyMorphs(TESObjectREFR * refr, std::function<void(const TriShapeVertexDataPtr, float)> vertexFunctor, std::function<void(const TriShapeVertexDataPtr, float)> uvFunctor) const;
 	bool HasMorphs(TESObjectREFR * refr) const;
+	void ForEachMorph(std::function<void(const SKEEFixedString&, const std::pair<TriShapeVertexDataPtr, TriShapeVertexDataPtr>&)> functor) const;
 
 	bool HasUV() const { return m_hasUV; }
 
@@ -204,6 +205,7 @@ class MorphFileCache
 public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
 	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
+	void ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const;
 
 private:
 	TriShapeMap vertexMap;
@@ -228,6 +230,7 @@ public:
 
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool attaching = false, bool deferUpdate = false);
 	void UpdateMorphs(TESObjectREFR * refr, bool deferUpdate = false);
+	void ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const;
 
 	void Shrink();
 	size_t Clear();
@@ -366,6 +369,7 @@ public:
 	virtual void ClearBodyMorphKeys(TESObjectREFR * actor, const char * morphKey) override { Impl_ClearBodyMorphKeys(actor, morphKey); }
 	virtual void VisitStrings(StringVisitor & visitor) override { Impl_VisitStrings([&visitor](SKEEFixedString key) { visitor.Visit(key); }); }
 	virtual void VisitActors(ActorVisitor & visitor) override { Impl_VisitActors([&visitor](TESObjectREFR* actor) { visitor.Visit(actor); }); }
+	virtual std::vector<SKEEFixedString> GetCachedMorphNames();
 
 	virtual size_t ClearMorphCache() override;
 

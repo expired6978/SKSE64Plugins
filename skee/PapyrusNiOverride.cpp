@@ -7,6 +7,8 @@
 #include "skse64/NiExtraData.h"
 
 #include "skse64/PapyrusArgs.h"
+#include "skse64/PapyrusDelayFunctors.h"
+#include "skse64/Serialization.h"
 
 #include "PapyrusNiOverride.h"
 
@@ -16,11 +18,15 @@
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
+#include "AttachmentInterface.h"
 
 #include "ShaderUtilities.h"
+#include "NifUtils.h"
 #include "Utilities.h"
 
-extern SKSETaskInterface	* g_task;
+extern SKSETaskInterface*	g_task;
+extern SKSEObjectInterface* g_objectInterface;
+
 extern OverrideInterface	g_overrideInterface;
 extern OverlayInterface		g_overlayInterface;
 extern BodyMorphInterface	g_bodyMorphInterface;
@@ -28,6 +34,7 @@ extern ItemDataInterface	g_itemDataInterface;
 extern TintMaskInterface	g_tintMaskInterface;
 extern DyeMap				g_dyeMap;
 extern NiTransformInterface	g_transformInterface;
+extern AttachmentInterface	g_attachmentInterface;
 
 extern UInt32	g_numBodyOverlays;
 extern UInt32	g_numHandOverlays;
@@ -147,8 +154,7 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 
-		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
-		g_overrideInterface.SetHandleProperties(handle, false);
+		g_overrideInterface.SetProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -240,8 +246,10 @@ namespace papyrusNiOverride
 
 	void ApplyNodeOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
-		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
-		return g_overrideInterface.SetHandleNodeProperties(handle, false);
+		if (!refr)
+			return;
+
+		return g_overrideInterface.SetNodeProperties(refr->formID, false);
 	}
 
 	bool HasNodeOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt32 key, UInt32 index)
@@ -357,9 +365,7 @@ namespace papyrusNiOverride
 	{
 		if(!refr)
 			return;
-
-		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
-		g_overrideInterface.SetHandleWeaponProperties(handle, false);
+		g_overrideInterface.SetWeaponProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -461,9 +467,7 @@ namespace papyrusNiOverride
 	{
 		if (!refr)
 			return;
-
-		UInt64 handle = VirtualMachine::GetHandle(refr, TESObjectREFR::kTypeID);
-		g_overrideInterface.SetHandleSkinProperties(handle, false);
+		g_overrideInterface.SetSkinProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -846,6 +850,16 @@ namespace papyrusNiOverride
 			return;
 
 		g_bodyMorphInterface.UpdateModelWeight(refr);
+	}
+
+	VMResultArray<BSFixedString> GetCachedMorphNames(StaticFunctionTag* base)
+	{
+		VMResultArray<BSFixedString> results;
+		for (auto morph : g_bodyMorphInterface.GetCachedMorphNames())
+		{
+			results.push_back(morph);
+		}
+		return results;
 	}
 
 	void EnableTintTextureCache(StaticFunctionTag* base)
@@ -1604,6 +1618,248 @@ namespace papyrusNiOverride
 
 		return value;
 	}
+
+	class AttachMeshLatentFunctor : public LatentSKSEDelayFunctor
+	{
+	public:
+		virtual const char* ClassName() const override { return "AttachMeshLatentFunctor"; }
+		virtual UInt32		ClassVersion() const override { return 1; }
+
+		explicit AttachMeshLatentFunctor(SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
+		explicit AttachMeshLatentFunctor(UInt32 stackId, TESObjectREFR* refr, bool isFirstPerson, const BSFixedString& filePath, const BSFixedString& name, bool replace, const std::vector<BSFixedString>& filter)
+			: LatentSKSEDelayFunctor(stackId)
+			, m_ref(refr)
+			, m_isFirstPerson(isFirstPerson)
+			, m_filePath(filePath)
+			, m_name(name)
+			, m_replace(replace)
+			, m_filter(filter)
+		{}
+
+		virtual bool Save(SKSESerializationInterface* intfc) override
+		{
+			using namespace Serialization;
+
+			if (!LatentSKSEDelayFunctor::Save(intfc))
+				return false;
+
+			UInt32 formId = m_ref ? m_ref->formID : 0;
+			if (!WriteData(intfc, &formId))
+				return false;
+			if (!WriteData(intfc, &m_isFirstPerson))
+				return false;
+			if (!WriteData(intfc, &m_filePath))
+				return false;
+			if (!WriteData(intfc, &m_name))
+				return false;
+			if (!WriteData(intfc, &m_replace))
+				return false;
+			UInt32 size = static_cast<UInt32>(m_filter.size());
+			if (WriteData(intfc, &size))
+				return false;
+			for (size_t i = 0; i < m_filter.size(); ++i)
+			{
+				if (!WriteData(intfc, &m_filter[i]))
+					return false;
+			}
+			return true;
+		}
+
+		virtual bool Load(SKSESerializationInterface* intfc, UInt32 version) override
+		{
+			using namespace Serialization;
+
+			if (!LatentSKSEDelayFunctor::Load(intfc, version))
+				return false;
+
+			UInt32 formId = 0;
+			if (!ReadData(intfc, &formId))
+				return false;
+			if (!ReadData(intfc, &m_isFirstPerson))
+				return false;
+			if (!ReadData(intfc, &m_filePath))
+				return false;
+			if (!ReadData(intfc, &m_name))
+				return false;
+			if (!ReadData(intfc, &m_replace))
+				return false;
+			UInt32 size = 0;
+			if (ReadData(intfc, &size))
+				return false;
+
+			m_filter.clear();
+			m_filter.reserve(size);
+
+			for (UInt32 i = 0; i < size; ++i)
+			{
+				BSFixedString filter;
+				if (!ReadData(intfc, &filter))
+					return false;
+
+				m_filter.push_back(filter);
+			}
+
+			UInt32 newFormId;
+			if (!ResolveAnyForm(intfc, formId, &newFormId))
+				m_ref = nullptr;
+
+			TESForm* form = LookupFormByID(newFormId);
+			if (!form || (form->formType != Character::kTypeID && form->formType != TESObjectREFR::kTypeID))
+				m_ref = nullptr;
+
+			m_ref = static_cast<TESObjectREFR*>(form);
+			return true;
+		}
+
+		virtual void Run(VMValue& resultValue) override
+		{
+			if (!m_ref)
+			{
+				(*g_skyrimVM)->GetClassRegistry()->LogError("Must be used on a reference that exists", StackId());
+				resultValue.SetBool(false);
+				return;
+			}
+
+			std::unique_ptr<const char*[]> filter = nullptr;
+			if (m_filter.size())
+			{
+				filter = std::make_unique<const char*[]>(m_filter.size());
+				for (size_t i = 0; i < m_filter.size(); ++i)
+				{
+					filter[i] = m_filter[i].c_str();
+				}
+			}
+
+			NiAVObject* outRoot = nullptr;
+			char errBuf[512];
+			if (g_attachmentInterface.AttachMesh(m_ref, m_filePath.c_str(), m_name.c_str(), m_isFirstPerson, m_replace, filter.get(), m_filter.size(), outRoot, errBuf, 512))
+			{
+				g_bodyMorphInterface.ApplyVertexDiff(m_ref, outRoot);
+				g_overrideInterface.ApplyNodeOverrides(m_ref, outRoot, true);
+				resultValue.SetBool(true);
+			}
+			else
+			{
+				(*g_skyrimVM)->GetClassRegistry()->LogError(errBuf, StackId());
+				resultValue.SetBool(false);
+			}
+		}
+
+	protected:
+		TESObjectREFR*				m_ref;
+		bool						m_isFirstPerson;
+		BSFixedString				m_filePath;
+		BSFixedString				m_name;
+		bool						m_replace;
+		std::vector<BSFixedString>	m_filter;
+	};
+
+	bool AttachMesh(VMClassRegistry* registry, UInt32 stackId, StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, BSFixedString filePath, BSFixedString name, bool replace, VMArray<BSFixedString> filter)
+	{
+		if (!refr) {
+			registry->LogError("Must be used on a reference that exists", stackId);
+			return false;
+		}
+
+		std::vector<BSFixedString> filteredNames;
+		if (filter.Length())
+		{
+			for (UInt32 i = 0; i < filter.Length(); ++i)
+			{
+				BSFixedString name;
+				filter.Get(&name, i);
+				filteredNames.push_back(name);
+			}
+		}
+
+		g_objectInterface->GetDelayFunctorManager().Enqueue(new AttachMeshLatentFunctor(stackId, refr, isFirstPerson, filePath, name, replace, filteredNames));
+		return true;
+	}
+
+	class DetachMeshLatentFunctor : public LatentSKSEDelayFunctor
+	{
+	public:
+		virtual const char* ClassName() const override { return "DetachMeshLatentFunctor"; }
+		virtual UInt32		ClassVersion() const override { return 1; }
+
+		explicit DetachMeshLatentFunctor(SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
+		explicit DetachMeshLatentFunctor(UInt32 stackId, TESObjectREFR* refr, bool isFirstPerson, const BSFixedString& name)
+			: LatentSKSEDelayFunctor(stackId)
+			, m_ref(refr)
+			, m_isFirstPerson(isFirstPerson)
+			, m_name(name)
+		{}
+
+		virtual bool Save(SKSESerializationInterface* intfc) override
+		{
+			using namespace Serialization;
+
+			if (!LatentSKSEDelayFunctor::Save(intfc))
+				return false;
+			if (!WriteData(intfc, &m_ref->formID))
+				return false;
+			if (!WriteData(intfc, &m_isFirstPerson))
+				return false;
+			if (!WriteData(intfc, &m_name))
+				return false;
+			return true;
+		}
+
+		virtual bool Load(SKSESerializationInterface* intfc, UInt32 version) override
+		{
+			using namespace Serialization;
+
+			if (!LatentSKSEDelayFunctor::Load(intfc, version))
+				return false;
+
+			UInt32 formId = 0;
+			if (!ReadData(intfc, &formId))
+				return false;
+			if (!ReadData(intfc, &m_isFirstPerson))
+				return false;
+			if (!ReadData(intfc, &m_name))
+				return false;
+
+			UInt32 newFormId;
+			if (!ResolveAnyForm(intfc, formId, &newFormId))
+				m_ref = nullptr;
+
+			TESForm* form = LookupFormByID(newFormId);
+			if (!form || form->formType != Character::kTypeID)
+				m_ref = nullptr;
+
+			m_ref = static_cast<TESObjectREFR*>(form);
+			return true;
+		}
+
+		virtual void Run(VMValue& resultValue) override
+		{
+			if (!m_ref)
+			{
+				(*g_skyrimVM)->GetClassRegistry()->LogError("Must be used on a reference that exists", StackId());
+				resultValue.SetBool(false);
+				return;
+			}
+
+			resultValue.SetBool(g_attachmentInterface.DetachMesh(m_ref, m_name.c_str(), m_isFirstPerson));
+		}
+
+	protected:
+		TESObjectREFR*				m_ref;
+		bool						m_isFirstPerson;
+		BSFixedString				m_name;
+	};
+
+	bool DetachMesh(VMClassRegistry* registry, UInt32 stackId, StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, BSFixedString name)
+	{
+		if (!refr) {
+			registry->LogError("Must be used on a reference that exists", stackId);
+			return false;
+		}
+
+		g_objectInterface->GetDelayFunctorManager().Enqueue(new DetachMeshLatentFunctor(stackId, refr, isFirstPerson, name));
+		return true;
+	}
 }
 
 #include "skse64/PapyrusVM.h"
@@ -1982,6 +2238,9 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->RegisterFunction(
 		new NativeFunction2<StaticFunctionTag, void, BSFixedString, TESForm*>("ForEachMorphedReference", "NiOverride", papyrusNiOverride::ForEachMorphedReference, registry));
 
+	registry->RegisterFunction(
+		new NativeFunction0<StaticFunctionTag, VMResultArray<BSFixedString>>("GetCachedMorphNames", "NiOverride", papyrusNiOverride::GetCachedMorphNames, registry));
+
 
 	// Unique Item manipulation
 	registry->RegisterFunction(
@@ -2176,6 +2435,16 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->RegisterFunction(
 		new NativeFunction4<StaticFunctionTag, VMResultArray<BSFixedString>, TESObjectREFR *, bool, BSFixedString, BSFixedString>("GetStringsExtraData", "NiOverride", papyrusNiOverride::GetExtraData<VMResultArray<BSFixedString>>, registry));
 
+	// Mesh Manipulation
+	registry->RegisterFunction(
+		new LatentNativeFunction6<StaticFunctionTag, bool, TESObjectREFR*, bool, BSFixedString, BSFixedString, bool, VMArray<BSFixedString>>("AttachMesh", "NiOverride", papyrusNiOverride::AttachMesh, registry));
+
+	registry->RegisterFunction(
+		new LatentNativeFunction3<StaticFunctionTag, bool, TESObjectREFR*, bool, BSFixedString>("DetachMesh", "NiOverride", papyrusNiOverride::DetachMesh, registry));
+
+	g_objectInterface->GetObjectRegistry().RegisterClass<AttachMeshLatentFunctor>();
+	g_objectInterface->GetObjectRegistry().RegisterClass<DetachMeshLatentFunctor>();
+
 	// Extra data manipulation
 	registry->SetFunctionFlags("NiOverride", "GetBooleanExtraData", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "GetIntegerExtraData", VMClassRegistry::kFunctionFlag_NoWait);
@@ -2334,6 +2603,7 @@ void papyrusNiOverride::RegisterFuncs(VMClassRegistry* registry)
 	registry->SetFunctionFlags("NiOverride", "ClearBodyMorphKeys", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "ClearMorphs", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "UpdateModelWeight", VMClassRegistry::kFunctionFlag_NoWait);
+	registry->SetFunctionFlags("NiOverride", "GetCachedMorphNames", VMClassRegistry::kFunctionFlag_NoWait);
 
 	registry->SetFunctionFlags("NiOverride", "EnableTintTextureCache", VMClassRegistry::kFunctionFlag_NoWait);
 	registry->SetFunctionFlags("NiOverride", "ReleaseTintTextureCache", VMClassRegistry::kFunctionFlag_NoWait);

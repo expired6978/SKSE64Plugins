@@ -27,8 +27,11 @@
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
+#include "SkinLayerInterface.h"
 #include "SkeletonExtender.h"
+#include "AttachmentInterface.h"
 #include "ActorUpdateManager.h"
+#include "ActorArmorTangentUpdater.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -36,6 +39,7 @@
 #include "ShaderUtilities.h"
 #include "ScaleformFunctions.h"
 #include "ScaleformCharGenFunctions.h"
+#include "ScaleformUtils.h"
 #include "StringTable.h"
 
 #include <shlobj.h>
@@ -57,6 +61,7 @@ SKSETaskInterface				* g_task = nullptr;
 SKSEMessagingInterface			* g_messaging = nullptr;
 SKSEPapyrusInterface			* g_papyrus = nullptr;
 SKSETrampolineInterface			* g_trampoline = nullptr;
+SKSEObjectInterface				* g_objectInterface = nullptr;
 
 // Handlers
 InterfaceMap				g_interfaceMap;
@@ -70,6 +75,8 @@ NiTransformInterface		g_transformInterface;
 FaceMorphInterface			g_morphInterface;
 SkeletonExtenderInterface	g_skeletonExtenderInterface;
 ActorUpdateManager			g_actorUpdateManager;
+ActorArmorTangentUpdater	g_actorArmorTangentUpdater;
+AttachmentInterface			g_attachmentInterface;
 PartSet	g_partSet;
 
 StringTable g_stringTable;
@@ -84,6 +91,9 @@ bool	g_enableBodyMorph = true;
 bool	g_enableTintSync = true;
 bool	g_enableTintInventory = true;
 bool	g_enableTintHairSlot = true;
+bool	g_enableTangentSpaceCorrection = true;
+bool	g_enableFaceNormalRecalculate = true;
+bool	g_enableBodyNormalRecalculate = true;
 
 bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
@@ -100,11 +110,10 @@ bool	g_alphaOverride = true;
 UInt16	g_alphaFlags = 4845;
 UInt16	g_alphaThreshold = 0;
 
-UInt16	g_loadMode = 0;
-
 
 bool	g_enableBodyInit = true;
 bool	g_firstLoad = false;
+bool	g_isReverting = false;
 bool	g_immediateArmor = true;
 bool	g_enableFaceOverlays = true;
 bool	g_immediateFace = false;
@@ -304,6 +313,8 @@ void SKEE64Serialization_Revert(SKSESerializationInterface * intfc)
 {
 	_MESSAGE("Reverting...");
 
+	g_isReverting = true;
+
 	g_overlayInterface.Revert();
 	g_overrideInterface.Revert();
 	g_bodyMorphInterface.Revert();
@@ -311,6 +322,7 @@ void SKEE64Serialization_Revert(SKSESerializationInterface * intfc)
 	g_dyeMap.Revert();
 	g_transformInterface.Revert();
 	g_morphInterface.Revert();
+	g_attachmentInterface.Revert();
 	g_stringTable.Revert();
 }
 
@@ -418,6 +430,8 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 
 bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
 {
+	using namespace ScaleformUtils;
+
 	GFxValue obj;
 	RegisterBool(root, "bEnableOverlays", g_enableOverlays);
 
@@ -456,6 +470,8 @@ bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
 
 bool RegisterCharGenScaleform(GFxMovieView * view, GFxValue * root)
 {
+	using namespace ScaleformUtils;
+
 	RegisterBool(root, "bEnableSculpting", g_enableSculpting);
 	RegisterBool(root, "bEnableHeadExport", g_enableHeadExport);
 
@@ -689,6 +705,11 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		_ERROR("couldn't get trampoline interface");
 	}
 
+	g_objectInterface = (SKSEObjectInterface *)skse->QueryInterface(kInterface_Object);
+	if (!g_objectInterface) {
+		_ERROR("couldn't get object interface");
+	}
+
 	// supported runtime version
 	return true;
 }
@@ -707,6 +728,9 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableTintSync", &g_enableTintSync);
 	SKEE64GetConfigValue("Features", "bEnableTintInventory", &g_enableTintInventory);
 	SKEE64GetConfigValue("Features", "bEnableTintHairSlot", &g_enableTintHairSlot);
+	SKEE64GetConfigValue("Features", "bEnableTangentSpaceCorrection", &g_enableTangentSpaceCorrection);
+	SKEE64GetConfigValue("Features", "bEnableFaceNormalRecalculate", &g_enableFaceNormalRecalculate);
+	SKEE64GetConfigValue("Features", "bEnableBodyNormalRecalculate", &g_enableBodyNormalRecalculate);
 
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
 	SKEE64GetConfigValue("Overlays", "bEnableFaceOverlays", &g_enableFaceOverlays);
@@ -732,7 +756,6 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	}
 	g_overlayInterface.SetDefaultTexture(defaultTexture);
 
-	SKEE64GetConfigValue("General", "iLoadMode", &g_loadMode);
 	SKEE64GetConfigValue("General", "bDeferredBodyMorph", &g_deferredBodyMorph);
 
 	SKEE64GetConfigValue("General", "iScaleMode", &g_scaleMode);
@@ -867,7 +890,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 
 		if (g_enableTintHairSlot)
 		{
-			EventDispatcher<SKSENiNodeUpdateEvent> * dispatcher = static_cast<EventDispatcher<SKSENiNodeUpdateEvent>*>(g_messaging->GetEventDispatcher(SKSEMessagingInterface::kDispatcher_NiNodeUpdateEvent));
+			EventDispatcher<SKSENiNodeUpdateEvent>* dispatcher = static_cast<EventDispatcher<SKSENiNodeUpdateEvent>*>(g_messaging->GetEventDispatcher(SKSEMessagingInterface::kDispatcher_NiNodeUpdateEvent));
 			if (dispatcher)
 			{
 				dispatcher->AddEventSink(&g_tintMaskInterface);
@@ -883,6 +906,12 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_interfaceMap.AddInterface("TintMask", &g_tintMaskInterface);
 	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
 	g_interfaceMap.AddInterface("ActorUpdateManager", &g_actorUpdateManager);
+	g_interfaceMap.AddInterface("Attachment", &g_attachmentInterface);
+
+	if (g_enableTangentSpaceCorrection)
+	{
+		g_actorUpdateManager.AddInterface(&g_actorArmorTangentUpdater);
+	}
 
 	g_actorUpdateManager.AddInterface(&g_skeletonExtenderInterface);
 	g_actorUpdateManager.AddInterface(&g_bodyMorphInterface);

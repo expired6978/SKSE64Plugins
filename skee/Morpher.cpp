@@ -7,115 +7,152 @@
 #undef max
 #endif
 #include "half.hpp"
+#include <DirectXMath.h>
 #include "skse64/NiGeometry.h"
+#include "skse64/NiExtraData.h"
 
 float round_v(float num)
 {
 	return (num > 0.0) ? floor(num + 0.5) : ceil(num - 0.5);
 }
 
-NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<NiSkinPartition> _skinPartition) : geometry(_geometry)
+NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<NiSkinPartition> _skinPartition) 
+	: geometry(_geometry)
+	, skinPartition(_skinPartition)
 {
-	BSDynamicTriShape * dynamicTriShape = ni_cast(geometry, BSDynamicTriShape);
-	BSTriShape * triShape = ni_cast(geometry, BSTriShape);
+	
+}
+
+void NormalApplicator::Apply()
+{
+	BSDynamicTriShape* dynamicTriShape = ni_cast(geometry, BSDynamicTriShape);
+	BSTriShape* triShape = ni_cast(geometry, BSTriShape);
 
 	if (dynamicTriShape) dynamicTriShape->lock.Lock();
 
+	NiIntegersExtraData* extraData = static_cast<NiIntegersExtraData*>(geometry->GetExtraData("LOCKEDNORM"));
+	if (extraData)
+	{
+		for (UInt32 i = 0; i < extraData->m_size; ++i)
+		{
+			lockedVertices.insert(static_cast<UInt16>(extraData->m_data[i]));
+		}
+	}
+
 	UInt64 vertexDesc = geometry->vertexDesc;
 	UInt32 numVertices = triShape ? triShape->numVertices : 0;
-	UInt8* vertexBlock = nullptr;
 
+	bool hasVertices = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_VERTEX) == VertexFlags::VF_VERTEX;
 	bool hasNormals = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_NORMAL) == VertexFlags::VF_NORMAL;
 	bool hasTangents = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_TANGENT) == VertexFlags::VF_TANGENT;
 	bool hasUV = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_UV) == VertexFlags::VF_UV;
 
-	const NiSkinInstance * skinInstance = geometry->m_spSkinInstance.m_pObject;
-	if (skinInstance && (hasNormals || hasTangents)) {
-		const NiSkinPartition * skinPartition = skinInstance->m_spSkinPartition.m_pObject;
-		if (skinPartition) {
-			numVertices = numVertices ? numVertices : skinPartition->vertexCount;
+	if (skinPartition && (hasNormals || hasTangents)) {
 
-			// Pull the base data from the vertex block
-			rawVertices.resize(numVertices);
-			if (hasUV)
-				rawUV.resize(numVertices);
+		numVertices = numVertices ? numVertices : skinPartition->vertexCount;
+
+		// Pull the base data from the vertex block
+		rawVertices.resize(numVertices);
+		if (hasUV)
+			rawUV.resize(numVertices);
 
 
-			if (hasNormals) {
-				rawNormals.resize(numVertices);
-				if (hasTangents) {
-					rawTangents.resize(numVertices);
-					rawBitangents.resize(numVertices);
-				}
+		if (hasNormals) {
+			rawNormals.resize(numVertices);
+			if (hasTangents) {
+				rawTangents.resize(numVertices);
+				rawBitangents.resize(numVertices);
 			}
+		}
 
-			UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexDesc);
+		UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexDesc);
+		UInt8* vertexBlock = reinterpret_cast<UInt8*>(skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData);
 
-			vertexBlock = dynamicTriShape ? reinterpret_cast<UInt8*>(dynamicTriShape->pDynamicData) : reinterpret_cast<UInt8*>(skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData);
-
+		if (dynamicTriShape)
+		{
 			for (UInt32 i = 0; i < numVertices; i++)
 			{
-				UInt8 * vBegin = &vertexBlock[i * vertexSize];
+				DirectX::XMVECTOR* vertex = static_cast<DirectX::XMVECTOR*>(dynamicTriShape->pDynamicData);
+				DirectX::XMStoreFloat3(reinterpret_cast<DirectX::XMFLOAT3*>(&rawVertices[i]), vertex[i]);
+			}
+		}
 
-				rawVertices[i].x = (*(float *)vBegin); vBegin += 4;
-				rawVertices[i].y = (*(float *)vBegin); vBegin += 4;
-				rawVertices[i].z = (*(float *)vBegin); vBegin += 4;
+		for (UInt32 i = 0; i < numVertices; i++)
+		{
+			UInt8* vBegin = &vertexBlock[i * vertexSize];
+
+			if (hasVertices)
+			{
+				rawVertices[i].x = (*(float*)vBegin); vBegin += 4;
+				rawVertices[i].y = (*(float*)vBegin); vBegin += 4;
+				rawVertices[i].z = (*(float*)vBegin); vBegin += 4;
 
 				vBegin += 4; // Skip BitangetX
-
-				if (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_UV)
-				{
-					rawUV[i].u = (*(half_float::half *)vBegin); vBegin += 2;
-					rawUV[i].v = (*(half_float::half *)vBegin); vBegin += 2;
-				}
 			}
 
-			std::vector<uint16_t> indices;
-			for (UInt32 p = 0; p < skinPartition->m_uiPartitions; ++p)
+			if (hasUV)
 			{
-				for (UInt32 t = 0; t < skinPartition->m_pkPartitions[p].m_usTriangles * 3; ++t)
-				{
-					indices.push_back(skinPartition->m_pkPartitions[p].m_pusTriList[t]);
-				}
+				rawUV[i].u = (*(half_float::half*)vBegin); vBegin += 2;
+				rawUV[i].v = (*(half_float::half*)vBegin); vBegin += 2;
 			}
+		}
 
-			RecalcNormals(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
-			CalcTangentSpace(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
-
-			for (UInt32 i = 0; i < numVertices; i++)
+		std::vector<UInt16> indices;
+		for (UInt32 p = 0; p < skinPartition->m_uiPartitions; ++p)
+		{
+			for (UInt32 t = 0; t < skinPartition->m_pkPartitions[p].m_usTriangles * 3; ++t)
 			{
-				UInt8 * vBegin = &vertexBlock[i * vertexSize];
+				indices.push_back(skinPartition->m_pkPartitions[p].m_pusTriList[t]);
+			}
+		}
 
+		RecalcNormals(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
+		CalcTangentSpace(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
+
+		for (UInt32 i = 0; i < numVertices; i++)
+		{
+			UInt8* vBegin = &vertexBlock[i * vertexSize];
+
+			bool skipVertex = lockedVertices.count(i);
+
+			if (hasVertices)
+			{
 				// X,Y,Z,BX
 				vBegin += 4;
 				vBegin += 4;
 				vBegin += 4;
 
 				// No need to write bitangentX
-				*(float *)vBegin = rawBitangents[i].x; vBegin += 4;
-
-				// Skip UV write
-				if (hasUV)
+				if (!skipVertex)
 				{
-					vBegin += 4;
+					*(float*)vBegin = rawBitangents[i].x;
 				}
+				vBegin += 4;
+			}
 
-				if (hasNormals)
+			// Skip UV write
+			if (hasUV)
+			{
+				vBegin += 4;
+			}
+
+			if (hasNormals && !skipVertex)
+			{
+
+				*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+				*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+				*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+
+				*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+
+				if (hasTangents)
 				{
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(SInt8*)vBegin = (UInt8)round_v((((rawNormals[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
 
-					*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+					*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+					*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
+					*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
 
-					if (hasTangents)
-					{
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-						*(SInt8*)vBegin = (UInt8)round_v((((rawTangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-
-						*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					}
+					*(SInt8*)vBegin = (UInt8)round_v((((rawBitangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
 				}
 			}
 		}

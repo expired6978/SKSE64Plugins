@@ -86,7 +86,7 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 		masks[base.first].technique = base.second;
 	}
 	for (auto base : layerTarget.typeData) {
-		masks[base.first].textureType = base.second;
+		masks[base.first].textureType = static_cast<CDXTextureRenderer::TextureType>(base.second);
 	}
 	for (auto base : layerTarget.alphaData) {
 		masks[base.first].color |= (UInt32)(base.second * 255) << 24;
@@ -137,7 +137,7 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 			for (auto base : layerData.m_typeMap) {
 				auto it = masks.find(base.first);
 				if (it != masks.end()) {
-					masks[base.first].textureType = base.second;
+					masks[base.first].textureType = static_cast<CDXTextureRenderer::TextureType>(base.second);
 				}
 			}
 		}
@@ -887,25 +887,59 @@ void TintMaskInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TE
 	if (((armorMask & addonMask) & (g_tintHairSlot)) != 0)
 	{
 		Character * actor = refr->formType == Character::kTypeID ? static_cast<Character*>(refr) : nullptr;
+		NiColorA value;
 		TESNPC * actorBase = static_cast<TESNPC*>(refr->baseForm);
-		if (actor && actorBase)
-		{
-			auto headData = actorBase->headData;
-			if (headData) {
-				auto hairColorForm = headData->hairColor;
-				if (hairColorForm) {
-					// Dunno why the hell they multiplied hairColor by 2
-					NiColorA val;
-					val.r = static_cast<float>(min((hairColorForm->abgr & 0xFF) * 2, 255)) / 255.0f;
-					val.g = static_cast<float>(min(((hairColorForm->abgr >> 8) & 0xFF) * 2, 255)) / 255.0f;
-					val.b = static_cast<float>(min(((hairColorForm->abgr >> 16) & 0xFF) * 2, 255)) / 255.0f;
-					val.a = 1.0f;
-					NiColorA * color = &val;
-					UpdateModelHair(object, &color);
-				}
-			}
+		if (GetActorHairColor(actor, value)) {
+			NiColorA* color = &value;
+			UpdateModelHair(object, &color);
 		}
 	}
+}
+
+bool TintMaskInterface::GetActorHairColor(Actor* actor, NiColorA& color)
+{
+	BGSColorForm* hairColorForm = nullptr;
+	TESNPC* actorBase = static_cast<TESNPC*>(actor->baseForm);
+	if (actorBase) {
+		UInt8 gender = CALL_MEMBER_FN(actorBase, GetSex)();
+		// Try our parent templates
+		TESNPC* templateNPC = actorBase;
+		do {
+			auto headData = templateNPC->headData;
+			if (headData) {
+				hairColorForm = headData->hairColor;
+			}
+			templateNPC = templateNPC->nextTemplate;
+		} while (templateNPC && !hairColorForm);
+
+		// No templates had a hair color record, get the default from the race
+		if (!hairColorForm)
+		{
+			TESRace* race = actor->race;
+			if (!race) {
+				race = actorBase->race.race;
+			}
+
+			// Race had no chargen data, they probably don't have a hair record
+			auto chargenData = race->chargenData[gender];
+			if (!chargenData)
+			{
+				return false;
+			}
+
+			hairColorForm = race->chargenData[gender]->defaultColor;
+		}
+	}
+
+	if (hairColorForm) {
+		color.r = static_cast<float>(min((hairColorForm->abgr & 0xFF) * 2, 255)) / 255.0f;
+		color.g = static_cast<float>(min(((hairColorForm->abgr >> 8) & 0xFF) * 2, 255)) / 255.0f;
+		color.b = static_cast<float>(min(((hairColorForm->abgr >> 16) & 0xFF) * 2, 255)) / 255.0f;
+		color.a = 1.0f;
+		return true;
+	}
+
+	return false;
 }
 
 EventResult TintMaskInterface::ReceiveEvent(SKSENiNodeUpdateEvent * evn, EventDispatcher<SKSENiNodeUpdateEvent>* dispatcher)
@@ -914,25 +948,13 @@ EventResult TintMaskInterface::ReceiveEvent(SKSENiNodeUpdateEvent * evn, EventDi
 	if (refr && refr->formType == Character::kTypeID)
 	{
 		Character * actor = static_cast<Character*>(refr);
-		TESNPC * actorBase = static_cast<TESNPC*>(refr->baseForm);
-		if (actor && actorBase) {
-			auto headData = actorBase->headData;
-			if (headData) {
-				auto hairColorForm = headData->hairColor;
-				if (hairColorForm) {
-					NiColorA val;
-					val.r = static_cast<float>(min((hairColorForm->abgr & 0xFF) * 2, 255)) / 255.0f;
-					val.g = static_cast<float>(min(((hairColorForm->abgr >> 8) & 0xFF) * 2, 255)) / 255.0f;
-					val.b = static_cast<float>(min(((hairColorForm->abgr >> 16) & 0xFF) * 2, 255)) / 255.0f;
-					val.a = 1.0f;
-					NiColorA * color = &val;
-
-					VisitEquippedNodes(actor, g_tintHairSlot, [&](TESObjectARMO* armor, TESObjectARMA* arma, NiAVObject* node, bool isFP)
-					{
-						UpdateModelHair(node, &color);
-					});
-				}
-			}
+		NiColorA value;
+		if (GetActorHairColor(actor, value)) {
+			NiColorA* color = &value;
+			VisitEquippedNodes(actor, g_tintHairSlot, [&](TESObjectARMO* armor, TESObjectARMA* arma, NiAVObject* node, bool isFP)
+			{
+				UpdateModelHair(node, &color);
+			});
 		}
 	}
 	return kEvent_Continue;

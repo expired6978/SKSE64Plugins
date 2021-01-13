@@ -1,26 +1,14 @@
 #include "Utilities.h"
 
-#include "skse64/PapyrusVM.h"
+#include <memory>
 
-namespace VirtualMachine
+std::string format(const char* format, ...)
 {
-UInt64 GetHandle(void * src, UInt32 typeID)
-{
-	VMClassRegistry		* registry = (*g_skyrimVM)->GetClassRegistry();
-	IObjectHandlePolicy	* policy = registry->GetHandlePolicy();
-
-	return policy->Create(typeID, (void*)src);
-}
-
-void * GetObject(UInt64 handle, UInt32 typeID)
-{
-	VMClassRegistry		* registry = (*g_skyrimVM)->GetClassRegistry();
-	IObjectHandlePolicy	* policy = registry->GetHandlePolicy();
-
-	if (handle == policy->GetInvalidHandle()) {
-		return NULL;
-	}
-
-	return policy->Resolve(typeID, handle);
-}
+	va_list args;
+	va_start(args, format);
+	size_t size = std::snprintf(nullptr, 0, format, args) + 1; // Extra space for '\0'
+	std::unique_ptr<char[]> buf(new char[size]);
+	std::vsnprintf(buf.get(), size, format, args);
+	va_end(args);
+	return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
 }

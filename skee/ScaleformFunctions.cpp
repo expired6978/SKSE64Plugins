@@ -12,6 +12,7 @@
 
 #include "TintMaskInterface.h"
 #include "ScaleformFunctions.h"
+#include "ScaleformUtils.h"
 
 extern SKSETaskInterface	* g_task;
 extern ItemDataInterface	g_itemDataInterface;
@@ -151,6 +152,8 @@ private:
 
 void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 
@@ -254,6 +257,8 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 
 void SKSEScaleform_GetDyeItems::Invoke(Args * args)
 {
+	using namespace ScaleformUtils;
+
 	ASSERT(args->numArgs >= 1);
 	ASSERT(args->args[0].GetType() == GFxValue::kType_Number);
 

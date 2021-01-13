@@ -271,6 +271,7 @@ public:
 
 	UInt32 GetActor() const { return m_formId; }
 	UInt32 GetSlotMask() const { return m_identifier.slotMask; }
+	UInt32 GetRankID() const { return m_identifier.rankId; }
 
 private:
 	UInt32 m_formId;

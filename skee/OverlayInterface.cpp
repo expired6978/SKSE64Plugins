@@ -16,15 +16,18 @@
 #include "skse64/NiExtraData.h"
 #include "skse64/NiSerialization.h"
 
+#include "ActorUpdateManager.h"
 #include "OverlayInterface.h"
 #include "OverrideInterface.h"
 #include "BodyMorphInterface.h"
 #include "OverrideVariant.h"
 #include "ShaderUtilities.h"
+#include "NifUtils.h"
 #include "Utilities.h"
 
 #include <unordered_set>
 
+extern ActorUpdateManager				g_actorUpdateManager;
 extern OverlayInterface					g_overlayInterface;
 extern OverrideInterface				g_overrideInterface;
 extern BodyMorphInterface				g_bodyMorphInterface;
@@ -186,6 +189,11 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			else
 				shaderProperty->shaderFlags2 &= ~BSLightingShaderProperty::kSLSF2_Vertex_Colors;
 
+			if ((sourceShader->shaderFlags1 & BSLightingShaderProperty::kSLSF1_Model_Space_Normals) == BSLightingShaderProperty::kSLSF1_Model_Space_Normals)
+				shaderProperty->shaderFlags1 |= BSLightingShaderProperty::kSLSF1_Model_Space_Normals;
+			else
+				shaderProperty->shaderFlags1 &= ~BSLightingShaderProperty::kSLSF1_Model_Space_Normals;
+
 			if(ni_is_type(sourceShader->GetRTTI(), BSLightingShaderProperty) && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
 			{
 				BSLightingShaderMaterial * sourceMaterial = (BSLightingShaderMaterial *)sourceShader->material;
@@ -204,8 +212,11 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 					}
 					else
 					{
-						for(UInt32 i = 1; i < BSTextureSet::kNumTextures; i++)
-							targetMaterial->textureSet->SetTexturePath(i, textureSet->textureSet.GetTexturePath(i));
+						for (UInt32 i = 1; i < BSTextureSet::kNumTextures; i++)
+						{
+							const char* texturePath = textureSet->textureSet.GetTexturePath(i);
+							targetMaterial->textureSet->SetTexturePath(i, texturePath);
+						}
 					}
 					
 					targetMaterial->ReleaseTextures();
@@ -624,40 +635,19 @@ void SKSETaskModifyOverlay::Run()
 	if (reference && g_overlayInterface.HasOverlays(reference))
 	{
 		Actor * actor = DYNAMIC_CAST(reference, TESObjectREFR, Actor);
-		if(actor)
+		if (actor)
 		{
-			BSFixedString rootName("NPC Root [Root]");
-
-			NiNode * skeletonRoot[2];
-			skeletonRoot[0] = actor->GetNiRootNode(0);
-			skeletonRoot[1] = actor->GetNiRootNode(1);
-
-			// Skip second skeleton, it's the same as the first
-			if(skeletonRoot[1] == skeletonRoot[0])
-				skeletonRoot[1] = NULL;
-
-			for(UInt32 i = 0; i <= 1; i++)
+			VisitSkeletalRoots(actor, [&](NiNode* rootNode, bool isFirstPerson)
 			{
-				if(skeletonRoot[i])
+				NiAVObject* overlayNode = rootNode->GetObjectByName(&m_nodeName.data);
+				if (overlayNode)
 				{
-					NiAVObject * root = skeletonRoot[i]->GetObjectByName(&rootName.data);
-					if(root)
-					{
-						NiNode * rootNode = root->GetAsNiNode();
-						if(rootNode)
-						{
-							NiAVObject * overlayNode = rootNode->GetObjectByName(&m_nodeName.data);
-							if(overlayNode)
-							{
 #ifdef _DEBUG
-								_MESSAGE("%s - Modifying Overlay %s from %08X on skeleton %d", __FUNCTION__, m_nodeName.data, actor->formID, i);
+					_MESSAGE("%s - Modifying Overlay %s from %08X on skeleton", __FUNCTION__, m_nodeName.data, actor->formID);
 #endif
-								Modify(actor, overlayNode, rootNode);
-							}
-						}
-					}
+					Modify(actor, overlayNode, rootNode);
 				}
-			}
+			});
 		}
 	}
 }
@@ -780,9 +770,7 @@ void OverlayInterface::RevertOverlay(TESObjectREFR * reference, BSFixedString no
 void OverlayInterface::EraseOverlays(TESObjectREFR * reference)
 {
 	RevertOverlays(reference, true);
-
-	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
-	overlays.erase(handle);
+	overlays.erase(reference->formID);
 }
 
 void OverlayInterface::RevertOverlays(TESObjectREFR * reference, bool resetDiffuse)
@@ -883,8 +871,7 @@ bool OverlayInterface::HasOverlays(TESObjectREFR * reference)
 	if(reference == (*g_thePlayer)) // Always true for the player
 		return true;
 
-	UInt64 handle = VirtualMachine::GetHandle(reference, reference->formType);
-	auto & it = overlays.find(handle);
+	auto & it = overlays.find(reference->formID);
 	if(it != overlays.end())
 		return true;
 
@@ -953,8 +940,7 @@ void OverlayInterface::RemoveOverlays(TESObjectREFR * reference)
 		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
 	}
 
-	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
-	overlays.erase(handle);
+	overlays.erase(reference->formID);
 }
 
 void OverlayInterface::AddOverlays(TESObjectREFR * reference)
@@ -966,8 +952,7 @@ void OverlayInterface::AddOverlays(TESObjectREFR * reference)
 	_DMESSAGE("%s Installing Overlays to %08X", __FUNCTION__, reference->formID);
 #endif
 
-	UInt64 handle = VirtualMachine::GetHandle(reference, TESObjectREFR::kTypeID);
-	overlays.insert(handle);
+	overlays.insert(reference->formID);
 
 	if (g_enableOverlays)
 	{
@@ -1040,10 +1025,11 @@ void OverlayInterface::AddOverlays(TESObjectREFR * reference)
 
 void OverlayInterface::Revert()
 {
-	for (auto & handle : overlays) {
-		TESObjectREFR * reference = static_cast<TESObjectREFR *>(VirtualMachine::GetObject(handle, TESObjectREFR::kTypeID));
-		if (reference) {
-			RevertOverlays(reference, true);
+	for (auto & formId : overlays) {
+		TESForm* form = LookupFormByID(formId);
+		if (form && form->formType == Character::kTypeID)
+		{
+			RevertOverlays(static_cast<TESObjectREFR*>(form), true);
 		}
 	}
 	overlays.clear();
@@ -1089,13 +1075,13 @@ bool OverlayHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 		return error;
 	}
 
+	UInt32 formId = newHandle & 0xFFFFFFFF;
+
 #ifdef _DEBUG
 	_DMESSAGE("%s - Loading overlay for %016llX", __FUNCTION__, newHandle);
 #endif
 
-	TESObjectREFR * refr = static_cast<TESObjectREFR*>(VirtualMachine::GetObject(newHandle, TESObjectREFR::kTypeID));
-	if(refr)
-		g_overlayInterface.AddOverlays(refr);
+	g_actorUpdateManager.AddOverlayUpdate(formId);
 
 	return error;
 }

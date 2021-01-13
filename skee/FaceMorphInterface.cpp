@@ -31,6 +31,7 @@
 #include "StringTable.h"
 #include "ShaderUtilities.h"
 #include "Utilities.h"
+#include "Morpher.h"
 
 #include "OverrideVariant.h"
 #include "OverrideInterface.h"
@@ -43,9 +44,13 @@ extern NiTransformInterface g_transformInterface;
 extern BodyMorphInterface	g_bodyMorphInterface;
 extern OverlayInterface		g_overlayInterface;
 extern StringTable			g_stringTable;
+extern SKSETaskInterface*	g_task;
 
 #include <map>
 #include <vector>
+
+
+extern bool	g_enableFaceNormalRecalculate;
 
 extern float g_sliderMultiplier;
 extern float g_sliderInterval;
@@ -752,7 +757,6 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 	PlayerCharacter * player = (*g_thePlayer);
 	TESNPC * npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
 	TESRace * race = npc->race.race;
-	UInt64 handle = VirtualMachine::GetHandle(actor, TESObjectREFR::kTypeID);
 
 	// Wipe the HeadPart list and replace it with the default race list
 	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
@@ -871,7 +875,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 			}
 		}
 
-		g_overrideInterface.SetHandleNodeProperties(handle, false);
+		g_overrideInterface.SetNodeProperties(actor->formID, false);
 	}
 
 	if ((applyType & kPresetApplySkinOverrides) == kPresetApplySkinOverrides)
@@ -884,7 +888,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 			}
 		}
 
-		g_overrideInterface.SetHandleSkinProperties(handle, false);
+		g_overrideInterface.SetSkinProperties(actor->formID, false);
 	}
 
 	g_transformInterface.RemoveAllReferenceTransforms(actor);
@@ -1432,6 +1436,11 @@ void FaceMorphInterface::ApplyMorph(TESNPC * npc, BGSHeadPart * headPart, BSFace
 			}
 		}
 	}
+
+	if (g_enableFaceNormalRecalculate)
+	{
+		g_task->AddTask(new SKSETaskApplyMorphNormals(faceNode));
+	}
 }
 
 void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
@@ -1507,6 +1516,11 @@ void FaceMorphInterface::ApplyMorphs(TESNPC * npc, BSFaceGenNiNode * faceNode)
 			}
 		}
 	}
+
+	if (g_enableFaceNormalRecalculate)
+	{
+		g_task->AddTask(new SKSETaskApplyMorphNormals(faceNode));
+	}
 }
 
 void FaceMorphInterface::SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, const SKEEFixedString & name, float relative)
@@ -1516,6 +1530,11 @@ void FaceMorphInterface::SetMorph(TESNPC * npc, BSFaceGenNiNode * faceNode, cons
 #endif
 	BSFixedString morphName(name.c_str());
 	FaceGenApplyMorph(FaceGen::GetSingleton(), faceNode, npc, &morphName, relative);
+
+	if (g_enableFaceNormalRecalculate)
+	{
+		g_task->AddTask(new SKSETaskApplyMorphNormals(faceNode, false));
+	}
 }
 
 SInt32 FaceMorphInterface::LoadSliders(tArray<RaceMenuSlider> * sliderArray, RaceMenuSlider * slider)
@@ -3120,6 +3139,85 @@ void SKSETaskApplyMorphs::Run()
 	BSFaceGenNiNode * faceNode = actor->GetFaceGenNiNode();
 	if (faceNode) {
 		g_morphInterface.ApplyMorphs(actorBase, faceNode);
-		UpdateModelFace(faceNode);
 	}
 }
+
+SKSETaskApplyMorphNormals::SKSETaskApplyMorphNormals(NiPointer<NiAVObject> faceNode, bool updateModel)
+	: m_faceNode(faceNode)
+	, m_updateModel(updateModel)
+{
+
+}
+
+
+void SKSETaskApplyMorphNormals::Run()
+{
+	// Copies from the FOD into the Dynamic Geometry
+	if (m_updateModel)
+	{
+		UpdateModelFace(m_faceNode);
+	}
+	
+	VisitGeometry(m_faceNode, [](BSGeometry* geometry)
+	{
+		UInt64 vertexDesc = geometry->vertexDesc;
+
+		bool hasNormals = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_NORMAL) == VertexFlags::VF_NORMAL;
+		bool hasTangents = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_TANGENT) == VertexFlags::VF_TANGENT;
+
+		if (!hasNormals && !hasTangents)
+		{
+			return false;
+		}
+
+		BSShaderProperty* shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
+		if (!shaderProperty || !ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
+		{
+			return false;
+		}
+
+		BSLightingShaderMaterial* material = (BSLightingShaderMaterial*)shaderProperty->material;
+		if (!material || material->GetShaderType() != BSLightingShaderMaterial::kShaderType_FaceGen)
+		{
+			return false;
+		}
+
+		NiSkinInstance* skinInstance = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
+		if (!skinInstance) {
+			return false;
+		}
+
+		NiSkinPartition* skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
+		if (!skinPartition) {
+			return false;
+		}
+
+		NiSkinPartition* newSkinPartition = nullptr;
+		CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject**)&newSkinPartition);
+
+		if (!newSkinPartition) {
+			return false;
+		}
+
+		auto& partition = newSkinPartition->m_pkPartitions[0];
+		UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+
+		{
+			NormalApplicator applicator(geometry, newSkinPartition);
+			applicator.Apply();
+		}
+
+		// Propagate the data to the other partitions
+		for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
+		{
+			auto& pPartition = newSkinPartition->m_pkPartitions[p];
+			memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
+		}
+
+		NIOVTaskUpdateSkinPartition update(skinInstance, newSkinPartition);
+		newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
+		update.Run();
+		return false;
+	});
+}
+

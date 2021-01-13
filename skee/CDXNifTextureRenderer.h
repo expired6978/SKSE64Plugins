@@ -26,7 +26,7 @@ public:
 		SKEEFixedString texture;
 		SKEEFixedString technique = "normal";
 		UInt32 color = 0xFFFFFF;
-		UInt8 textureType = 1;
+		CDXTextureRenderer::TextureType textureType = CDXTextureRenderer::TextureType::Mask;
 	};
 
 	bool ApplyMasksToTexture(CDXD3DDevice* device, NiPointer<NiTexture> texture, std::map<SInt32, MaskData> & masks, const BSFixedString & name, NiPointer<NiTexture> & output);

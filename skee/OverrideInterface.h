@@ -23,6 +23,8 @@ class NiGeometry;
 class BGSTextureSet;
 class OverrideVariant;
 
+typedef UInt32 OverrideHandle;
+
 class OverrideSet : public std::set<OverrideVariant>
 {
 public:
@@ -50,7 +52,7 @@ public:
 	virtual void Visit(std::function<bool(const T & key, OverrideSet *)> functor);
 };
 
-class AddonRegistration : public std::unordered_map<UInt64, OverrideRegistration<StringTableItem>>
+class AddonRegistration : public std::unordered_map<OverrideHandle, OverrideRegistration<StringTableItem>>
 {
 public:
 	// Serialization
@@ -58,7 +60,7 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class ArmorRegistration : public std::unordered_map<UInt64, AddonRegistration>
+class ArmorRegistration : public std::unordered_map<OverrideHandle, AddonRegistration>
 {
 public:
 	// Serialization
@@ -66,7 +68,7 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class WeaponRegistration : public std::unordered_map<UInt64, OverrideRegistration<StringTableItem>>
+class WeaponRegistration : public std::unordered_map<OverrideHandle, OverrideRegistration<StringTableItem>>
 {
 public:
 	// Serialization
@@ -74,7 +76,7 @@ public:
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 };
 
-class SkinRegistration : public std::unordered_map<UInt32, OverrideSet>
+class SkinRegistration : public std::unordered_map<OverrideHandle, OverrideSet>
 {
 public:
 	// Serialization
@@ -174,50 +176,50 @@ public:
 	T table[N];
 };
 
-class ActorRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<ArmorRegistration, 2>>>
+class ActorRegistrationMapHolder : public SafeDataHolder<std::unordered_map<OverrideHandle, MultiRegistration<ArmorRegistration, 2>>>
 {
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<ArmorRegistration, 2>>	RegMap;
+	typedef std::unordered_map<OverrideHandle, MultiRegistration<ArmorRegistration, 2>>	RegMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt32 * outFormId, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
 
-class NodeRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>>
+class NodeRegistrationMapHolder : public SafeDataHolder<std::unordered_map<OverrideHandle, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>>
 {
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>	RegMap;
+	typedef std::unordered_map<OverrideHandle, MultiRegistration<OverrideRegistration<StringTableItem>, 2>>	RegMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, OverrideHandle* outFormId, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
 
-class WeaponRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<MultiRegistration<WeaponRegistration, 2>, 2>>>
+class WeaponRegistrationMapHolder : public SafeDataHolder<std::unordered_map<OverrideHandle, MultiRegistration<MultiRegistration<WeaponRegistration, 2>, 2>>>
 {
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<MultiRegistration<WeaponRegistration, 2>, 2>>	RegMap;
+	typedef std::unordered_map<OverrideHandle, MultiRegistration<MultiRegistration<WeaponRegistration, 2>, 2>>	RegMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, OverrideHandle* outFormId, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
 
-class SkinRegistrationMapHolder : public SafeDataHolder<std::unordered_map<UInt64, MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2>>>
+class SkinRegistrationMapHolder : public SafeDataHolder<std::unordered_map<OverrideHandle, MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2>>>
 {
 public:
-	typedef std::unordered_map<UInt64, MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2>>	RegMap;
+	typedef std::unordered_map<OverrideHandle, MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2>>	RegMap;
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, UInt64 * outHandle, const StringIdMap & stringTable);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, OverrideHandle* outFormId, const StringIdMap & stringTable);
 
 	friend class OverrideInterface;
 };
@@ -246,21 +248,21 @@ public:
 	virtual bool LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	// Specific overrides
-	virtual void AddRawOverride(UInt64 handle, bool isFemale, UInt64 armorHandle, UInt64 addonHandle, BSFixedString nodeName, OverrideVariant & value);
+	virtual void AddRawOverride(OverrideHandle formId, bool isFemale, OverrideHandle armorHandle, OverrideHandle addonHandle, BSFixedString nodeName, OverrideVariant & value);
 	virtual void AddOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant & value);
 
 	// Non-specific overrides
-	virtual void AddRawNodeOverride(UInt64 handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
+	virtual void AddRawNodeOverride(OverrideHandle handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
 	virtual void AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
 
 	// Applies all properties for a handle
-	void SetHandleProperties(UInt64 handle, bool immediate);
+	void SetProperties(OverrideHandle handle, bool immediate);
 
 	// Applies all properties for an armor
 	//void SetHandleArmorAddonProperties(UInt64 handle, UInt64 armorHandle, UInt64 addonHandle, bool immediate);
 
 	// Applies node properties for a handle
-	void SetHandleNodeProperties(UInt64 handle, bool immediate);
+	void SetNodeProperties(OverrideHandle handle, bool immediate);
 
 	// Set/Get a single property
 	virtual void SetArmorAddonProperty(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
@@ -281,7 +283,7 @@ public:
 
 	virtual void RemoveAllOverrides();
 	virtual void RemoveAllReferenceOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceOverrides(UInt64 handle);
+	void RemoveAllReferenceOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor);
 	virtual void RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon);
@@ -290,7 +292,7 @@ public:
 
 	virtual void RemoveAllNodeOverrides();
 	virtual void RemoveAllReferenceNodeOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceNodeOverrides(UInt64 handle);
+	void RemoveAllReferenceNodeOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName);
 	virtual void RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
@@ -298,37 +300,37 @@ public:
 	virtual OverrideVariant * GetOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index);
 	virtual OverrideVariant * GetNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
 
-	virtual void AddRawWeaponOverride(UInt64 handle, bool isFemale, bool firstPerson, UInt64 weaponHandle, BSFixedString nodeName, OverrideVariant & value);
+	virtual void AddRawWeaponOverride(OverrideHandle handle, bool isFemale, bool firstPerson, OverrideHandle weaponHandle, BSFixedString nodeName, OverrideVariant & value);
 	virtual void AddWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant & value);
 	virtual OverrideVariant * GetWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
 	virtual void ApplyWeaponOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, NiAVObject * object, bool immediate);
 
 	virtual void RemoveAllWeaponBasedOverrides();
 	virtual void RemoveAllReferenceWeaponOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceWeaponOverrides(UInt64 handle);
+	void RemoveAllReferenceWeaponOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon);
 	virtual void RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName);
 	virtual void RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
 
 	virtual bool HasWeaponNode(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, bool debug);
-	virtual void SetHandleWeaponProperties(UInt64 handle, bool immediate);
+	virtual void SetWeaponProperties(OverrideHandle handle, bool immediate);
 
 	virtual void SetWeaponProperty(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
 	virtual void GetWeaponProperty(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value);
 
 	// Skin API
 	virtual bool LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
-	virtual void AddRawSkinOverride(UInt64 handle, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
+	virtual void AddRawSkinOverride(OverrideHandle handle, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
 	virtual void AddSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
 	virtual OverrideVariant * GetSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
 	virtual void ApplySkinOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, UInt32 slotMask, NiAVObject * object, bool immediate);
 	virtual void RemoveAllSkinOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask);
 	virtual void RemoveSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
-	virtual void SetHandleSkinProperties(UInt64 handle, bool immediate);
+	virtual void SetSkinProperties(OverrideHandle handle, bool immediate);
 	virtual void RemoveAllSkinBasedOverrides();
 	virtual void RemoveAllReferenceSkinOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceSkinOverrides(UInt64 handle);
+	void RemoveAllReferenceSkinOverrides(OverrideHandle handle);
 	virtual void SetSkinProperty(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant * value, bool immediate);
 	virtual void GetSkinProperty(TESObjectREFR * refr, bool firstPerson, UInt32 slotMask, OverrideVariant * value);
 

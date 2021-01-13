@@ -7,9 +7,6 @@
 class GFxValue;
 class GFxMovieView;
 
-void RegisterNumber(GFxValue * dst, const char * name, double value);
-void RegisterString(GFxValue * dst,  GFxMovieView * view, const char * name, const char * str);
-
 class SKSEScaleform_GetHeadParts : public GFxFunctionHandler
 {
 public:

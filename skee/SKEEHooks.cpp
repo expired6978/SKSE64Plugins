@@ -24,6 +24,7 @@
 #include "TintMaskInterface.h"
 #include "ItemDataInterface.h"
 #include "NiTransformInterface.h"
+#include "AttachmentInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -523,6 +524,16 @@ public:
 	}
 };
 #endif
+
+bool IsPlayable_Hooked(BGSHeadPart* headPart)
+{
+	if (headPart->type >= BGSHeadPart::kNumTypes)
+	{
+		return false;
+	}
+
+	return headPart->partFlags & BGSHeadPart::kFlagPlayable;
+}
 
 void * GetHeadParts_Hooked(void * unk1, void * unk2)
 {
@@ -1206,7 +1217,17 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
 		Console_Print("Preset loaded");
 	}
+#if _DEBUG
+	else if (_strnicmp(buffer, "attach", MAX_PATH) == 0)
+	{
+		if (!thisObj) {
+			Console_Print("Attaching mesh requires object");
+			return false;
+		}
 
+		g_task->AddTask(new SKSEAttachSkinnedMesh(static_cast<Actor*>(thisObj), buffer2, "TestRoot", false, true, std::vector<BSFixedString>()));
+	}
+#endif
 	else if (_strnicmp(buffer, "dump", MAX_PATH) == 0)
 	{
 		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
@@ -1244,7 +1265,16 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				totalMorphs += key.second.size();
 			}
 			Console_Print("Dumped %d total morphs", totalMorphs);
-
+		}
+		else if (_strnicmp(buffer2, "morphnames", MAX_PATH) == 0)
+		{
+			Console_Print("Dumping morph names");
+			auto morphNames = g_bodyMorphInterface.GetCachedMorphNames();
+			for (auto& name : morphNames)
+			{
+				Console_Print("\t%s", name.c_str());
+			}
+			Console_Print("%d total morphs", morphNames.size());
 		}
 		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
 		{
@@ -1280,12 +1310,17 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 		}
 		else if (_strnicmp(buffer2, "tints", MAX_PATH) == 0)
 		{
+			if (thisObj && thisObj->formType != Character::kTypeID) {
+				Console_Print("Console target must be an actor");
+				return false;
+			}
+
 			UInt32 mask = 1;
 			for (UInt32 i = 0; i < 32; ++i)
 			{
 				ModifiedItemIdentifier identifier;
 				identifier.SetSlotMask(mask);
-				g_task->AddTask(new NIOVTaskUpdateItemDye((*g_thePlayer), identifier, TintMaskInterface::kUpdate_All, true, [mask](TESObjectARMO* armo, TESObjectARMA* arma, const char* path, NiTexturePtr texture, LayerTarget& layer)
+				g_task->AddTask(new NIOVTaskUpdateItemDye(thisObj ? static_cast<Actor*>(thisObj) : (*g_thePlayer), identifier, TintMaskInterface::kUpdate_All, true, [mask](TESObjectARMO* armo, TESObjectARMA* arma, const char* path, NiTexturePtr texture, LayerTarget& layer)
 				{
 					char texturePath[MAX_PATH];
 					_snprintf_s(texturePath, MAX_PATH, "Data\\SKSE\\Plugins\\NiOverride\\Exported\\TintMasks\\%s", path);
@@ -1330,6 +1365,85 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				gLog.Outdent();
 				Console_Print("Item UID: %d ID: %d Owner: %08X Form: %08X", item.uid, item.rank, item.ownerForm, item.formId);
 			});
+		}
+		else if (_strnicmp(buffer2, "itembinding", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping itembinding requires a console target");
+				return false;
+			}
+
+			class RankItemFinder
+			{
+			public:
+				bool Accept(InventoryEntryData* pEntryData)
+				{
+					if (!pEntryData)
+						return true;
+
+					ExtendDataList* pExtendList = pEntryData->extendDataList;
+					if (!pExtendList)
+						return true;
+
+					SInt32 n = 0;
+					BaseExtraList* pExtraDataList = pExtendList->GetNthItem(n);
+					while (pExtraDataList)
+					{
+						if (pExtraDataList->HasType(kExtraData_Rank))
+						{
+							ExtraRank* extraRank = static_cast<ExtraRank*>(pExtraDataList->GetByType(kExtraData_Rank));
+							Console_Print("\tItem ID: %d Form: %08X", extraRank->rank, pEntryData->type->formID);
+							auto itemData = g_itemDataInterface.GetData(extraRank->rank);
+							if (itemData)
+							{
+								for (auto& tintData : itemData->m_tintData)
+								{
+									Console_Print("\t\tTint Index: %d", tintData.first);
+									for (auto& color : tintData.second.m_colorMap)
+									{
+										Console_Print("\t\t\tColorIndex: %d Color: %08X", color.first, color.second);
+									}
+									for (auto& blend : tintData.second.m_blendMap)
+									{
+										Console_Print("\t\t\tBlendIndex: %d Blend: %s", blend.first, blend.second->c_str());
+									}
+									for (auto& texture : tintData.second.m_textureMap)
+									{
+										Console_Print("\t\t\tTextureIndex: %d Texture: %s", texture.first, texture.second->c_str());
+									}
+									for (auto& type : tintData.second.m_typeMap)
+									{
+										Console_Print("\t\t\tTypeIndex: %d Type: %d", type.first, type.second);
+									}
+								}
+							}
+							foundItems++;
+						}
+
+						n++;
+						pExtraDataList = pExtendList->GetNthItem(n);
+					}
+					return true;
+				}
+
+				UInt32 foundItems = 0;
+			};
+
+			Console_Print("Finding items with extended data inside %08X", thisObj->formID);
+
+			ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisObj->extraData.GetByType(kExtraData_ContainerChanges));
+			if (pContainerChanges) {
+				RankItemFinder itemFinder;
+				auto data = pContainerChanges->data;
+				if (data) {
+					auto objList = data->objList;
+					if (objList) {
+						objList->Visit(itemFinder);
+
+						Console_Print("Found %d items with extended data inside %08X", itemFinder.foundItems, thisObj->formID);
+					}
+				}
+			}
 		}
 #if _DEBUG
 		else if (_strnicmp(buffer2, "nodes", MAX_PATH) == 0)
@@ -1431,6 +1545,9 @@ bool InstallSKEEHooks()
 
 	RelocAddr <uintptr_t> GetHeadParts_Target(LoadRaceMenuSliders + 0x212);
 	g_branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
+
+	RelocAddr <uintptr_t> IsPlayable_Target(LoadRaceMenuSliders + 0x27D);
+	g_branchTrampoline.Write5Call(IsPlayable_Target.GetUIntPtr(), (uintptr_t)IsPlayable_Hooked);
 	
 	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);

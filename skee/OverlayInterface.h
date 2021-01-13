@@ -17,7 +17,7 @@ class BSGeometry;
 #include "skse64/GameThreads.h"
 #include "skse64/GameTypes.h"
 
-#include <set>
+#include <unordered_set>
 
 #define FACE_NODE "Face [Ovl%d]"
 #define FACE_NODE_SPELL "Face [SOvl%d]"
@@ -125,7 +125,7 @@ public:
 	SKSETaskUninstallOverlay(TESObjectREFR * refr, BSFixedString nodeName) : SKSETaskModifyOverlay(refr, nodeName){};
 };
 
-class OverlayHolder : public std::set<UInt64>
+class OverlayHolder : public std::unordered_set<UInt32>
 {
 public:
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);

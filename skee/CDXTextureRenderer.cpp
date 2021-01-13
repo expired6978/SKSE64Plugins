@@ -400,7 +400,7 @@ Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> CDXTextureRenderer::GetResource
 
 void CDXTextureRenderer::AddLayer(const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> & texture, const TextureType & type, const std::string & technique, const XMFLOAT4 & maskColor)
 {
-	m_resources.push_back({ { 0, type, maskColor }, texture, technique });
+	m_resources.push_back({ { 0, static_cast<UInt32>(type), maskColor }, texture, technique });
 }
 
 void CDXTextureRenderer::Release()
