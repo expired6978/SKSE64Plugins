@@ -572,7 +572,9 @@ void FaceMorphInterface::LoadMods()
 							for (UInt32 t = 0; t < FacePresetList::kNumPresets; t++) {
 								race->chargenData[i]->presetFlags[t][0] = 0xFFFFFFFF;
 								race->chargenData[i]->presetFlags[t][1] = 0xFFFFFFFF;
-								race->chargenData[i]->totalPresets[t] = FacePresetList::GetSingleton()->presets[t].gameSetting->data.s32;
+								auto presetList = FacePresetList::GetSingleton();
+								auto gameSetting = presetList->presets[t].gameSetting;
+								race->chargenData[i]->totalPresets[t] = gameSetting->data.s32;
 							}
 						}
 					}

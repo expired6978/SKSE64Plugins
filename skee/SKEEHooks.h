@@ -21,7 +21,7 @@ extern RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider;
 typedef void (*_DoubleMorphCallback)(RaceSexMenu * menu, float value, UInt32 sliderId);
 extern RelocAddr<_DoubleMorphCallback> DoubleMorphCallback;
 
-typedef void(*_FaceGenApplyMorph)(FaceGen * faceGen, BSFaceGenNiNode * node, TESNPC * npc, BSFixedString * morph, float relative);
+typedef void(*_FaceGenApplyMorph)(FaceGen* faceGen, BSFaceGenNiNode* node, TESNPC* npc, BSFixedString* morph, float relative);
 extern RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph;
 
 typedef void(*_AddGFXArgument)(GArray<GFxValue> * arr, GArray<GFxValue> * arr2, UInt64 idx);

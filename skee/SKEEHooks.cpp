@@ -83,43 +83,38 @@ extern bool					g_allowAllMorphs;
 extern bool					g_allowAnyRacePart;
 extern bool					g_allowAnyGenderPart;
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x001CAC70);
+RelocAddr<_CreateArmorNode> CreateArmorNode(0x001D6400); // DONE
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
-RelocAddr <_RegenerateHead> RegenerateHead(0x003D2A60);
+RelocAddr <_RegenerateHead> RegenerateHead(FaceGen::RegenerateHead_Address);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01DEA030);
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7E110); // DONE
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x01596840);
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168E260); // DONE
 
-// DB0F3961824CB053B91AC8B9D2FE917ACE7DD265+84
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00856E10);
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x00883790); // DONE
 
-// 57F6EC6339F20ED6A0882786A452BA66A046BDE8+1AE
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003D2220);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008BC760);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008B4820);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(FaceGen::ApplyMorph_Address); // DONE
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008EB1F0); // DONE
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008E4560); // DONE
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00360840);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00360A30);
-
-typedef void(*_RaceSexMenu_Render)(RaceSexMenu * menu);
-RelocAddr<_RaceSexMenu_Render> RaceSexMenu_Render(0x0051E7F0);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00377630); // DONE
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00377820); // DONE
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
-RelocAddr<_UpdateHeadState> UpdateHeadState(0x00362E90);
+RelocAddr<_UpdateHeadState> UpdateHeadState(0x00379D80);
 
 typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
-RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x00888730);
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008B8700); // DONE
 _SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
 
 typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
-RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x00888290);
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008B81D0); // DONE
 
 typedef void*(*_GetHeadParts)(void * unk1, void * unk2);
-RelocAddr <_GetHeadParts> GetHeadParts(0x00165660);
+RelocAddr <_GetHeadParts> GetHeadParts(0); // NEED REWRITE, GOT INLINED (0x00165660)
 
 typedef void(*_TransferItemUID)(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1);
 _TransferItemUID TransferItemUID_Original = nullptr;
@@ -443,7 +438,8 @@ void RaceSexMenu_Render_Hooked(RaceSexMenu * rsm)
 		g_World.End(&g_Camera, g_Device);
 	}
 
-	RaceSexMenu_Render(rsm);
+	if (rsm->view)
+		rsm->view->Render();
 }
 
 void RegenerateHead_Hooked(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc)
@@ -535,7 +531,7 @@ bool IsPlayable_Hooked(BGSHeadPart* headPart)
 	return headPart->partFlags & BGSHeadPart::kFlagPlayable;
 }
 
-void * GetHeadParts_Hooked(void * unk1, void * unk2)
+UInt8 GetSex_Hooked(TESNPC* npc)
 {
 	class RaceVisitor : public BGSListForm::Visitor
 	{
@@ -550,10 +546,8 @@ void * GetHeadParts_Hooked(void * unk1, void * unk2)
 		TESRace * m_race;
 	};
 
-	void * ret = GetHeadParts(unk1, unk2);
 	g_partSet.Revert();
 
-	TESNPC * npc = DYNAMIC_CAST((*g_thePlayer)->baseForm, TESForm, TESNPC);
 	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
 	bool isFemale = gender == 1;
 
@@ -602,7 +596,7 @@ void * GetHeadParts_Hooked(void * unk1, void * unk2)
 		}
 	}
 
-	return ret;
+	return gender;
 }
 
 class MorphVisitor : public MorphMap::Visitor
@@ -641,7 +635,7 @@ private:
 UInt8 ApplyRaceMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName, TESModelTri * modelMorph, NiAVObject ** headNode, float relative, UInt8 unk1)
 {
 	//BGSHeadPart * headPart = (BGSHeadPart *)((UInt32)modelMorph - offsetof(BGSHeadPart, raceMorph));
-	UInt8 ret = CALL_MEMBER_FN(model, ApplyMorph)(morphName, modelMorph, headNode, relative, unk1);
+	UInt8 ret = CALL_MEMBER_FN(model, ApplyRaceMorph)(morphName, modelMorph, headNode, relative, unk1);
 #ifdef _DEBUG
 	//_MESSAGE("%08X - Applying %s from %s : %s", this, morphName[0], modelMorph->name.data, headPart->partName.data);
 #endif
@@ -1082,7 +1076,7 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 	char buffer2[MAX_PATH];
 	memset(buffer2, 0, MAX_PATH);
 
-	if (!ObjScript_ExtractArgs(paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, locals, buffer, buffer2))
+	if (!ObScript_ExtractArgs(paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, locals, buffer, buffer2))
 	{
 		return false;
 	}
@@ -1541,27 +1535,29 @@ bool InstallSKEEHooks()
 		}
 	}
 
-	static const uintptr_t LoadRaceMenuSliders = 0x008B5E20;
+	static const uintptr_t LoadRaceMenuSliders = RaceSexMenu::LoadSliders_Address; // old 1408B5E20 new 1408E5650
 
-	RelocAddr <uintptr_t> GetHeadParts_Target(LoadRaceMenuSliders + 0x212);
-	g_branchTrampoline.Write5Call(GetHeadParts_Target.GetUIntPtr(), (uintptr_t)GetHeadParts_Hooked);
+	// NEED REWRITE, GOT INLINED
+	RelocAddr <uintptr_t> GetSex_Target(LoadRaceMenuSliders + 0x16F);
+	g_branchTrampoline.Write5Call(GetSex_Target.GetUIntPtr(), (uintptr_t)GetSex_Hooked);
 
-	RelocAddr <uintptr_t> IsPlayable_Target(LoadRaceMenuSliders + 0x27D);
+	RelocAddr <uintptr_t> IsPlayable_Target(LoadRaceMenuSliders + 0x3CE); // DONE
 	g_branchTrampoline.Write5Call(IsPlayable_Target.GetUIntPtr(), (uintptr_t)IsPlayable_Hooked);
 	
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008B5230 + 0x9FB);
+	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008E4F60 + 0x4D6); // DONE
 	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
-	RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x37E4);
+	RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x3583); // DONE
 	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3CD5);
+	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3A03); // DONE
 	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008B1BC0 + 0x4F); // ChangeDoubleMorph callback
+	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008E1BA0 + 0x50); // ChangeDoubleMorph callback - DONE
 	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
-	
-	RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3895);
+
+
+	RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3644); // DONE
 	{
 		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
 			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1592,7 +1588,7 @@ bool InstallSKEEHooks()
 
 	if (!g_externalHeads)
 	{
-		static const uintptr_t PreprocessedHeads = 0x00363DE0;
+		static const uintptr_t PreprocessedHeads = 0x0037AFB0; // DONE
 
 		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
 		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
@@ -1647,9 +1643,8 @@ bool InstallSKEEHooks()
 				{
 					Xbyak::Label retnLabel;
 
-					mov(rax, rsp);
+					mov(ptr[rsp-0x08+0x10], rcx);
 					push(rbp);
-					push(r12);
 
 					jmp(ptr[rip + retnLabel]);
 
@@ -1671,60 +1666,52 @@ bool InstallSKEEHooks()
 
 	if (g_extendedMorphs)
 	{
-		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003D2380 + 0xF3);
+		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003EB3A0 + 0x134); // DONE
 		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003D45B0 + 0x56);
-		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003E9F50 + 0x124); // DONE
+		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked); // Revisit
 	}
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003D24F0 + 0xC7);
+	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003E9E40 + 0xB7); // DONE
 	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003DC1C0 + 0x79);
+	RelocAddr <uintptr_t> UpdateMorph_Target(0x003F46A0 + 0x7E); // DONE
 	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 
 	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
 	if(g_enableFaceOverlays)
 	{
-		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C71F00 + 0x92);
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C9A580 + 0x147); // DONE
 		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C71F00 + 0x8B);
+		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C9A580 + 0x140); // DONE
 		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C72250 + 0x76);
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C9AAC0 + 0x76); // DONE
 		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C72C60 + 0x2F);
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C9B580 + 0x2F); // DONE
 		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x00363F20 + 0x1E0);
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037B0F0 + 0x169); // DONE
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
 
-		// RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00364FF0 + 0x33E);
-		// g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
-
-		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00363000 + 0x1DF);
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00379F20 + 0x2EB); // DONE
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x016BAC68 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AD7E0 + 0x30); // ??_7RaceSexMenu@@6B@ - DONE
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		/*RelocAddr <uintptr_t> Cache_Target(0x008B2BE0);
-		SafeWrite8(Cache_Target.GetUIntPtr(), 0xC3); // Cache immediate retn
-		RelocAddr <uintptr_t> CacheClear_Target(0x008B2D60);
-		SafeWrite8(CacheClear_Target.GetUIntPtr(), 0xC3); // Cache clear immediate retn*/
-
-		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008BB750);
+		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008E2AA0); // DONE
 		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
-	RelocAddr<uintptr_t> ArmorAddon_Target(0x001C6F90 + 0xB4A);
+	RelocAddr<uintptr_t> ArmorAddon_Target(0x0001D2420 + 0xCA9); // DONE
 	{
 		struct ArmorAddonHook_Entry_Code : Xbyak::CodeGenerator {
 			ArmorAddonHook_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1765,7 +1752,7 @@ bool InstallSKEEHooks()
 
 	if (g_enableTintInventory)
 	{
-		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008887E0 + 0x1BA);
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008B87B0 + 0x1C3); // DONE
 		{
 			struct TintInventoryItem_Code : Xbyak::CodeGenerator {
 				TintInventoryItem_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)

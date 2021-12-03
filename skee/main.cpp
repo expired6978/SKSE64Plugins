@@ -592,10 +592,7 @@ void InterfaceExchangeMessageHandler(SKSEMessagingInterface::Message * message)
 	}
 }
 
-extern "C"
-{
-
-bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
+bool SKSEPlugin_Query(const SKSEInterface* skse)
 {
 	// Loading SKEE64 into SKSEVR short circuit immediately
 	if (GET_EXE_VERSION_SUB(skse->runtimeVersion) != 0)
@@ -610,67 +607,43 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	if (logLevel >= 0)
 		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\skee64.log");
 
-	_DMESSAGE("skee");
-
-	// populate info structure
-	info->infoVersion =	PluginInfo::kInfoVersion;
-	info->name =		"skee";
-	info->version =		1;
-
 	// store plugin handle so we can identify ourselves later
 	g_pluginHandle = skse->GetPluginHandle();
 
-	if(skse->isEditor)
+	if (skse->isEditor)
 	{
 		_MESSAGE("loaded in editor, marking as incompatible");
 		return false;
 	}
-	else if (skse->runtimeVersion != RUNTIME_VERSION_1_5_97 && skse->runtimeVersion != RUNTIME_VERSION_1_5_97)
-	{
-		UInt32 runtimeVersion = RUNTIME_VERSION_1_5_97;
-		char buf[512];
-		sprintf_s(buf, "RaceMenu Version Error:\nexpected game version %d.%d.%d.%d\nyour game version is %d.%d.%d.%d\nsome features may not work correctly.",
-			GET_EXE_VERSION_MAJOR(runtimeVersion),
-			GET_EXE_VERSION_MINOR(runtimeVersion),
-			GET_EXE_VERSION_BUILD(runtimeVersion),
-			GET_EXE_VERSION_SUB(runtimeVersion),
-			GET_EXE_VERSION_MAJOR(skse->runtimeVersion),
-			GET_EXE_VERSION_MINOR(skse->runtimeVersion),
-			GET_EXE_VERSION_BUILD(skse->runtimeVersion),
-			GET_EXE_VERSION_SUB(skse->runtimeVersion));
-		MessageBox(NULL, buf, "Game Version Error", MB_OK | MB_ICONEXCLAMATION);
-		_FATALERROR("unsupported runtime version %08X", skse->runtimeVersion);
-		return false;
-	}
 
 	// get the serialization interface and query its version
-	g_serialization = (SKSESerializationInterface *)skse->QueryInterface(kInterface_Serialization);
-	if(!g_serialization)
+	g_serialization = (SKSESerializationInterface*)skse->QueryInterface(kInterface_Serialization);
+	if (!g_serialization)
 	{
 		_FATALERROR("couldn't get serialization interface");
 		return false;
 	}
-	if(g_serialization->version < MIN_SERIALIZATION_VERSION)//SKSESerializationInterface::kVersion)
+	if (g_serialization->version < MIN_SERIALIZATION_VERSION)//SKSESerializationInterface::kVersion)
 	{
 		_FATALERROR("serialization interface too old (%d expected %d)", g_serialization->version, MIN_SERIALIZATION_VERSION);
 		return false;
 	}
 
 	// get the scaleform interface and query its version
-	g_scaleform = (SKSEScaleformInterface *)skse->QueryInterface(kInterface_Scaleform);
-	if(!g_scaleform)
+	g_scaleform = (SKSEScaleformInterface*)skse->QueryInterface(kInterface_Scaleform);
+	if (!g_scaleform)
 	{
 		_FATALERROR("couldn't get scaleform interface");
 		return false;
 	}
-	if(g_scaleform->interfaceVersion < MIN_SCALEFORM_VERSION)
+	if (g_scaleform->interfaceVersion < MIN_SCALEFORM_VERSION)
 	{
 		_FATALERROR("scaleform interface too old (%d expected %d)", g_scaleform->interfaceVersion, MIN_SCALEFORM_VERSION);
 		return false;
 	}
 
 	// get the papyrus interface and query its version
-	g_papyrus = (SKSEPapyrusInterface *)skse->QueryInterface(kInterface_Papyrus);
+	g_papyrus = (SKSEPapyrusInterface*)skse->QueryInterface(kInterface_Papyrus);
 	if (!g_papyrus)
 	{
 		_FATALERROR("couldn't get papyrus interface");
@@ -683,29 +656,29 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	}
 
 	// get the task interface and query its version
-	g_task = (SKSETaskInterface *)skse->QueryInterface(kInterface_Task);
-	if(!g_task)
+	g_task = (SKSETaskInterface*)skse->QueryInterface(kInterface_Task);
+	if (!g_task)
 	{
 		_FATALERROR("couldn't get task interface");
 		return false;
 	}
-	if(g_task->interfaceVersion < MIN_TASK_VERSION)//SKSETaskInterface::kInterfaceVersion)
+	if (g_task->interfaceVersion < MIN_TASK_VERSION)//SKSETaskInterface::kInterfaceVersion)
 	{
 		_FATALERROR("task interface too old (%d expected %d)", g_task->interfaceVersion, MIN_TASK_VERSION);
 		return false;
 	}
 
-	g_messaging = (SKSEMessagingInterface *)skse->QueryInterface(kInterface_Messaging);
+	g_messaging = (SKSEMessagingInterface*)skse->QueryInterface(kInterface_Messaging);
 	if (!g_messaging) {
 		_ERROR("couldn't get messaging interface");
 	}
 
-	g_trampoline = (SKSETrampolineInterface *)skse->QueryInterface(kInterface_Trampoline);
+	g_trampoline = (SKSETrampolineInterface*)skse->QueryInterface(kInterface_Trampoline);
 	if (!g_trampoline) {
 		_ERROR("couldn't get trampoline interface");
 	}
 
-	g_objectInterface = (SKSEObjectInterface *)skse->QueryInterface(kInterface_Object);
+	g_objectInterface = (SKSEObjectInterface*)skse->QueryInterface(kInterface_Object);
 	if (!g_objectInterface) {
 		_ERROR("couldn't get object interface");
 	}
@@ -714,8 +687,26 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	return true;
 }
 
+extern "C"
+{
+
+__declspec(dllexport) SKSEPluginVersionData SKSEPlugin_Version =
+{
+	SKSEPluginVersionData::kVersion,
+	2,
+	"Skyrim Engine Extender",
+	"Expired6978",
+	"expired6978@gmail.com",
+	0,	// not version independent
+	{ RUNTIME_VERSION_1_6_318, 0 },	// compatible with 1.6.318
+	0,	// works with any version of the script extender. you probably do not need to put anything here
+};
+
 bool SKSEPlugin_Load(const SKSEInterface * skse)
 {
+	if (!SKSEPlugin_Query(skse))
+		return false;
+	
 	_DMESSAGE("NetImmerse Override Enabled");
 
 	SKEE64GetConfigValue("Features", "bEnableOverlays", &g_enableOverlays);
