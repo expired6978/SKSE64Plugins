@@ -125,6 +125,18 @@ public:
 	SKSETaskUninstallOverlay(TESObjectREFR * refr, BSFixedString nodeName) : SKSETaskModifyOverlay(refr, nodeName){};
 };
 
+class SKSETaskUpdateOverlays : public TaskDelegate
+{
+public:
+	virtual void Run();
+	virtual void Dispose();
+
+	SKSETaskUpdateOverlays(TESObjectREFR* refr);
+	
+private:
+	UInt32	m_formId;
+};
+
 class OverlayHolder : public std::unordered_set<UInt32>
 {
 public:
@@ -180,6 +192,8 @@ public:
 
 	// Relinks default overlays
 	virtual void RebuildOverlays(UInt32 armorMask, UInt32 addonMask, TESObjectREFR * refr, NiNode * boneTree, NiAVObject * resultNode);
+
+	void QueueOverlayBuild(TESObjectREFR* reference);
 
 #ifdef _DEBUG
 	void DumpMap();

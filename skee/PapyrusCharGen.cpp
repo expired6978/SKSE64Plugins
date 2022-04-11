@@ -143,17 +143,17 @@ void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr pres
 	}
 
 	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) == FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) {
-		g_transformInterface.RemoveAllReferenceTransforms(actor);
+		g_transformInterface.Impl_RemoveAllReferenceTransforms(actor);
 		for (UInt32 i = 0; i <= 1; i++) {
 			for (auto & xForms : presetData->transformData[i]) {
 				for (auto & key : xForms.second) {
 					for (auto & value : key.second) {
-						g_transformInterface.AddNodeTransform(actor, i == 1 ? true : false, gender == 1 ? true : false, xForms.first, key.first, value);
+						g_transformInterface.Impl_AddNodeTransform(actor, i == 1 ? true : false, gender == 1 ? true : false, xForms.first, key.first, value);
 					}
 				}
 			}
 		}
-		g_transformInterface.UpdateNodeAllTransforms(actor);
+		g_transformInterface.Impl_UpdateNodeAllTransforms(actor);
 	}
 
 	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) == FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) {

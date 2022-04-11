@@ -43,11 +43,52 @@ extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
 extern bool								g_enableBodyNormalRecalculate;
-extern bool								g_isReverting;
 
 UInt32 BodyMorphInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
+}
+
+void BodyMorphInterface::PrintDiagnostics()
+{
+	Console_Print("BodyMorphInterface Diagnostics:");
+	actorMorphs.Lock();
+	Console_Print("\t%llu actors morphed", actorMorphs.m_data.size());
+	for (auto& entry : actorMorphs.m_data)
+	{
+		TESForm* form = LookupFormByID(entry.first);
+		TESObjectREFR* refr = form ? DYNAMIC_CAST(form, TESForm, TESObjectREFR) : nullptr;
+		_MESSAGE("Reference: %08X (%s) (%lld keys)", entry.first, refr ? CALL_MEMBER_FN(refr, GetReferenceName)() : "", entry.second.size());
+		for (auto& item : entry.second)
+		{
+			_MESSAGE("\tMorph: %s (%lld morphs)", item.first ? item.first->c_str() : "", item.second.size());
+			for (auto& morph : item.second)
+			{
+				_MESSAGE("\t\tKey: %s Value: %f", morph.first ? morph.first->c_str() : "", morph.second);
+			}
+		}
+	}
+	actorMorphs.Release();
+	morphCache.Lock();
+	Console_Print("\t%llu bytes cached", morphCache.totalMemory);
+	Console_Print("\t%llu files cached", morphCache.m_data.size());
+	morphCache.Release();
+	Console_Print("\t%llu BodyGen templates loaded", bodyGenTemplates.size());
+	Console_Print("\t%llu BodyGen male candidates", bodyGenData[0].size());
+	Console_Print("\t%llu BodyGen female candidates", bodyGenData[1].size());
+
+	morphCache.ForEachMorphFile([&](const SKEEFixedString& filePath, const MorphFileCache& morphFile)
+	{
+		_MESSAGE("File: %s (%llu bytes)", filePath.c_str(), morphFile.GetByteSize());
+		morphFile.ForEachShape([&](const SKEEFixedString& shapeName, const BodyMorphMap& morphMap)
+		{
+			_MESSAGE("\tShape: %s (%llu total morphs)", shapeName.c_str(), morphMap.size());
+			morphMap.ForEachMorph([&](const SKEEFixedString& morphName, const auto vertexData)
+			{
+				_MESSAGE("\t\tMorph: %s (%llu verts %llu uv)", morphName.c_str(), vertexData.first ? vertexData.first->GetSize() : 0LL, vertexData.second ? vertexData.second->GetSize() : 0LL);
+			});
+		});
+	});
 }
 
 std::vector<SKEEFixedString> BodyMorphInterface::GetCachedMorphNames()
@@ -454,186 +495,107 @@ void BodyMorphMap::ForEachMorph(std::function<void(const SKEEFixedString&, const
 #include <d3d11_4.h>
 
 void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
-{
-	BSFixedString nodeName = bodyMorph.first.c_str();
-	BSGeometry * geometry = rootNode->GetAsBSGeometry();
-	NiGeometry * legacyGeometry = rootNode->GetAsNiGeometry();
-	NiAVObject * bodyNode = geometry ? geometry : legacyGeometry ? legacyGeometry : rootNode->GetObjectByName(&nodeName.data);
-	if (bodyNode)
+{	
+	auto execMorphUpdate = [&](BSGeometry* bodyGeometry)
 	{
-#if 0
-		NiGeometry * legacyGeometry = bodyNode->GetAsNiGeometry();
-		if (legacyGeometry)
-		{
-			NiGeometryData * geometryData = niptr_cast<NiGeometryData>(legacyGeometry->m_spModelData);
-			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(legacyGeometry->m_spSkinInstance);
-			if (geometryData && skinInstance) {
+		NiSkinInstance* skinInstance = niptr_cast<NiSkinInstance>(bodyGeometry->m_spSkinInstance);
+		if (skinInstance) {
+			NiSkinPartition* skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
+			if (skinPartition) {
 				// Undo morphs on the old shape
-				BSFaceGenBaseMorphExtraData * bodyData = (BSFaceGenBaseMorphExtraData *)legacyGeometry->GetExtraData("FOD");
-				if (bodyData) {
-					NiAutoRefCounter arc(bodyData);
-					// Undo old morphs for this trishape
-					for (UInt16 i = 0; i < geometryData->m_usVertices; i++) {
-						if (!isAttaching)
-							geometryData->m_pkVertex[i] -= bodyData->vertexData[i];
-						bodyData->vertexData[i] = NiPoint3(0, 0, 0);
-					}
+				NiBinaryExtraData* bodyData = (NiBinaryExtraData*)bodyGeometry->GetExtraData("SHAPEDATA");
 
-					geometryData->m_usDirtyFlags = 0x0001;
-				}
+				bool existingMorphs = !isAttaching && bodyData;
 
 				// Apply new morphs to new shape
-				if (bodyMorph.second.HasMorphs(refr))
+				if (bodyMorph.second.HasMorphs(refr) || existingMorphs)
 				{
-					NiGeometryData * targetShapeData = nullptr;
-					CALL_MEMBER_FN(geometryData, DeepCopy)((NiObject **)&targetShapeData);
-
-					NiSkinInstance * newSkinInstance = skinInstance->Clone();
-					if (newSkinInstance)
+					if (skinPartition)
 					{
-						// If we've created a new skin instance, create a new partition too
-						if (newSkinInstance != skinInstance)
-						{
-							NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
-							if (skinPartition) {
-								NiSkinPartition * newSkinPartition = nullptr;
-								CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
+						NiSkinPartition* newSkinPartition = nullptr;
+						CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject**)&newSkinPartition);
 
-								newSkinInstance->m_spSkinPartition = newSkinPartition;
-								newSkinPartition->DecRef();
+						// Reset the Vertices directly
+						if (bodyData && newSkinPartition)
+						{
+							if (!isAttaching)
+							{
+								// Overwrite the vertex data with the original source data
+								for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
+								{
+									auto& partition = newSkinPartition->m_pkPartitions[p];
+									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+
+									memcpy(partition.shapeData->m_RawVertexData, bodyData->m_data, newSkinPartition->vertexCount * vertexSize);
+								}
 							}
 						}
-						if (targetShapeData) {
-							// No old morphs, add one
+
+						if (newSkinPartition)
+						{
+							// No existing morphs, copy the current vertex block
 							if (!bodyData) {
-								bodyData = BSFaceGenBaseMorphExtraData::Create(targetShapeData, false);
-								legacyGeometry->AddExtraData(bodyData);
+								auto& partition = newSkinPartition->m_pkPartitions[0];
+								UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+
+								bodyData = NiBinaryExtraData::Create("SHAPEDATA", reinterpret_cast<char*>(partition.shapeData->m_RawVertexData), newSkinPartition->vertexCount * vertexSize);
+								bodyGeometry->AddExtraData(bodyData);
 							}
 
-							if (bodyData) {
-								NiAutoRefCounter arc(bodyData);
-								bodyMorph.second.ApplyMorphs(refr, [&](const TriShapeVertexDataPtr morphData, float morphFactor)
-								{
-									morphData->ApplyMorphRaw(targetShapeData->m_usVertices, bodyData->vertexData, morphFactor);
-									morphData->ApplyMorphRaw(targetShapeData->m_usVertices, targetShapeData->m_pkVertex, morphFactor);
-								}, nullptr);
-							}
-
-							legacyGeometry->m_spModelData = targetShapeData;
-							legacyGeometry->m_spSkinInstance = newSkinInstance;
-							targetShapeData->DecRef();
-
-							targetShapeData->m_usDirtyFlags = 0x0001;
-						}
-					}
-				}
-			}
-		}
-#endif
-
-		BSGeometry * bodyGeometry = bodyNode->GetAsBSGeometry();
-		if (bodyGeometry)
-		{
-			NiSkinInstance * skinInstance = niptr_cast<NiSkinInstance>(bodyGeometry->m_spSkinInstance);
-			if (skinInstance) {
-				NiSkinPartition * skinPartition = niptr_cast<NiSkinPartition>(skinInstance->m_spSkinPartition);
-				if (skinPartition) {
-					// Undo morphs on the old shape
-					NiBinaryExtraData * bodyData = (NiBinaryExtraData *)bodyGeometry->GetExtraData("SHAPEDATA");
-					
-					bool existingMorphs = !isAttaching && bodyData;
-
-					// Apply new morphs to new shape
-					if (bodyMorph.second.HasMorphs(refr) || existingMorphs)
-					{
-						if (skinPartition)
-						{
-							NiSkinPartition * newSkinPartition = nullptr;
-							CALL_MEMBER_FN(skinPartition, DeepCopy)((NiObject **)&newSkinPartition);
-
-							// Reset the Vertices directly
-							if (bodyData && newSkinPartition)
+							if (bodyData)
 							{
-								if (!isAttaching)
+								auto& partition = newSkinPartition->m_pkPartitions[0];
+								UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+								UInt32 vertexCount = newSkinPartition->vertexCount;
+								TriShapeVertexData::Layout layout;
+								layout.vertexDesc = partition.shapeData->m_VertexDesc;
+								layout.vertexData = partition.shapeData->m_RawVertexData;
+
+								std::function<void(const TriShapeVertexDataPtr, float)> vertexMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
 								{
-									// Overwrite the vertex data with the original source data
-									for (UInt32 p = 0; p < newSkinPartition->m_uiPartitions; ++p)
+									if (morphFactor != 0.0f)
 									{
-										auto & partition = newSkinPartition->m_pkPartitions[p];
-										UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
-
-										memcpy(partition.shapeData->m_RawVertexData, bodyData->m_data, newSkinPartition->vertexCount * vertexSize);
+										morphData->ApplyMorph(vertexCount, &layout, morphFactor);
 									}
-								}
-							}
+								};
 
-							if (newSkinPartition)
-							{
-								// No existing morphs, copy the current vertex block
-								if (!bodyData) {
-									auto & partition = newSkinPartition->m_pkPartitions[0];
-									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
+								std::function<void(const TriShapeVertexDataPtr, float)> uvMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
+								{
+									if (morphFactor != 0.0f)
+									{
+										morphData->ApplyMorph(vertexCount, &layout, morphFactor);
+									}
+								};
 
-									bodyData = NiBinaryExtraData::Create("SHAPEDATA", reinterpret_cast<char*>(partition.shapeData->m_RawVertexData), newSkinPartition->vertexCount * vertexSize);
-									bodyGeometry->AddExtraData(bodyData);
+								// Applies all morphs for this shape
+								bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
+
+								if (g_enableBodyNormalRecalculate)
+								{
+									NormalApplicator applicator(bodyGeometry, newSkinPartition);
+									applicator.Apply();
 								}
 
-								if (bodyData)
+								// Propagate the data to the other partitions
+								for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
 								{
-									auto & partition = newSkinPartition->m_pkPartitions[0];
-									UInt32 vertexSize = newSkinPartition->GetVertexSize(partition.vertexDesc);
-									UInt32 vertexCount = newSkinPartition->vertexCount;
-									TriShapeVertexData::Layout layout;
-									layout.vertexDesc = partition.shapeData->m_VertexDesc;
-									layout.vertexData = partition.shapeData->m_RawVertexData;
+									auto& pPartition = newSkinPartition->m_pkPartitions[p];
+									memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
+								}
 
-									std::function<void(const TriShapeVertexDataPtr, float)> vertexMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
-									{
-										if (morphFactor != 0.0f)
-										{
-											morphData->ApplyMorph(vertexCount, &layout, morphFactor);
-										}
-									};
+								auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
+								newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
 
-									std::function<void(const TriShapeVertexDataPtr, float)> uvMorpher = [&](const TriShapeVertexDataPtr morphData, float morphFactor)
-									{
-										if (morphFactor != 0.0f)
-										{
-											morphData->ApplyMorph(vertexCount, &layout, morphFactor);
-										}
-									};
-
-									// Applies all morphs for this shape
-									bodyMorph.second.ApplyMorphs(refr, vertexMorpher, bodyMorph.second.HasUV() ? uvMorpher : nullptr);
-
-									if (g_enableBodyNormalRecalculate)
-									{
-										NormalApplicator applicator(bodyGeometry, newSkinPartition);
-										applicator.Apply();
-									}
-
-									// Propagate the data to the other partitions
-									for (UInt32 p = 1; p < newSkinPartition->m_uiPartitions; ++p)
-									{
-										auto & pPartition = newSkinPartition->m_pkPartitions[p];
-										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
-									}
-
+								if (deferred)
+								{
+									g_task->AddTask(updateTask);
+								}
+								else
+								{
 									if (mutex) mutex->lock();
-
-									auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
-									newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
-
-									if (deferred)
-									{
-										g_task->AddTask(updateTask);
-									}
-									else
-									{
-										updateTask->Run();
-										updateTask->Dispose();
-									}
+									updateTask->Run();
 									if (mutex) mutex->unlock();
+									updateTask->Dispose();
 								}
 							}
 						}
@@ -641,6 +603,27 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 				}
 			}
 		}
+	};
+
+	BSGeometry* geometry = rootNode->GetAsBSGeometry();
+	if (geometry)
+	{
+		execMorphUpdate(geometry);
+	}
+	else
+	{
+		BSFixedString nodeName = bodyMorph.first.c_str();
+		VisitObjects(rootNode, [&](NiAVObject* object)
+		{
+			if (BSGeometry* bodyGeometry = object->GetAsBSGeometry())
+			{
+				if (bodyGeometry->m_name == nodeName.data)
+				{
+					execMorphUpdate(bodyGeometry);
+				}
+			}
+			return false;
+		});
 	}
 }
 
@@ -708,47 +691,6 @@ void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 	Shrink();
 }
 
-class EquippedItemCollector
-{
-public:
-	typedef std::vector<TESForm*> FoundItems;
-
-	EquippedItemCollector() {}
-
-	bool Accept(InventoryEntryData* pEntryData)
-	{
-		if (!pEntryData)
-			return true;
-
-		if (pEntryData->countDelta < 1)
-			return true;
-
-		ExtendDataList* pExtendList = pEntryData->extendDataList;
-		if (!pExtendList)
-			return true;
-
-		SInt32 n = 0;
-		BaseExtraList* pExtraDataList = pExtendList->GetNthItem(n);
-		while (pExtraDataList)
-		{
-			if (pExtraDataList->HasType(kExtraData_Worn) || pExtraDataList->HasType(kExtraData_WornLeft))
-				m_found.push_back(pEntryData->type);
-
-			n++;
-			pExtraDataList = pExtendList->GetNthItem(n);
-		}
-
-		return true;
-	}
-
-	FoundItems& Found()
-	{
-		return m_found;
-	}
-private:
-	FoundItems	m_found;
-};
-
 void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 {
 	if(!refr)
@@ -758,38 +700,10 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 	if (!actor)
 		return;
 
-	EquippedItemCollector::FoundItems foundData;
-	ExtraContainerChanges * extraContainer = static_cast<ExtraContainerChanges*>(refr->extraData.GetByType(kExtraData_ContainerChanges));
-	if (extraContainer) {
-		if (extraContainer->data && extraContainer->data->objList) {
-			EquippedItemCollector itemFinder;
-			extraContainer->data->objList->Visit(itemFinder);
-			foundData = itemFinder.Found();
-		}
-	}
-
-	TESObjectARMO * skin = GetActorSkin(actor);
-	if (skin)
-		foundData.push_back(skin);
-
-	for (auto foundItem : foundData) {
-		TESObjectARMO * armor = DYNAMIC_CAST(foundItem, TESForm, TESObjectARMO);
-		if (armor) {
-			for (UInt32 i = 0; i < armor->armorAddons.count; i++) {
-				TESObjectARMA * arma = NULL;
-				if (armor->armorAddons.GetNthItem(i, arma)) {
-					if (arma->isValidRace(actor->race)) { // Only search AAs that fit this race
-						VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiNode * skeletonRoot, NiAVObject * armorNode) {
-							ApplyMorphs(refr, armorNode, false, deferUpdate);
-#ifdef _NO_REATTACH
-							g_overlayInterface.RebuildOverlays(armor->bipedObject.GetSlotMask(), arma->biped.GetSlotMask(), refr, skeletonRoot, armorNode);
-#endif
-						});
-					}
-				}
-			}
-		}
-	}
+	VisitBipedNodes(refr, [&](bool isFirstPerson, UInt32 bipedIndex, NiNode* rootNode, TESForm* armo, TESForm* arma, NiAVObject* object)
+	{
+		ApplyMorphs(refr, object, false, deferUpdate);
+	});
 
 	BSFixedString attachmentName(AttachmentInterface::ATTACHMENT_HOLDER);
 	VisitSkeletalRoots(refr, [&](NiNode* rootNode, bool isFirstPerson)
@@ -800,11 +714,6 @@ void MorphCache::UpdateMorphs(TESObjectREFR * refr, bool deferUpdate)
 			ApplyMorphs(refr, attachmentNode, false, deferUpdate);
 		}
 	});
-
-#ifndef _NO_REATTACH
-	//CALL_MEMBER_FN(actor->processManager, SetEquipFlag)(ActorProcessManager::kFlags_Unk01 | ActorProcessManager::kFlags_Unk02 | ActorProcessManager::kFlags_Mobile);
-	//CALL_MEMBER_FN(actor->processManager, UpdateEquipment)(actor);
-#endif
 }
 
 void MorphCache::ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const
@@ -1210,13 +1119,43 @@ void NIOVTaskUpdateSkinPartition::Run()
 		UInt32 vertexSize = m_partition->GetVertexSize(partition.vertexDesc);
 		UInt32 vertexCount = m_partition->vertexCount;
 
-		auto deviceContext = g_renderManager->context;
-		deviceContext->UpdateSubresource(partition.shapeData->m_VertexBuffer, 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+		D3D11_BUFFER_DESC desc;
+		partition.shapeData->m_VertexBuffer->GetDesc(&desc);
 
-		for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+		auto deviceContext = g_renderManager->context;
+		switch (desc.Usage)
 		{
-			auto & pPartition = m_partition->m_pkPartitions[p];
-			deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+		case D3D11_USAGE_DEFAULT:
+		{
+			deviceContext->UpdateSubresource(partition.shapeData->m_VertexBuffer, 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+
+			for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+			{
+				auto& pPartition = m_partition->m_pkPartitions[p];
+				deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+			}
+			break;
+		}
+		case D3D11_USAGE_DYNAMIC:
+		{
+			if (desc.CPUAccessFlags & D3D11_CPU_ACCESS_WRITE) {
+				D3D11_MAPPED_SUBRESOURCE mappedResource;
+				if (deviceContext->Map(partition.shapeData->m_VertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) == S_OK) {
+					memcpy(mappedResource.pData, partition.shapeData->m_RawVertexData, vertexCount * vertexSize);
+					deviceContext->Unmap(partition.shapeData->m_VertexBuffer, 0);
+				}
+
+				for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+				{
+					auto& pPartition = m_partition->m_pkPartitions[p];
+					if (deviceContext->Map(pPartition.shapeData->m_VertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) == S_OK) {
+						memcpy(mappedResource.pData, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize);
+						deviceContext->Unmap(pPartition.shapeData->m_VertexBuffer, 0);
+					}
+				}
+			}
+			break;
+		}
 		}
 
 		m_skinInstance->m_spSkinPartition = m_partition;
@@ -1835,7 +1774,7 @@ void BodyMorphInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, T
 {
 	if (HasMorphs(refr))
 	{
-		if (g_isReverting)
+		if (g_actorUpdateManager.isReverting())
 		{
 			g_actorUpdateManager.AddBodyUpdate(refr->formID);
 		}
@@ -1987,6 +1926,7 @@ bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion, con
 // Serialize ActorMorphs
 void ActorMorphs::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 {
+	SimpleLocker locker(&m_lock);
 	for(auto & morph : m_data) {
 		intfc->OpenRecord('MRPH', kVersion);
 
@@ -2180,29 +2120,33 @@ bool ActorMorphs::Load(SKSESerializationInterface * intfc, UInt32 kVersion, cons
 	if(morphMap.empty())
 		return false;
 
-	if (g_enableBodyMorph)
-	{
-		TESObjectREFR * refr = (TESObjectREFR *)LookupFormByID(newFormId);
-		if (refr && (refr->formType == kFormType_Reference || refr->formType == kFormType_Character))
-		{
-			m_data.insert_or_assign(newFormId, morphMap);
-
-#ifdef _DEBUG
-			_DMESSAGE("%s - Loaded MorphSet Handle %08llX actor %s", __FUNCTION__, newFormId, CALL_MEMBER_FN(refr, GetReferenceName)());
-#endif
-
-			g_actorUpdateManager.AddBodyUpdate(newFormId);
-		}
-		else if (refr)
-		{
-			_WARNING("%s - Discarding morphs for %08llX form is not an actor or reference (%d)", __FUNCTION__, newFormId, refr->formType);
-		}
-		else
-		{
-			_WARNING("%s - Discarding morphs for %08llX form is invalid", __FUNCTION__, newFormId);
-		}
+	auto form = LookupFormByID(newFormId);
+	if (!form) {
+		_WARNING("%s - Discarding body morphs for (%08llX) form is invalid", __FUNCTION__, newFormId);
+		return false;
+	}
+	else if (form->formType != kFormType_Reference && form->formType != kFormType_Character) {
+		_WARNING("%s - Discarding body morphs for (%08llX) form is not an actor or reference (%d)", __FUNCTION__, newFormId, form->formType);
+		return false;
+	}
+	else if ((form->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted) {
+		_WARNING("%s - Discarding body morphs for (%08llX) form is deleted", __FUNCTION__, newFormId);
+		return false;
 	}
 
+	if (g_enableBodyMorph)
+	{
+
+		Lock();
+		m_data.insert_or_assign(newFormId, morphMap);
+		Release();
+
+#ifdef _DEBUG
+		_DMESSAGE("%s - Loaded MorphSet Handle %08llX actor (%s)", __FUNCTION__, newFormId, CALL_MEMBER_FN(static_cast<TESObjectREFR*>(form), GetReferenceName)());
+#endif
+		g_actorUpdateManager.AddBodyUpdate(newFormId);
+		
+	}
 	return error;
 }
 

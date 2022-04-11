@@ -42,12 +42,12 @@ public:
 	NiTransform * GetBaseTransform(SKEEFixedString rootModel, SKEEFixedString nodeName, bool relative);
 };
 
-class NiTransformInterface : public IPluginInterface
+class NiTransformInterface : public INiTransformInterface
 {
 public:
 	enum
 	{
-		kCurrentPluginVersion = 2,
+		kCurrentPluginVersion = 3,
 		kSerializationVersion1 = 1,
 		kSerializationVersion2 = 2,
 		kSerializationVersion3 = 3,
@@ -59,28 +59,61 @@ public:
 	virtual bool Load(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	virtual void Revert();
 
-	virtual bool AddNodeTransform(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, OverrideVariant & value);
-	virtual bool RemoveNodeTransformComponent(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, UInt16 index);
-	virtual bool RemoveNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name);
-	virtual void RemoveAllReferenceTransforms(TESObjectREFR * refr);
+	virtual bool HasNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool HasNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool HasNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool HasNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+
+	virtual void AddNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Position& position); // X,Y,Z
+	virtual void AddNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Rotation& rotation); // Euler angles
+	virtual void AddNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, float scale);
+	virtual void AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, UInt32 scaleMode);
+
+	virtual Position GetNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual Rotation GetNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual float GetNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual UInt32 GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+
+	virtual bool RemoveNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool RemoveNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool RemoveNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual bool RemoveNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+
+	virtual bool RemoveNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual void RemoveAllReferenceTransforms(TESObjectREFR* refr);
+
+	virtual bool GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, UInt16 key, NiTransform* result);
+
+	virtual void UpdateNodeAllTransforms(TESObjectREFR* ref);
+
+	virtual void VisitNodes(TESObjectREFR* refr, bool firstPerson, bool isFemale, NodeVisitor& visitor);
+	virtual void UpdateNodeTransforms(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node);
+
+	// Internal implementations
+	bool Impl_AddNodeTransform(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, OverrideVariant & value);
+	bool Impl_RemoveNodeTransformComponent(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, UInt16 index);
+	bool Impl_RemoveNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name);
+	void Impl_RemoveAllReferenceTransforms(TESObjectREFR * refr);
 	
-	virtual OverrideVariant GetOverrideNodeValue(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, SInt8 index);
-	virtual bool GetOverrideNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, NiTransform * result);
+	OverrideVariant Impl_GetOverrideNodeValue(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, SInt8 index);
+	bool Impl_GetOverrideNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, NiTransform * result);
 
-	virtual void GetOverrideTransform(OverrideSet * set, UInt16 key, NiTransform * result);
-	virtual SKEEFixedString GetRootModelPath(TESObjectREFR * refr, bool firstPerson, bool isFemale);
+	void Impl_GetOverrideTransform(OverrideSet * set, UInt16 key, NiTransform * result);
+	SKEEFixedString GetRootModelPath(TESObjectREFR * refr, bool firstPerson, bool isFemale);
 
-	virtual void UpdateNodeAllTransforms(TESObjectREFR * ref);
+	void Impl_UpdateNodeAllTransforms(TESObjectREFR * ref);
 
-	virtual void VisitNodes(TESObjectREFR * refr, bool firstPerson, bool isFemale, std::function<bool(SKEEFixedString, OverrideRegistration<StringTableItem>*)> functor);
-	virtual bool VisitNodeTransforms(TESObjectREFR * refr, bool firstPerson, bool isFemale, BSFixedString node, std::function<bool(OverrideRegistration<StringTableItem>*)> each_key, std::function<void(NiNode*, NiAVObject*, NiTransform*)> finalize);
-	virtual void UpdateNodeTransforms(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node);
+	void Impl_VisitNodes(TESObjectREFR * refr, bool firstPerson, bool isFemale, std::function<bool(SKEEFixedString, OverrideRegistration<StringTableItem>*)> functor);
+	bool Impl_VisitNodeTransforms(TESObjectREFR * refr, bool firstPerson, bool isFemale, BSFixedString node, std::function<bool(OverrideRegistration<StringTableItem>*)> each_key, std::function<void(NiNode*, NiAVObject*, NiTransform*)> finalize);
+	void Impl_UpdateNodeTransforms(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node);
 
-	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
+	void VisitStrings(std::function<void(SKEEFixedString)> functor);
 	
 	void RemoveInvalidTransforms(UInt32 formId);
 	void RemoveNamedTransforms(UInt32 formId, SKEEFixedString name);
 	void SetTransforms(UInt32 formId, bool immediate = false, bool reset = false);
+
+	void PrintDiagnostics();
 
 	NodeTransformRegistrationMapHolder	transformData;
 	NodeTransformCache					transformCache;

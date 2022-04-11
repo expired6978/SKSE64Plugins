@@ -283,7 +283,6 @@ public:
 
 	virtual void RemoveAllOverrides();
 	virtual void RemoveAllReferenceOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor);
 	virtual void RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon);
@@ -292,7 +291,6 @@ public:
 
 	virtual void RemoveAllNodeOverrides();
 	virtual void RemoveAllReferenceNodeOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceNodeOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName);
 	virtual void RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
@@ -307,7 +305,6 @@ public:
 
 	virtual void RemoveAllWeaponBasedOverrides();
 	virtual void RemoveAllReferenceWeaponOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceWeaponOverrides(OverrideHandle handle);
 
 	virtual void RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon);
 	virtual void RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName);
@@ -339,9 +336,8 @@ public:
 	virtual void VisitSkin(TESObjectREFR * refr, bool isFemale, bool firstPerson, std::function<void(UInt32, OverrideVariant&)> functor);
 	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
 
-#ifdef _DEBUG
-	void DumpMap();
-#endif
+	void Dump();
+
 private:
 	ActorRegistrationMapHolder armorData;
 	NodeRegistrationMapHolder nodeData;

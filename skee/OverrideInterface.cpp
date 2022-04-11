@@ -203,49 +203,29 @@ OverrideVariant * OverrideInterface::GetSkinOverride(TESObjectREFR * refr, bool 
 
 void OverrideInterface::RemoveAllReferenceOverrides(TESObjectREFR * refr)
 {
-	RemoveAllReferenceOverrides(refr->formID);
+	armorData.Lock();
+	armorData.m_data.erase(refr->formID);
+	armorData.Release();
 }
 
 void OverrideInterface::RemoveAllReferenceNodeOverrides(TESObjectREFR * refr)
 {
-	RemoveAllReferenceNodeOverrides(refr->formID);
+	nodeData.Lock();
+	nodeData.m_data.erase(refr->formID);
+	nodeData.Release();
 }
 
 void OverrideInterface::RemoveAllReferenceWeaponOverrides(TESObjectREFR * refr)
 {
-	RemoveAllReferenceWeaponOverrides(refr->formID);
+	weaponData.Lock();
+	weaponData.m_data.erase(refr->formID);
+	weaponData.Release();
 }
 
 void OverrideInterface::RemoveAllReferenceSkinOverrides(TESObjectREFR * refr)
 {
-	RemoveAllReferenceSkinOverrides(refr->formID);
-}
-
-void OverrideInterface::RemoveAllReferenceOverrides(OverrideHandle handle)
-{
-	armorData.Lock();
-	armorData.m_data.erase(handle);
-	armorData.Release();
-}
-
-void OverrideInterface::RemoveAllReferenceNodeOverrides(OverrideHandle handle)
-{
-	nodeData.Lock();
-	nodeData.m_data.erase(handle);
-	nodeData.Release();
-}
-
-void OverrideInterface::RemoveAllReferenceWeaponOverrides(OverrideHandle handle)
-{
-	weaponData.Lock();
-	weaponData.m_data.erase(handle);
-	weaponData.Release();
-}
-
-void OverrideInterface::RemoveAllReferenceSkinOverrides(OverrideHandle handle)
-{
 	skinData.Lock();
-	skinData.m_data.erase(handle);
+	skinData.m_data.erase(refr->formID);
 	skinData.Release();
 }
 
@@ -2170,23 +2150,19 @@ bool SkinRegistration::Load(SKSESerializationInterface * intfc, UInt32 kVersion,
 }
 
 bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion, OverrideHandle * outHandle, const StringIdMap & stringTable)
-{
-	bool error = false;
-	
+{	
 	UInt64 handle = 0;
 	if (!intfc->ReadRecordData(&handle, sizeof(handle)))
 	{
 		_MESSAGE("%s - Error loading reg key", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	MultiRegistration<OverrideRegistration<StringTableItem>,2> reg;
 	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading override gender registrations", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	OverrideHandle formId = handle & 0xFFFFFFFF;
@@ -2195,19 +2171,29 @@ bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 
 	// Skip if handle is no longer valid.
 	if (!ResolveAnyForm(intfc, formId, &newFormId)) {
 		*outHandle = 0;
-		return error;
-	}
-
-	TESForm* form = LookupFormByID(formId);
-	if (!form || form->formType != Character::kTypeID)
-	{
-		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	if(reg.empty()) {
 		*outHandle = 0;
-		return error;
+		return true;
+	}
+
+	TESForm* form = LookupFormByID(formId);
+	if (!form) {
+		_WARNING("%s - Discarding node overrides for (%08llX) form is invalid", __FUNCTION__, newFormId);
+		*outHandle = 0;
+		return true;
+	}
+	else if (form->formType != kFormType_Reference && form->formType != kFormType_Character) {
+		_WARNING("%s - Discarding node overrides for (%08llX) form is not a reference (%d)", __FUNCTION__, newFormId, form->formType);
+		*outHandle = 0;
+		return true;
+	}
+	else if ((form->flags & TESForm::kFlagIsDeleted) == TESForm::kFlagIsDeleted) {
+		_WARNING("%s - Discarding node overrides for (%08llX) form is deleted", __FUNCTION__, newFormId);
+		*outHandle = 0;
+		return true;
 	}
 
 	*outHandle = newFormId;
@@ -2215,11 +2201,15 @@ bool NodeRegistrationMapHolder::Load(SKSESerializationInterface * intfc, UInt32 
 	Lock();
 	m_data[newFormId] = reg;
 	Release();
-	return error;
+#ifdef _DEBUG
+	_DMESSAGE("%s - Loaded overrides for handle (%08llX) reference (%s)", __FUNCTION__, newFormId, CALL_MEMBER_FN(static_cast<TESObjectREFR*>(form), GetReferenceName)());
+#endif
+	return false;
 }
 
 void NodeRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 kVersion)
 {
+	SimpleLocker locker(&m_lock);
 	for(auto it = m_data.begin(); it != m_data.end(); ++it) {
 		intfc->OpenRecord('NDEN', kVersion);
 
@@ -2238,6 +2228,7 @@ void NodeRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 k
 
 void ActorRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 kVersion)
 {
+	SimpleLocker locker(&m_lock);
 	for(auto it = m_data.begin(); it != m_data.end(); ++it) {
 		intfc->OpenRecord('ACEN', kVersion);
 
@@ -2256,23 +2247,19 @@ void ActorRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 
 
 bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, OverrideHandle * outHandle, const StringIdMap & stringTable)
 {
-	bool error = false;
-
 	UInt64 handle = 0;
 	// Key
 	if (!intfc->ReadRecordData(&handle, sizeof(handle)))
 	{
 		_MESSAGE("%s - Error loading reg key", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	MultiRegistration<ArmorRegistration,2> reg;
 	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading armor gender registrations", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	OverrideHandle formId = handle & 0xFFFFFFFF;
@@ -2281,20 +2268,20 @@ bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 
 	// Skip if handle is no longer valid.
 	if (!ResolveAnyForm(intfc, formId, &newFormId)) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	// Invalid handle
 	TESForm* form = LookupFormByID(formId);
-	if (!form || form->formType != Character::kTypeID)
+	if (!form || (form->formType != kFormType_Reference && form->formType != kFormType_Character))
 	{
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 	
 	if(reg.empty()) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	*outHandle = newFormId;
@@ -2306,14 +2293,13 @@ bool ActorRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 
 #ifdef _DEBUG
 	_MESSAGE("%s - Loaded %08X", __FUNCTION__, newFormId);
 #endif
-
-	//SetHandleProperties(newHandle, false);
-	return error;
+	return false;
 }
 
 
 void WeaponRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 kVersion)
 {
+	SimpleLocker locker(&m_lock);
 	for(auto it = m_data.begin(); it != m_data.end(); ++it) {
 		intfc->OpenRecord('WPEN', kVersion);
 
@@ -2332,23 +2318,19 @@ void WeaponRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32
 
 bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, OverrideHandle * outHandle, const StringIdMap & stringTable)
 {
-	bool error = false;
-
 	UInt64 handle = 0;
 	// Key
 	if (!intfc->ReadRecordData(&handle, sizeof(handle)))
 	{
 		_MESSAGE("%s - Error loading reg key", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	MultiRegistration<MultiRegistration<WeaponRegistration,2>,2> reg;
 	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading weapon registrations", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	OverrideHandle formId = handle & 0xFFFFFFFF;
@@ -2357,20 +2339,19 @@ bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32
 	// Skip if handle is no longer valid.
 	if (!ResolveAnyForm(intfc, formId, &newFormId)) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	// Invalid handle
 	TESForm* form = LookupFormByID(formId);
-	if (!form || form->formType != Character::kTypeID)
-	{
+	if (!form || (form->formType != kFormType_Reference && form->formType != kFormType_Character)) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	if(reg.empty()) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	*outHandle = newFormId;
@@ -2382,14 +2363,13 @@ bool WeaponRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32
 #ifdef _DEBUG
 	_MESSAGE("%s - Loaded %08X", __FUNCTION__, newFormId);
 #endif
-
-	//SetHandleProperties(newHandle, false);
-	return error;
+	return false;
 }
 
 
 void SkinRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 kVersion)
 {
+	SimpleLocker locker(&m_lock);
 	for (auto it = m_data.begin(); it != m_data.end(); ++it) {
 		intfc->OpenRecord('SKNR', kVersion);
 
@@ -2408,23 +2388,19 @@ void SkinRegistrationMapHolder::Save(SKSESerializationInterface* intfc, UInt32 k
 
 bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 kVersion, OverrideHandle* outHandle, const StringIdMap & stringTable)
 {
-	bool error = false;
-
 	UInt64 handle = 0;
 	// Key
 	if (!intfc->ReadRecordData(&handle, sizeof(handle)))
 	{
 		_MESSAGE("%s - Error loading reg key", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	MultiRegistration<MultiRegistration<SkinRegistration, 2>, 2> reg;
 	if (reg.Load(intfc, kVersion, stringTable))
 	{
 		_MESSAGE("%s - Error loading skin registrations", __FUNCTION__);
-		error = true;
-		return error;
+		return true;
 	}
 
 	OverrideHandle formId = handle & 0xFFFFFFFF;
@@ -2433,20 +2409,18 @@ bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 k
 	// Skip if handle is no longer valid.
 	if (!ResolveAnyForm(intfc, formId, &newFormId)) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	// Invalid handle
 	TESForm* form = LookupFormByID(formId);
-	if (!form || form->formType != Character::kTypeID)
-	{
+	if (!form || form->formType != Character::kTypeID) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
-
 	if (reg.empty()) {
 		*outHandle = 0;
-		return error;
+		return true;
 	}
 
 	*outHandle = newFormId;
@@ -2458,9 +2432,7 @@ bool SkinRegistrationMapHolder::Load(SKSESerializationInterface* intfc, UInt32 k
 #ifdef _DEBUG
 	_MESSAGE("%s - Loaded %08X", __FUNCTION__, newFormId);
 #endif
-
-	//SetHandleProperties(newHandle, false);
-	return error;
+	return false;
 }
 
 // ActorRegistration
@@ -2528,36 +2500,37 @@ bool OverrideInterface::LoadSkinOverrides(SKSESerializationInterface* intfc, UIn
 	return false;
 }
 
-#ifdef _DEBUG
-void OverrideInterface::DumpMap()
+void OverrideInterface::Dump()
 {
 	_MESSAGE("Dumping Overrides");
-	for(ActorRegistrationMapHolder::RegMap::iterator it = armorData.m_data.begin(); it != armorData.m_data.end(); ++it)
+	armorData.Lock();
+	_MESSAGE("Dumping (%lld) actor overrides", armorData.m_data.size());
+	for(auto it : armorData.m_data)
 	{
 		for(UInt8 gender = 0; gender < 2; gender++)
 		{
-			_MESSAGE("Actor Handle: %016llX children %d", it->first, it->second[gender].size());
-			for(ArmorRegistration::iterator ait = it->second[gender].begin(); ait != it->second[gender].end(); ++ait) // Loop Armors
+			_MESSAGE("Actor Handle: (%016llX) children (%d) Gender (%d)", it.first, it.second[gender].size(), gender);
+			for(auto ait : it.second[gender]) // Loop Armors
 			{
-				_MESSAGE("Armor Handle: %016llX children %d", ait->first, ait->second.size());
-				for(AddonRegistration::iterator dit = ait->second.begin(); dit != ait->second.end(); ++dit) // Loop Addons
+				_MESSAGE("Armor Handle: (%016llX) children (%lld)", ait.first, ait.second.size());
+				for(auto dit : ait.second) // Loop Addons
 				{
-					_MESSAGE("Addon Handle: %016llX children %d", dit->first, dit->second.size());
-					for(auto nit = dit->second.begin(); nit != dit->second.end(); ++nit) // Loop Overrides
+					_MESSAGE("Addon Handle: (%016llX) children (%lld)", dit.first, dit.second.size());
+					for(auto nit : dit.second) // Loop Overrides
 					{
-						_MESSAGE("Override Node: %s children %d", nit->first->c_str(), nit->second.size());
-						for(OverrideSet::iterator iter = nit->second.begin(); iter != nit->second.end(); ++iter)
+						_MESSAGE("Override Node: (%s) children (%lld)", nit.first->c_str(), nit.second.size());
+						for(auto ovr: nit.second)
 						{
-							switch((*iter).type)
+							switch(ovr.type)
 							{
 							case OverrideVariant::kType_String:
-								_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).str->c_str());
+								_MESSAGE("Override: Key (%d) Value (%s)", ovr.key, ovr.str->c_str());
 								break;
 							case OverrideVariant::kType_Float:
-								_MESSAGE("Override: Key %d Value %f", (*iter).key, (*iter).data.f);
+								_MESSAGE("Override: Key (%d) Value (%f)", ovr.key, ovr.data.f);
 								break;
 							default:
-								_MESSAGE("Override: Key %d Value %X", (*iter).key, (*iter).data.u);
+								_MESSAGE("Override: Key (%d) Value (%X)", ovr.key, ovr.data.u);
 								break;
 							}
 						}
@@ -2566,34 +2539,38 @@ void OverrideInterface::DumpMap()
 			}
 		}
 	}
-	for(NodeRegistrationMapHolder::RegMap::iterator nit = nodeData.m_data.begin(); nit != nodeData.m_data.end(); ++nit)
+	armorData.Release();
+
+	nodeData.Lock();
+	_MESSAGE("Dumping (%lld) node overrides", nodeData.m_data.size());
+	for(auto nit : nodeData.m_data)
 	{
 		for(UInt8 gender = 0; gender < 2; gender++)
 		{
-			_MESSAGE("Node Handle: %016llX children %d", nit->first, nit->second[gender].size());
-			for(auto oit = nit->second[gender].begin(); oit != nit->second[gender].end(); ++oit) // Loop Overrides
+			_MESSAGE("Node Handle: (%016llX) children (%lld) Gender (%d)", nit.first, nit.second[gender].size(), gender);
+			for(auto oit : nit.second[gender]) // Loop Overrides
 			{
-				_MESSAGE("Override Node: %s children %d", oit->first->c_str(), oit->second.size());
-				for(OverrideSet::iterator iter = oit->second.begin(); iter != oit->second.end(); ++iter)
+				_MESSAGE("Override Node: (%s) children (%lld)", oit.first->c_str(), oit.second.size());
+				for(auto ovr : oit.second)
 				{
-					switch((*iter).type)
+					switch(ovr.type)
 					{
 					case OverrideVariant::kType_String:
-						_MESSAGE("Override: Key %d Value %s", (*iter).key, (*iter).str->c_str());
+						_MESSAGE("Override: Key (%d) Value (%s)", ovr.key, ovr.str->c_str());
 						break;
 					case OverrideVariant::kType_Float:
-						_MESSAGE("Override: Key %d Value %f", (*iter).key, (*iter).data.f);
+						_MESSAGE("Override: Key (%d) Value (%f)", ovr.key, ovr.data.f);
 						break;
 					default:
-						_MESSAGE("Override: Key %d Value %X", (*iter).key, (*iter).data.u);
+						_MESSAGE("Override: Key (%d) Value (%X)", ovr.key, ovr.data.u);
 						break;
 					}
 				}
 			}
 		}
 	}
+	nodeData.Release();
 }
-#endif
 
 extern bool	g_immediateArmor;
 

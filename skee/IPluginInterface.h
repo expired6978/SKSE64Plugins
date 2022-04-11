@@ -6,6 +6,7 @@ class TESObjectARMO;
 class TESObjectARMA;
 class NiNode;
 class NiAVObject;
+class NiTransform;
 
 class IPluginInterface
 {
@@ -103,6 +104,59 @@ public:
 	virtual void VisitStrings(StringVisitor & visitor) = 0;
 	virtual void VisitActors(ActorVisitor & visitor) = 0;
 	virtual size_t ClearMorphCache() = 0;
+};
+
+class INiTransformInterface : public IPluginInterface
+{
+public:
+	struct Position
+	{
+		float x, y, z;
+	};
+	struct Rotation
+	{
+		float heading, attitude, bank;
+	};
+
+	// Visits all overrides within a set
+	class NodeVisitor
+	{
+	public:
+		virtual bool VisitPosition(const char* node, const char* key, Position& position) = 0;
+		virtual bool VisitRotation(const char* node, const char* key, Rotation& rotation) = 0;
+		virtual bool VisitScale(const char* node, const char* key, float scale) = 0;
+		virtual bool VisitScaleMode(const char* node, const char* key, UInt32 scaleMode) = 0;
+	};
+
+	virtual bool HasNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool HasNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool HasNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool HasNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+
+	virtual void AddNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Position& position) = 0; // X,Y,Z
+	virtual void AddNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Rotation& rotation) = 0; // Euler angles
+	virtual void AddNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, float scale) = 0;
+	virtual void AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, UInt32 scaleMode) = 0;
+
+	virtual Position GetNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual Rotation GetNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual float GetNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual UInt32 GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+
+	virtual bool RemoveNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool RemoveNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool RemoveNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual bool RemoveNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+
+	virtual bool RemoveNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name) = 0;
+	virtual void RemoveAllReferenceTransforms(TESObjectREFR* refr) = 0;
+
+	virtual bool GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, UInt16 key, NiTransform* result) = 0;
+
+	virtual void UpdateNodeAllTransforms(TESObjectREFR* ref) = 0;
+
+	virtual void VisitNodes(TESObjectREFR* refr, bool firstPerson, bool isFemale, NodeVisitor& visitor) = 0;
+	virtual void UpdateNodeTransforms(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node) = 0;
 };
 
 class IAttachmentInterface : public IPluginInterface

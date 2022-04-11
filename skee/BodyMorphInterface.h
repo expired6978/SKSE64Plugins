@@ -120,6 +120,7 @@ public:
 	};
 
 	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor) = 0;
+	virtual size_t GetSize() const = 0;
 };
 typedef std::shared_ptr<TriShapeVertexData> TriShapeVertexDataPtr;
 
@@ -130,6 +131,7 @@ public:
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
 	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
+	virtual size_t GetSize() const { return m_vertexDeltas.size(); }
 
 	UInt32								m_maxIndex;
 	std::vector<TriShapeVertexDelta>	m_vertexDeltas;
@@ -142,7 +144,8 @@ public:
 	TriShapePackedVertexData() : m_maxIndex(0) { }
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
-	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, Layout* vertexData, float factor);
+	virtual size_t GetSize() const { return m_vertexDeltas.size(); }
 
 	float									m_multiplier;
 	UInt32									m_maxIndex;
@@ -162,7 +165,8 @@ public:
 	};
 
 	virtual void ApplyMorphRaw(UInt16 vertCount, void * vertices, float factor);
-	virtual void ApplyMorph(UInt16 vertexCount, Layout * vertexData, float factor);
+	virtual void ApplyMorph(UInt16 vertexCount, Layout* vertexData, float factor);
+	virtual size_t GetSize() const { return m_uvDeltas.size(); }
 
 	float								m_multiplier;
 	UInt32								m_maxIndex;
@@ -206,6 +210,8 @@ public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
 	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
 	void ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const;
+
+	size_t GetByteSize() const { return vertexMap.memoryUsage; }
 
 private:
 	TriShapeMap vertexMap;
@@ -374,6 +380,7 @@ public:
 	virtual size_t ClearMorphCache() override;
 
 	void LoadMods();
+	void PrintDiagnostics();
 
 private:
 	void GetFilteredNPCList(std::vector<TESNPC*> activeNPCs[], const ModInfo * modInfo, UInt32 gender, TESRace * raceFilter, std::unordered_set<TESFaction*> factionList);

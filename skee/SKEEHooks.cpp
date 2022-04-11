@@ -83,38 +83,47 @@ extern bool					g_allowAllMorphs;
 extern bool					g_allowAnyRacePart;
 extern bool					g_allowAnyGenderPart;
 
-RelocAddr<_CreateArmorNode> CreateArmorNode(0x001D6400); // DONE
+// Hook Toggles
+extern bool					g_hookBipedAttach;
+extern bool					g_hookNativeSliders;
+extern bool					g_hookSliderCallbacks;
+extern bool					g_hookHeadPreprocessing;
+extern bool					g_hookMorphUpdates;
+
+RelocAddr<_AttachBipedObject> AttachBipedObject(0x001D6360);
+_AttachBipedObject AttachBipedObject_Original = nullptr;
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
 RelocAddr <_RegenerateHead> RegenerateHead(FaceGen::RegenerateHead_Address);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7E110); // DONE
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7F110);
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168E260); // DONE
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168F260);
 
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00883790); // DONE
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x00884530);
 
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(FaceGen::ApplyMorph_Address); // DONE
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008EB1F0); // DONE
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008E4560); // DONE
+typedef UInt8 (*_BSFaceGenModel_ApplyMorph)(BSFaceGenModel* model, BSFixedString* morphName, TESModelTri* modelMorph, NiAVObject** headNode, float relative, UInt8 unk1);
+RelocAddr <_BSFaceGenModel_ApplyMorph> BSFaceGenModel_ApplyMorph(BSFaceGenModel::ApplyMorph_Address);
+_BSFaceGenModel_ApplyMorph BSFaceGenModel_ApplyMorph_Original = nullptr;
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x00377630); // DONE
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00377820); // DONE
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003E9BC0);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008EBEA0);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008E5210);
+
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003775A0);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00377790);
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
-RelocAddr<_UpdateHeadState> UpdateHeadState(0x00379D80);
+RelocAddr<_UpdateHeadState> UpdateHeadState(0x00379CF0);
 
 typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
-RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008B8700); // DONE
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008B9360);
 _SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
 
 typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
-RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008B81D0); // DONE
-
-typedef void*(*_GetHeadParts)(void * unk1, void * unk2);
-RelocAddr <_GetHeadParts> GetHeadParts(0); // NEED REWRITE, GOT INLINED (0x00165660)
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008B8E30);
 
 typedef void(*_TransferItemUID)(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1);
 _TransferItemUID TransferItemUID_Original = nullptr;
@@ -245,49 +254,43 @@ UInt32 * g_unk2 = (UInt32*)0x001310588;
 
 #endif
 
-NiAVObject * CreateArmorNode_Hooked(Biped * bipedInfo, NiNode * objectRoot, UInt64 unk3_4, BipedParam * params, UInt8 unk5, UInt8 unk6, UInt64 unk7)
+NiAVObject * AttachBipedObject_Hooked(Biped * bipedInfo, NiNode * objectRoot, UInt32 bipedIndex, UInt32 unkIndex, UInt8 unk5, UInt8 unk6, UInt64 unk7)
 {
-	NiAVObject * retVal = CreateArmorNode(bipedInfo, objectRoot, unk3_4 >> 32, unk3_4 & 0xFFFFFFFF, unk5, unk6, unk7);
+	NiAVObject * retVal = AttachBipedObject_Original(bipedInfo, objectRoot, bipedIndex, unkIndex, unk5, unk6, unk7);
 
 	NiPointer<TESObjectREFR> reference;
 	UInt32 handle = bipedInfo->handle;
 	LookupREFRByHandle(handle, reference);
 	if (reference)
-		InstallArmorAddonHook(reference, params, bipedInfo->root, retVal);
+		InstallArmorAddonHook(reference, bipedInfo->unk10[bipedIndex], bipedInfo->root, retVal);
 
 	return retVal;
 }
 
-void InstallArmorAddonHook(TESObjectREFR * refr, BipedParam * params, NiNode * boneTree, NiAVObject * resultNode)
+void InstallArmorAddonHook(TESObjectREFR * refr, Biped::Data& params, NiNode * boneTree, NiAVObject * resultNode)
 {
 	if (!refr) {
 #ifdef _DEBUG
-		_ERROR("%s - Error no reference found skipping overlays.", __FUNCTION__);
+		_ERROR("%s - Error no reference found", __FUNCTION__);
 #endif
 		return;
 	}
-	if (!params) {
+	if (!params.armor || !params.addon) {
 #ifdef _DEBUG
-		_ERROR("%s - Error no armor parameters found, skipping overlays.", __FUNCTION__);
-#endif
-		return;
-	}
-	if (!params->data.armor || !params->data.addon) {
-#ifdef _DEBUG
-		_ERROR("%s - Armor or ArmorAddon found, skipping overlays.", __FUNCTION__);
+		_ERROR("%s - Armor or ArmorAddon found.", __FUNCTION__);
 #endif
 		return;
 	}
 	if (!boneTree) {
 #ifdef _DEBUG
-		_ERROR("%s - Error no bone tree found, skipping overlays.", __FUNCTION__);
+		_ERROR("%s - Error no bone tree found", __FUNCTION__);
 #endif
 		return;
 	}
 	if (!resultNode) {
 #ifdef _DEBUG
-		UInt32 addonFormid = params->data.addon ? params->data.addon->formID : 0;
-		UInt32 armorFormid = params->data.armor ? params->data.armor->formID : 0;
+		UInt32 addonFormid = params.addon ? params.addon->formID : 0;
+		UInt32 armorFormid = params.armor ? params.armor->formID : 0;
 		_ERROR("%s - Error no node found on Reference (%08X) while attaching ArmorAddon (%08X) of Armor (%08X)", __FUNCTION__, refr->formID, addonFormid, armorFormid);
 #endif
 		return;
@@ -319,10 +322,10 @@ void InstallArmorAddonHook(TESObjectREFR * refr, BipedParam * params, NiNode * b
 #endif
 		return;
 	}
-	if (params->data.armor->formType == TESObjectARMO::kTypeID && params->data.addon->formType == TESObjectARMA::kTypeID)
+	if (params.armor->formType == TESObjectARMO::kTypeID && params.addon->formType == TESObjectARMA::kTypeID)
 	{
 		NiPointer<NiAVObject> node = resultNode;
-		g_actorUpdateManager.OnAttach(refr, static_cast<TESObjectARMO*>(params->data.armor), static_cast<TESObjectARMA*>(params->data.addon), node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
+		g_actorUpdateManager.OnAttach(refr, static_cast<TESObjectARMO*>(params.armor), static_cast<TESObjectARMA*>(params.addon), node, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
 	}
 
 	
@@ -354,7 +357,6 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 		// Face
 		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
 		{
-			memset(buff, 0, MAX_PATH);
 			sprintf_s(buff, MAX_PATH, FACE_NODE, i);
 			if (attemptUninstall) {
 				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, buff);
@@ -377,7 +379,6 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 		}
 		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
 		{
-			memset(buff, 0, MAX_PATH);
 			sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
 			if (attemptUninstall) {
 				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, buff);
@@ -659,7 +660,7 @@ UInt8 ApplyChargenMorph_Hooked(BSFaceGenModel * model, BSFixedString * morphName
 	//_MESSAGE("%08X - Applying %s from %s : %s - %f", this, morphName[0], modelMorph->name.data, headPart->partName.data, relative);
 #endif
 
-	UInt8 ret = CALL_MEMBER_FN(model, ApplyMorph)(morphName, modelMorph, headNode, relative, unk1);
+	UInt8 ret = BSFaceGenModel_ApplyMorph_Original(model, morphName, modelMorph, headNode, relative, unk1);
 
 	try
 	{
@@ -1109,8 +1110,8 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				return false;
 			}
 
-			g_transformInterface.RemoveAllReferenceTransforms(thisObj);
-			g_transformInterface.UpdateNodeAllTransforms(thisObj);
+			g_transformInterface.Impl_RemoveAllReferenceTransforms(thisObj);
+			g_transformInterface.Impl_UpdateNodeAllTransforms(thisObj);
 			Console_Print("Erased all transforms");
 		}
 		else if (_strnicmp(buffer2, "sculpt", MAX_PATH) == 0)
@@ -1222,6 +1223,25 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 		g_task->AddTask(new SKSEAttachSkinnedMesh(static_cast<Actor*>(thisObj), buffer2, "TestRoot", false, true, std::vector<BSFixedString>()));
 	}
 #endif
+	else if (_strnicmp(buffer, "diagnostics", MAX_PATH) == 0)
+	{
+		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
+		{
+			g_bodyMorphInterface.PrintDiagnostics();
+		}
+		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
+		{
+			g_transformInterface.PrintDiagnostics();
+		}
+		else if (_strnicmp(buffer2, "strings", MAX_PATH) == 0)
+		{
+			g_stringTable.PrintDiagnostics();
+		}
+		else if (_strnicmp(buffer2, "updates", MAX_PATH) == 0)
+		{
+			g_actorUpdateManager.PrintDiagnostics();
+		}
+	}
 	else if (_strnicmp(buffer, "dump", MAX_PATH) == 0)
 	{
 		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
@@ -1290,7 +1310,7 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 			Console_Print("Dumping transforms for %08X", thisObj->formID);
 
 			UInt32 totalTransforms = 0;
-			g_transformInterface.VisitNodes(thisObj, false, CALL_MEMBER_FN(npc, GetSex)() == 1, [&](const SKEEFixedString& node, OverrideRegistration<StringTableItem> * keys)
+			g_transformInterface.Impl_VisitNodes(thisObj, false, CALL_MEMBER_FN(npc, GetSex)() == 1, [&](const SKEEFixedString& node, OverrideRegistration<StringTableItem> * keys)
 			{
 				Console_Print("Node: %s", node.c_str());
 				for (auto& item : *keys)
@@ -1327,6 +1347,12 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				}));
 				mask <<= 1;
 			}
+		}
+		else if (_strnicmp(buffer2, "overrides", MAX_PATH) == 0)
+		{
+			Console_Print("Dumping node overrides...");
+			g_overrideInterface.Dump();
+			Console_Print("Dump complete. See log file for details.");
 		}
 		else if (_strnicmp(buffer2, "itemdata", MAX_PATH) == 0)
 		{
@@ -1439,29 +1465,32 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 				}
 			}
 		}
-#if _DEBUG
-		else if (_strnicmp(buffer2, "nodes", MAX_PATH) == 0)
+		else if (_strnicmp(buffer2, "skeleton_3p", MAX_PATH) == 0)
 		{
 			if (!thisObj) {
 				Console_Print("Dumping nodes requires a reference");
 				return false;
 			}
 
-			if (_strnicmp(buffer2, "fp", MAX_PATH) == 0)
-			{
-				DumpNodeChildren(thisObj->GetNiRootNode(1));
-			}
-			else
-			{
-				DumpNodeChildren(thisObj->GetNiRootNode(0));
+			Console_Print("Dumping reference third person skeleton...");
+			DumpNodeChildren(thisObj->GetNiRootNode(0));
+			Console_Print("Dumped reference. See log for more details.");
+		}
+		else if (_strnicmp(buffer2, "skeleton_1p", MAX_PATH) == 0)
+		{
+			if (!thisObj) {
+				Console_Print("Dumping nodes requires a reference");
+				return false;
 			}
 
-			Console_Print("Dumped actor");
+			Console_Print("Dumping reference first person skeleton...");
+			DumpNodeChildren(thisObj->GetNiRootNode(1));
+			Console_Print("Dumped reference. See log for more details.");
 		}
 		else if (_strnicmp(buffer2, "equipped", MAX_PATH) == 0)
 		{
 			if (!thisObj) {
-				Console_Print("Dumping nodes requires a reference");
+				Console_Print("Dumping biped nodes requires a reference");
 				return false;
 			}
 			for (int k = 0; k <= 1; ++k)
@@ -1479,7 +1508,6 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 						{
 							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
 						}
-						//DumpClass(&weightModel->weightData->unk10[i], sizeof(ActorWeightData::EquipSlot) / 8);
 					}
 					for (int i = 0; i < 42; ++i)
 					{
@@ -1490,13 +1518,11 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 						{
 							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
 						}
-						//DumpClass(&weightModel->weightData->unk10[i], sizeof(ActorWeightData::EquipSlot) / 8);
 					}
 				}
 			}
 			
 		}
-#endif
 	}
 	
 	return true;
@@ -1535,30 +1561,36 @@ bool InstallSKEEHooks()
 		}
 	}
 
-	static const uintptr_t LoadRaceMenuSliders = RaceSexMenu::LoadSliders_Address; // old 1408B5E20 new 1408E5650
+	static const uintptr_t LoadRaceMenuSliders = RaceSexMenu::LoadSliders_Address;
 
-	// NEED REWRITE, GOT INLINED
 	RelocAddr <uintptr_t> GetSex_Target(LoadRaceMenuSliders + 0x16F);
 	g_branchTrampoline.Write5Call(GetSex_Target.GetUIntPtr(), (uintptr_t)GetSex_Hooked);
 
-	RelocAddr <uintptr_t> IsPlayable_Target(LoadRaceMenuSliders + 0x3CE); // DONE
+	RelocAddr <uintptr_t> IsPlayable_Target(LoadRaceMenuSliders + 0x3CE);
 	g_branchTrampoline.Write5Call(IsPlayable_Target.GetUIntPtr(), (uintptr_t)IsPlayable_Hooked);
 	
-	RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008E4F60 + 0x4D6); // DONE
-	g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
-
-	RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x3583); // DONE
-	g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
-
-	RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3A03); // DONE
-	g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
-
-	RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008E1BA0 + 0x50); // ChangeDoubleMorph callback - DONE
-	g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
-
-
-	RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3644); // DONE
+	if (g_hookNativeSliders)
 	{
+		RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008E5C10 + 0x4D6);
+		g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
+
+		RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x3583);
+		g_branchTrampoline.Write5Call(AddSlider_Target.GetUIntPtr(), (uintptr_t)AddSlider_Hook);
+	}
+
+	if (g_hookSliderCallbacks)
+	{
+		RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3A03);
+		g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
+
+		RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008E2850 + 0x50); // ChangeDoubleMorph callback
+		g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
+	}
+
+
+	if(g_hookNativeSliders)
+	{
+		RelocAddr<uintptr_t> SliderLookup_Target(LoadRaceMenuSliders + 0x3644);
 		struct SliderLookup_Entry_Code : Xbyak::CodeGenerator {
 			SliderLookup_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
 			{
@@ -1586,9 +1618,9 @@ bool InstallSKEEHooks()
 		g_branchTrampoline.Write5Branch(SliderLookup_Target.GetUIntPtr(), uintptr_t(code.getCode()));
 	}
 
-	if (!g_externalHeads)
+	if (g_hookHeadPreprocessing && !g_externalHeads)
 	{
-		static const uintptr_t PreprocessedHeads = 0x0037AFB0; // DONE
+		static const uintptr_t PreprocessedHeads = 0x0037AF20;
 
 		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
 		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
@@ -1656,9 +1688,7 @@ bool InstallSKEEHooks()
 			void * codeBuf = g_localTrampoline.StartAlloc();
 			PreprocessedHeads_Code code(codeBuf);
 			g_localTrampoline.EndAlloc(code.getCurr());
-
 			RegenerateHead_Original = (_RegenerateHead)codeBuf;
-
 			g_branchTrampoline.Write6Branch(RegenerateHead.GetUIntPtr(), (uintptr_t)RegenerateHead_Hooked);
 		}
 	}
@@ -1666,82 +1696,101 @@ bool InstallSKEEHooks()
 
 	if (g_extendedMorphs)
 	{
-		RelocAddr <uintptr_t> ApplyChargenMorph_Target(0x003EB3A0 + 0x134); // DONE
-		g_branchTrampoline.Write5Call(ApplyChargenMorph_Target.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
+		struct BSFaceGenModel_ApplyMorph_Code : Xbyak::CodeGenerator {
+			BSFaceGenModel_ApplyMorph_Code(void* buf, uintptr_t address) : Xbyak::CodeGenerator(4096, buf)
+			{
+				Xbyak::Label retnLabel;
+				Xbyak::Label funcLabel;
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003E9F50 + 0x124); // DONE
+				push(rsi);
+				push(rdi);
+				push(r14);
+
+				jmp(ptr[rip + retnLabel]);
+
+				L(retnLabel);
+				dq(address + 5);
+			}
+		};
+
+		void* codeBuf = g_localTrampoline.StartAlloc();
+		BSFaceGenModel_ApplyMorph_Code code(codeBuf, BSFaceGenModel_ApplyMorph.GetUIntPtr());
+		g_localTrampoline.EndAlloc(code.getCurr());
+		BSFaceGenModel_ApplyMorph_Original = (_BSFaceGenModel_ApplyMorph)codeBuf;
+		g_branchTrampoline.Write5Branch(BSFaceGenModel_ApplyMorph.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
+
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003E9EC0 + 0x124);
 		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked); // Revisit
 	}
 
-	RelocAddr <uintptr_t> UpdateMorphs_Target(0x003E9E40 + 0xB7); // DONE
-	g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
+	if (g_hookMorphUpdates)
+	{
+		RelocAddr <uintptr_t> UpdateMorphs_Target(0x003E9DB0 + 0xB7);
+		g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-	RelocAddr <uintptr_t> UpdateMorph_Target(0x003F46A0 + 0x7E); // DONE
-	g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
+		RelocAddr <uintptr_t> UpdateMorph_Target(0x003F4610 + 0x7E);
+		g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
+	}
+
 
 	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
 	if(g_enableFaceOverlays)
 	{
-		RelocAddr <uintptr_t> NiAllocate_Geom_Target(0x00C9A580 + 0x147); // DONE
+		static const uintptr_t NiAllocate_Geom_Address = 0x00C9B3E0;
+
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(NiAllocate_Geom_Address + 0x147);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom_Target(0x00C9A580 + 0x140); // DONE
+		RelocAddr <uintptr_t> NiFree_Geom_Target(NiAllocate_Geom_Address + 0x140);
 		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C9AAC0 + 0x76); // DONE
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C9B920 + 0x76);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C9B580 + 0x2F); // DONE
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C9C3E0 + 0x2F);
 		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037B0F0 + 0x169); // DONE
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037B060 + 0x169);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00379F20 + 0x2EB); // DONE
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00379E90 + 0x2EB);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AD7E0 + 0x30); // ??_7RaceSexMenu@@6B@ - DONE
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AE950 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008E2AA0); // DONE
+		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008E3750);
 		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
-	RelocAddr<uintptr_t> ArmorAddon_Target(0x0001D2420 + 0xCA9); // DONE
+	if(g_hookBipedAttach)
 	{
-		struct ArmorAddonHook_Entry_Code : Xbyak::CodeGenerator {
-			ArmorAddonHook_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
+		struct AttachBipedObjectHook_Entry_Code : Xbyak::CodeGenerator {
+			AttachBipedObjectHook_Entry_Code(void* buf, uintptr_t address) : Xbyak::CodeGenerator(4096, buf)
 			{
 				Xbyak::Label retnLabel;
 				Xbyak::Label funcLabel;
 
-				mov(r8d, r15d);
-				shl(r8, 0x20);
-				and (r9, 0xFFFFFFFF);
-				or (r8, r9);
-				mov(r9, ptr[rsp + 0x78]);
-				mov(rdx, rsi);
-				mov(rcx, r13);
-				call(ptr[rip + funcLabel]);
+				mov(rax, rsp);
+				mov(ptr[rax + 0x20], r9b);
+
 				jmp(ptr[rip + retnLabel]);
 
-				L(funcLabel);
-				dq(funcAddr);
-
 				L(retnLabel);
-				dq(targetAddr + 0xE);
+				dq(address + 7);
 			}
 		};
 
 		void * codeBuf = g_localTrampoline.StartAlloc();
-		ArmorAddonHook_Entry_Code code(codeBuf, uintptr_t(CreateArmorNode_Hooked), ArmorAddon_Target.GetUIntPtr());
+		AttachBipedObjectHook_Entry_Code code(codeBuf, AttachBipedObject.GetUIntPtr());
 		g_localTrampoline.EndAlloc(code.getCurr());
+		AttachBipedObject_Original = (_AttachBipedObject)codeBuf;
 
-		g_branchTrampoline.Write6Branch(ArmorAddon_Target.GetUIntPtr(), uintptr_t(code.getCode()));
+		g_branchTrampoline.Write6Branch(AttachBipedObject.GetUIntPtr(), (uintptr_t)AttachBipedObject_Hooked);
 	}
 
 	if (g_enableTintSync)
@@ -1752,34 +1801,32 @@ bool InstallSKEEHooks()
 
 	if (g_enableTintInventory)
 	{
-		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008B87B0 + 0x1C3); // DONE
-		{
-			struct TintInventoryItem_Code : Xbyak::CodeGenerator {
-				TintInventoryItem_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)
-				{
-					Xbyak::Label retnLabel;
-					Xbyak::Label funcLabel;
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008B9410 + 0x1C3);
+		struct TintInventoryItem_Code : Xbyak::CodeGenerator {
+			TintInventoryItem_Code(void* buf) : Xbyak::CodeGenerator(4096, buf)
+			{
+				Xbyak::Label retnLabel;
+				Xbyak::Label funcLabel;
 
-					push(rbx);
-					sub(rsp, 0x20);
+				push(rbx);
+				sub(rsp, 0x20);
 
-					jmp(ptr[rip + retnLabel]);
+				jmp(ptr[rip + retnLabel]);
 
-					L(retnLabel);
-					dq(SetInventoryItemModel.GetUIntPtr() + 6);
-				}
-			};
+				L(retnLabel);
+				dq(SetInventoryItemModel.GetUIntPtr() + 6);
+			}
+		};
 
-			void * codeBuf = g_localTrampoline.StartAlloc();
-			TintInventoryItem_Code code(codeBuf);
-			g_localTrampoline.EndAlloc(code.getCurr());
+		void* codeBuf = g_localTrampoline.StartAlloc();
+		TintInventoryItem_Code code(codeBuf);
+		g_localTrampoline.EndAlloc(code.getCurr());
 
-			SetInventoryItemModel_Original = (_SetInventoryItemModel)codeBuf;
+		SetInventoryItemModel_Original = (_SetInventoryItemModel)codeBuf;
 
-			g_branchTrampoline.Write6Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
+		g_branchTrampoline.Write6Branch(SetInventoryItemModel.GetUIntPtr(), (uintptr_t)SetInventoryItemModel_Hooked);
 
-			g_branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
-		}
+		g_branchTrampoline.Write5Call(SetNewInventoryItemModel_Target.GetUIntPtr(), (uintptr_t)SetNewInventoryItemModel_Hooked);
 	}
 
 	{

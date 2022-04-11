@@ -893,7 +893,7 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 		g_overrideInterface.SetSkinProperties(actor->formID, false);
 	}
 
-	g_transformInterface.RemoveAllReferenceTransforms(actor);
+	g_transformInterface.Impl_RemoveAllReferenceTransforms(actor);
 
 	if ((applyType & kPresetApplyTransforms) == kPresetApplyTransforms)
 	{
@@ -901,13 +901,13 @@ void FaceMorphInterface::ApplyPresetData(Actor * actor, PresetDataPtr presetData
 			for (auto & xForms : presetData->transformData[i]) {
 				for (auto & key : xForms.second) {
 					for (auto & value : key.second) {
-						g_transformInterface.AddNodeTransform(actor, i == 1 ? true : false, gender == 1 ? true : false, xForms.first, key.first, value);
+						g_transformInterface.Impl_AddNodeTransform(actor, i == 1 ? true : false, gender == 1 ? true : false, xForms.first, key.first, value);
 					}
 				}
 			}
 		}
 
-		g_transformInterface.UpdateNodeAllTransforms(actor);
+		g_transformInterface.Impl_UpdateNodeAllTransforms(actor);
 	}
 	
 	g_bodyMorphInterface.ClearMorphs(actor);
@@ -2124,7 +2124,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 	// Collect transform data
 	PresetData::TransformData transformData[2];
 	for (UInt32 i = 0; i <= 1; i++) {
-		g_transformInterface.VisitNodes(player, i == 1, isFemale, [&i, &transformData](SKEEFixedString node, OverrideRegistration<StringTableItem> * keys)
+		g_transformInterface.Impl_VisitNodes(player, i == 1, isFemale, [&i, &transformData](SKEEFixedString node, OverrideRegistration<StringTableItem> * keys)
 		{
 			keys->Visit([&i, &node, &transformData](const StringTableItem & key, OverrideSet * set)
 			{

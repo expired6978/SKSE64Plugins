@@ -57,6 +57,4 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 SKEEFixedString GetSanitizedPath(const SKEEFixedString & path);
 NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial* material, UInt32 index);
 
-#ifdef _DEBUG
 void DumpNodeChildren(NiAVObject * node);
-#endif

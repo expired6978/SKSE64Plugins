@@ -241,7 +241,7 @@ bool NiTransformInterface::Load(SKSESerializationInterface* intfc, UInt32 kVersi
 	return false;
 }
 
-bool NiTransformInterface::AddNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, OverrideVariant & value)
+bool NiTransformInterface::Impl_AddNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, OverrideVariant & value)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -251,7 +251,7 @@ bool NiTransformInterface::AddNodeTransform(TESObjectREFR * refr, bool firstPers
 }
 
 
-bool NiTransformInterface::RemoveNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name)
+bool NiTransformInterface::Impl_RemoveNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -339,7 +339,7 @@ void NiTransformInterface::Revert()
 	transformData.m_data.clear();
 }
 
-void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR * refr)
+void NiTransformInterface::Impl_RemoveAllReferenceTransforms(TESObjectREFR * refr)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -350,7 +350,7 @@ void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR * refr)
 	}
 }
 
-bool NiTransformInterface::RemoveNodeTransformComponent(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, UInt16 index)
+bool NiTransformInterface::Impl_RemoveNodeTransformComponent(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, UInt16 index)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -381,7 +381,7 @@ bool NiTransformInterface::RemoveNodeTransformComponent(TESObjectREFR * refr, bo
 	return false;
 }
 
-void NiTransformInterface::VisitNodes(TESObjectREFR * refr, bool firstPerson, bool isFemale, std::function<bool(SKEEFixedString key, OverrideRegistration<StringTableItem> * value)> functor)
+void NiTransformInterface::Impl_VisitNodes(TESObjectREFR * refr, bool firstPerson, bool isFemale, std::function<bool(SKEEFixedString key, OverrideRegistration<StringTableItem> * value)> functor)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -398,7 +398,7 @@ void NiTransformInterface::VisitNodes(TESObjectREFR * refr, bool firstPerson, bo
 	}
 }
 
-bool NiTransformInterface::VisitNodeTransforms(TESObjectREFR * refr, bool firstPerson, bool isFemale, BSFixedString node, std::function<bool(OverrideRegistration<StringTableItem>*)> each_key, std::function<void(NiNode*, NiAVObject*, NiTransform*)> finalize)
+bool NiTransformInterface::Impl_VisitNodeTransforms(TESObjectREFR * refr, bool firstPerson, bool isFemale, BSFixedString node, std::function<bool(OverrideRegistration<StringTableItem>*)> each_key, std::function<void(NiNode*, NiAVObject*, NiTransform*)> finalize)
 {
 	SimpleLocker lock(&transformData.m_lock);
 
@@ -451,18 +451,18 @@ bool NiTransformInterface::VisitNodeTransforms(TESObjectREFR * refr, bool firstP
 	return ret;
 }
 
-void NiTransformInterface::UpdateNodeTransforms(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node)
+void NiTransformInterface::Impl_UpdateNodeTransforms(TESObjectREFR * ref, bool firstPerson, bool isFemale, SKEEFixedString node)
 {
 	BSFixedString target("");
 	NiTransform transformResult;
-	VisitNodeTransforms(ref, firstPerson, isFemale, node, 
+	Impl_VisitNodeTransforms(ref, firstPerson, isFemale, node, 
 	[&](OverrideRegistration<StringTableItem>* keys)
 	{
 		for (auto dit = keys->begin(); dit != keys->end(); ++dit) {// Loop Keys
 			NiTransform localTransform;
-			GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformPosition, &localTransform);
-			GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformScale, &localTransform);
-			GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformRotation, &localTransform);
+			Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformPosition, &localTransform);
+			Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformScale, &localTransform);
+			Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformRotation, &localTransform);
 			transformResult = localTransform * transformResult;
 
 			OverrideVariant value;
@@ -496,10 +496,10 @@ void NiTransformInterface::UpdateNodeTransforms(TESObjectREFR * ref, bool firstP
 	});
 }
 
-OverrideVariant NiTransformInterface::GetOverrideNodeValue(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, SInt8 index)
+OverrideVariant NiTransformInterface::Impl_GetOverrideNodeValue(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, SInt8 index)
 {
 	OverrideVariant foundValue;
-	VisitNodeTransforms(refr, firstPerson, isFemale, node,
+	Impl_VisitNodeTransforms(refr, firstPerson, isFemale, node,
 		[&](OverrideRegistration<StringTableItem>* keys)
 	{
 		if (name == SKEEFixedString("")) {
@@ -524,9 +524,9 @@ OverrideVariant NiTransformInterface::GetOverrideNodeValue(TESObjectREFR * refr,
 	return foundValue;
 }
 
-bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, NiTransform * result)
+bool NiTransformInterface::Impl_GetOverrideNodeTransform(TESObjectREFR * refr, bool firstPerson, bool isFemale, SKEEFixedString node, SKEEFixedString name, UInt16 key, NiTransform * result)
 {
-	return VisitNodeTransforms(refr, firstPerson, isFemale, node,
+	return Impl_VisitNodeTransforms(refr, firstPerson, isFemale, node,
 	[&](OverrideRegistration<StringTableItem>* keys)
 	{
 		if (name == SKEEFixedString("")) {
@@ -534,7 +534,7 @@ bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR * refr, bool f
 		} else {
 			auto it = keys->find(g_stringTable.GetString(name));
 			if (it != keys->end()) {
-				GetOverrideTransform(&it->second, key, result);
+				Impl_GetOverrideTransform(&it->second, key, result);
 				return true;
 			}
 		}
@@ -548,7 +548,7 @@ bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR * refr, bool f
 	});
 }
 
-void NiTransformInterface::UpdateNodeAllTransforms(TESObjectREFR * refr)
+void NiTransformInterface::Impl_UpdateNodeAllTransforms(TESObjectREFR * refr)
 {
 	SetTransforms(refr->formID);
 }
@@ -674,9 +674,9 @@ void NiTransformInterface::SetTransforms(UInt32 formId, bool immediate, bool res
 
 							for (auto dit = ait->second.begin(); dit != ait->second.end(); ++dit) {// Loop Keys
 								NiTransform localTransform;
-								GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformPosition, &localTransform);
-								GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformScale, &localTransform);
-								GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformRotation, &localTransform);
+								Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformPosition, &localTransform);
+								Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformScale, &localTransform);
+								Impl_GetOverrideTransform(&dit->second, OverrideVariant::kParam_NodeTransformRotation, &localTransform);
 								combinedTransform = combinedTransform * localTransform;
 
 								if (scaleMode == 1 || scaleMode == 2)
@@ -753,7 +753,7 @@ void NiTransformInterface::SetTransforms(UInt32 formId, bool immediate, bool res
 	}
 }
 
-void NiTransformInterface::GetOverrideTransform(OverrideSet * set, UInt16 key, NiTransform * result)
+void NiTransformInterface::Impl_GetOverrideTransform(OverrideSet * set, UInt16 key, NiTransform * result)
 {
 	OverrideVariant value;
 	OverrideSet::iterator it;
@@ -944,4 +944,252 @@ SKEEFixedString NiTransformInterface::GetRootModelPath(TESObjectREFR * refr, boo
 		return SKEEFixedString(model->GetModelName());
 
 	return SKEEFixedString("");
+}
+
+void NiTransformInterface::PrintDiagnostics()
+{
+	Console_Print("NiTransformInterface Diagnostics:");
+	transformData.Lock();
+	Console_Print("\t%llu actors with transforms", transformData.m_data.size());
+	for (auto& entry : transformData.m_data)
+	{
+		TESForm* form = LookupFormByID(entry.first);
+		TESObjectREFR* refr = form ? DYNAMIC_CAST(form, TESForm, TESObjectREFR) : nullptr;
+		_MESSAGE("Reference: %08X (%s) (%lld/%lld male 3p/fp %lld/%lld female 3p/fp transforms)", entry.first, refr ? CALL_MEMBER_FN(refr, GetReferenceName)() : "", entry.second[0][0].size(), entry.second[0][1].size(), entry.second[1][0].size(), entry.second[1][1].size());
+		for (uint8_t gender = 0; gender <= 1; ++gender)
+		{
+			for (uint8_t persp = 0; persp <= 1; ++persp)
+			{
+				_MESSAGE("\tGender: %s Perspective: %s (%lld nodes)", gender == 0 ? "male" : "female", persp == 0 ? "third" : "first", entry.second[gender][persp].size());
+				for (auto& xForm : entry.second[gender][persp])
+				{
+					_MESSAGE("\t\tNode: %s (%lld keys)", xForm.first ? xForm.first->c_str() : "", xForm.second.size());
+					for (auto& ovr : xForm.second)
+					{
+						_MESSAGE("\t\t\tKey: %s (%lld overrides)", ovr.first ? ovr.first->c_str() : "", ovr.second.size());
+					}
+				}
+			}
+		}
+	}
+	transformData.Release();
+	transformCache.Lock();
+	Console_Print("\t%llu skeletons cached", transformCache.m_data.size());
+	transformCache.Release();
+}
+
+bool NiTransformInterface::HasNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	NiTransform transform;
+	return Impl_GetOverrideNodeTransform(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, &transform);
+}
+
+bool NiTransformInterface::HasNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	NiTransform transform;
+	return Impl_GetOverrideNodeTransform(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, &transform);
+}
+
+bool NiTransformInterface::HasNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	return Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, 0);
+}
+
+bool NiTransformInterface::HasNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	OverrideVariant overrideVariant = Impl_GetOverrideNodeValue(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+	if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void NiTransformInterface::AddNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Position& position)
+{
+	float* pos = reinterpret_cast<float*>(&position);
+	OverrideVariant posV[3];
+	for (UInt32 i = 0; i < 3; i++) {
+		PackValue<float>(&posV[i], OverrideVariant::kParam_NodeTransformPosition, i, &pos[i]);
+		Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, posV[i]);
+	}
+}
+
+void NiTransformInterface::AddNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Rotation& rotationEuler)
+{
+	NiMatrix33 rotation;
+
+	rotationEuler.heading *= MATH_PI / 180;
+	rotationEuler.attitude *= MATH_PI / 180;
+	rotationEuler.bank *= MATH_PI / 180;
+
+	rotation.SetEulerAngles(rotationEuler.heading, rotationEuler.attitude, rotationEuler.bank);
+
+	OverrideVariant rotV[9];
+	for (UInt32 i = 0; i < 9; i++) {
+		PackValue<float>(&rotV[i], OverrideVariant::kParam_NodeTransformRotation, i, &rotation.arr[i]);
+		Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, rotV[i]);
+	}
+}
+
+void NiTransformInterface::AddNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, float scale)
+{
+	OverrideVariant scaleVar;
+	PackValue<float>(&scaleVar, OverrideVariant::kParam_NodeTransformScale, 0, &scale);
+	Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, scaleVar);
+}
+
+void NiTransformInterface::AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, UInt32 scaleMode)
+{
+	OverrideVariant scaleModeVar;
+	PackValue<UInt32>(&scaleModeVar, OverrideVariant::kParam_NodeTransformScaleMode, 0, &scaleMode);
+	Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, scaleModeVar);
+}
+
+INiTransformInterface::Position NiTransformInterface::GetNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	Position position;
+	NiTransform transform;
+	bool ret = Impl_GetOverrideNodeTransform(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, &transform);
+	position.x = transform.pos.x;
+	position.y = transform.pos.y;
+	position.z = transform.pos.z;
+	return position;
+}
+
+INiTransformInterface::Rotation NiTransformInterface::GetNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	NiTransform transform;
+	bool ret = Impl_GetOverrideNodeTransform(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, &transform);
+	Rotation rotation;
+	transform.rot.GetEulerAngles(&rotation.heading, &rotation.attitude, &rotation.bank);
+	rotation.heading *= 180 / MATH_PI;
+	rotation.attitude *= 180 / MATH_PI;
+	rotation.bank *= 180 / MATH_PI;
+	return rotation;
+}
+
+float NiTransformInterface::GetNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	NiTransform transform;
+	Impl_GetOverrideNodeTransform(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, &transform);
+	return transform.scale;
+}
+
+UInt32 NiTransformInterface::GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	OverrideVariant overrideVariant = Impl_GetOverrideNodeValue(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+	if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
+	{
+		return overrideVariant.data.u;
+	}
+
+	return -1;
+}
+
+bool NiTransformInterface::RemoveNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	bool ret = false;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 0))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 1))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 2))
+		ret = true;
+	return ret;
+}
+
+bool NiTransformInterface::RemoveNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	bool ret = false;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 0))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 1))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 2))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 3))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 4))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 5))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 6))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 7))
+		ret = true;
+	if (Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 8))
+		ret = true;
+	return ret;
+}
+
+bool NiTransformInterface::RemoveNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	return Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, 0);
+}
+
+bool NiTransformInterface::RemoveNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	return Impl_RemoveNodeTransformComponent(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+}
+
+
+bool NiTransformInterface::RemoveNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name)
+{
+	return Impl_RemoveNodeTransform(refr, firstPerson, isFemale, node, name);
+}
+
+void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR* refr)
+{
+	Impl_RemoveAllReferenceTransforms(refr);
+}
+
+bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, UInt16 key, NiTransform* result)
+{
+	return Impl_GetOverrideNodeTransform(refr, firstPerson, isFemale, node, name, key, result);
+}
+
+void NiTransformInterface::UpdateNodeAllTransforms(TESObjectREFR* ref)
+{
+	Impl_UpdateNodeAllTransforms(ref);
+}
+
+void NiTransformInterface::VisitNodes(TESObjectREFR* refr, bool firstPerson, bool isFemale, NodeVisitor& visitor)
+{
+	Impl_VisitNodes(refr, firstPerson, isFemale, [&](SKEEFixedString node, OverrideRegistration<StringTableItem>* reg)
+	{
+		for (auto& set : *reg)
+		{
+			for (auto& item : set.second)
+			{
+				if (item.key == OverrideVariant::kParam_NodeTransformPosition && item.index == 0)
+				{
+					Position pos = GetNodeTransformPosition(refr, firstPerson, isFemale, node, set.first->c_str());
+					visitor.VisitPosition(node, set.first->c_str(), pos);
+				}
+				else if (item.key == OverrideVariant::kParam_NodeTransformRotation && item.index == 0)
+				{
+					Rotation rot = GetNodeTransformRotation(refr, firstPerson, isFemale, node, set.first->c_str());
+					visitor.VisitRotation(node, set.first->c_str(), rot);
+				}
+				else if (item.key == OverrideVariant::kParam_NodeTransformScale)
+				{
+					float scale = GetNodeTransformScale(refr, firstPerson, isFemale, node, set.first->c_str());
+					visitor.VisitScale(node, set.first->c_str(), scale);
+				}
+				else if (item.key == OverrideVariant::kParam_NodeTransformScaleMode)
+				{
+					UInt32 scaleMode = GetNodeTransformScaleMode(refr, firstPerson, isFemale, node, set.first->c_str());
+					visitor.VisitScaleMode(node, set.first->c_str(), scaleMode);
+				}
+			}
+		}
+		return false;
+	});
+}
+
+void NiTransformInterface::UpdateNodeTransforms(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node)
+{
+	Impl_UpdateNodeTransforms(ref, firstPerson, isFemale, node);
 }

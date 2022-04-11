@@ -37,6 +37,7 @@
 #include "PartHandler.h"
 
 #include "ShaderUtilities.h"
+#include "PapyrusUtilities.h"
 #include "ScaleformFunctions.h"
 #include "ScaleformCharGenFunctions.h"
 #include "ScaleformUtils.h"
@@ -94,6 +95,11 @@ bool	g_enableTintHairSlot = true;
 bool	g_enableTangentSpaceCorrection = true;
 bool	g_enableFaceNormalRecalculate = true;
 bool	g_enableBodyNormalRecalculate = true;
+bool	g_hookBipedAttach = true;
+bool	g_hookNativeSliders = true;
+bool	g_hookSliderCallbacks = true;
+bool	g_hookHeadPreprocessing = true;
+bool	g_hookMorphUpdates = true;
 
 bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
@@ -113,7 +119,6 @@ UInt16	g_alphaThreshold = 0;
 
 bool	g_enableBodyInit = true;
 bool	g_firstLoad = false;
-bool	g_isReverting = false;
 bool	g_immediateArmor = true;
 bool	g_enableFaceOverlays = true;
 bool	g_immediateFace = false;
@@ -302,19 +307,11 @@ bool SKEE64GetConfigValue(const char * section, const char * key, bool * dataOut
 	return res;
 }
 
-// This event isnt hooked up SKSE end
-void SKEE64Serialization_FormDelete(UInt64 handle)
-{
-	g_overrideInterface.RemoveAllReferenceOverrides(handle);
-	g_overrideInterface.RemoveAllReferenceNodeOverrides(handle);
-}
-
 void SKEE64Serialization_Revert(SKSESerializationInterface * intfc)
 {
 	_MESSAGE("Reverting...");
 
-	g_isReverting = true;
-
+	g_actorUpdateManager.Revert();
 	g_overlayInterface.Revert();
 	g_overrideInterface.Revert();
 	g_bodyMorphInterface.Revert();
@@ -421,11 +418,6 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 	_DMESSAGE("%s - Loaded %dms", __FUNCTION__, sw.Stop());
 	
 	g_firstLoad = true;
-
-#ifdef _DEBUG
-	g_overrideInterface.DumpMap();
-	g_overlayInterface.DumpMap();
-#endif
 }
 
 bool RegisterNiOverrideScaleform(GFxMovieView * view, GFxValue * root)
@@ -560,6 +552,11 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 			g_enableBodyInit = true;
 			g_tintMaskInterface.ReleaseTints();
 			break;
+		case SKSEMessagingInterface::kMessage_NewGame:
+		{
+			g_actorUpdateManager.setNewGame(true);
+			break;
+		}
 		case SKSEMessagingInterface::kMessage_DataLoaded:
 		{
 			if (g_enableBodyGen) {
@@ -571,6 +568,7 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 			GetEventDispatcherList()->uniqueIdChangeDispatcher.AddEventSink(&g_itemDataInterface);
 			GetEventDispatcherList()->loadGameEventDispatcher.AddEventSink(&g_actorUpdateManager);
+			GetEventDispatcherList()->unk210.AddEventSink(&g_actorUpdateManager);
 
 			g_tintMaskInterface.LoadMods();
 			g_morphInterface.LoadMods();
@@ -693,12 +691,12 @@ extern "C"
 __declspec(dllexport) SKSEPluginVersionData SKSEPlugin_Version =
 {
 	SKSEPluginVersionData::kVersion,
-	2,
-	"Skyrim Engine Extender",
+	1,
+	"skee",
 	"Expired6978",
 	"expired6978@gmail.com",
 	0,	// not version independent
-	{ RUNTIME_VERSION_1_6_318, 0 },	// compatible with 1.6.318
+	{ RUNTIME_VERSION_1_6_353, 0 },	// compatible with 1.6.353
 	0,	// works with any version of the script extender. you probably do not need to put anything here
 };
 
@@ -710,6 +708,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	_DMESSAGE("NetImmerse Override Enabled");
 
 	SKEE64GetConfigValue("Features", "bEnableOverlays", &g_enableOverlays);
+	SKEE64GetConfigValue("Features", "bEnableFaceOverlays", &g_enableFaceOverlays);
 	SKEE64GetConfigValue("Features", "bEnableSculpting", &g_enableSculpting);
 	SKEE64GetConfigValue("Features", "bEnableHeadExport", &g_enableHeadExport);
 	SKEE64GetConfigValue("Features", "bEnableBodyGen", &g_enableBodyGen);
@@ -723,8 +722,15 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableFaceNormalRecalculate", &g_enableFaceNormalRecalculate);
 	SKEE64GetConfigValue("Features", "bEnableBodyNormalRecalculate", &g_enableBodyNormalRecalculate);
 
+	SKEE64GetConfigValue("Hooks", "bBipedAttach", &g_hookBipedAttach);
+	SKEE64GetConfigValue("Hooks", "bNativeSliders", &g_hookNativeSliders);
+	SKEE64GetConfigValue("Hooks", "bMorphUpdates", &g_hookMorphUpdates);
+	SKEE64GetConfigValue("Hooks", "bSliderCallbacks", &g_enableTintSync);
+	SKEE64GetConfigValue("Hooks", "bTintInventory", &g_enableTintInventory);
+	SKEE64GetConfigValue("Hooks", "bHeadPreprocessing", &g_hookHeadPreprocessing);
+	SKEE64GetConfigValue("Hooks", "bFaceOverlays", &g_enableFaceOverlays);
+
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
-	SKEE64GetConfigValue("Overlays", "bEnableFaceOverlays", &g_enableFaceOverlays);
 	SKEE64GetConfigValue("Overlays", "bImmediateArmor", &g_immediateArmor);
 	SKEE64GetConfigValue("Overlays", "bImmediateFace", &g_immediateFace);
 
@@ -862,7 +868,6 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 		g_serialization->SetRevertCallback(g_pluginHandle, SKEE64Serialization_Revert);
 		g_serialization->SetSaveCallback(g_pluginHandle, SKEE64Serialization_Save);
 		g_serialization->SetLoadCallback(g_pluginHandle, SKEE64Serialization_Load);
-		g_serialization->SetFormDeleteCallback(g_pluginHandle, SKEE64Serialization_FormDelete);
 	}
 
 	// register scaleform callbacks

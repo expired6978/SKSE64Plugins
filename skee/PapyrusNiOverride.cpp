@@ -1027,8 +1027,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		NiTransform transform;
-		return g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, &transform);
+		return g_transformInterface.HasNodeTransformPosition(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	void AddNodeTransformPosition(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name, VMArray<float> dataType)
@@ -1051,7 +1050,7 @@ namespace papyrusNiOverride
 		for (UInt32 i = 0; i < 3; i++) {
 			dataType.Get(&pos[i], i);
 			PackValue<float>(&posV[i], OverrideVariant::kParam_NodeTransformPosition, i, &pos[i]);
-			g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, name, posV[i]);
+			g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, name, posV[i]);
 		}		
 	}
 
@@ -1064,7 +1063,7 @@ namespace papyrusNiOverride
 			
 		position.resize(3, 0.0);
 		NiTransform transform;
-		bool ret = g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, &transform);
+		bool ret = g_transformInterface.Impl_GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, &transform);
 		position[0] = transform.pos.x;
 		position[1] = transform.pos.y;
 		position[2] = transform.pos.z;
@@ -1076,14 +1075,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		bool ret = false;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 0))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 1))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformPosition, 2))
-			ret = true;
-		return ret;
+		return g_transformInterface.RemoveNodeTransformPosition(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	bool HasNodeTransformScale(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1091,8 +1083,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		NiTransform transform;
-		return g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, &transform);
+		return g_transformInterface.HasNodeTransformScale(refr, isFirstPerson, isFemale, node, name);
 	}
 
 
@@ -1106,9 +1097,7 @@ namespace papyrusNiOverride
 			return;
 		}
 
-		OverrideVariant scale;
-		PackValue<float>(&scale, OverrideVariant::kParam_NodeTransformScale, 0, &fScale);
-		g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, name, scale);
+		g_transformInterface.AddNodeTransformScale(refr, isFirstPerson, isFemale, node, name, fScale);
 	}
 
 	float GetNodeTransformScale(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1116,9 +1105,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return 0;
 
-		NiTransform transform;
-		g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, &transform);
-		return transform.scale;
+		return g_transformInterface.GetNodeTransformScale(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	bool RemoveNodeTransformScale(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1126,7 +1113,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		return g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScale, 0);
+		return g_transformInterface.RemoveNodeTransformScale(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	bool HasNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1134,15 +1121,9 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		OverrideVariant overrideVariant = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
-		if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
-		{
-			return true;
-		}
-
-		return false;
+		return g_transformInterface.HasNodeTransformScaleMode(refr, isFirstPerson, isFemale, node, name);
 	}
-
+;
 	void AddNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name, UInt32 iScaleMode)
 	{
 		if (!refr)
@@ -1153,9 +1134,7 @@ namespace papyrusNiOverride
 			return;
 		}
 
-		OverrideVariant scaleMode;
-		PackValue<UInt32>(&scaleMode, OverrideVariant::kParam_NodeTransformScaleMode, 0, &iScaleMode);
-		g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, name, scaleMode);
+		g_transformInterface.AddNodeTransformScaleMode(refr, isFirstPerson, isFemale, node, name, iScaleMode);
 	}
 
 	UInt32 GetNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1163,13 +1142,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return 0;
 
-		OverrideVariant overrideVariant = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
-		if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
-		{
-			return overrideVariant.data.u;
-		}
-
-		return -1;
+		return g_transformInterface.GetNodeTransformScaleMode(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	bool RemoveNodeTransformScaleMode(StaticFunctionTag* base, TESObjectREFR* refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1177,7 +1150,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		return g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
+		return g_transformInterface.RemoveNodeTransformScaleMode(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	bool HasNodeTransformRotation(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name)
@@ -1185,8 +1158,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		NiTransform transform;
-		return g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, &transform);
+		return g_transformInterface.HasNodeTransformRotation(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	void AddNodeTransformRotation(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString name, VMArray<float> dataType)
@@ -1220,7 +1192,7 @@ namespace papyrusNiOverride
 		OverrideVariant rotV[9];
 		for (UInt32 i = 0; i < 9; i++) {
 			PackValue<float>(&rotV[i], OverrideVariant::kParam_NodeTransformRotation, i, &rotation.arr[i]);
-			g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, name, rotV[i]);
+			g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, name, rotV[i]);
 		}
 	}
 
@@ -1232,7 +1204,7 @@ namespace papyrusNiOverride
 			return rotation;
 
 		NiTransform transform;
-		bool ret = g_transformInterface.GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, &transform);
+		bool ret = g_transformInterface.Impl_GetOverrideNodeTransform(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, &transform);
 
 		switch (type) {
 			case 0:
@@ -1275,27 +1247,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		bool ret = false;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 0))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 1))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 2))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 3))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 4))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 5))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 6))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 7))
-			ret = true;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformRotation, 8))
-			ret = true;
-
-		return ret;
+		return g_transformInterface.RemoveNodeTransformRotation(refr, isFirstPerson, isFemale, node, name);
 	}
 
 	void UpdateAllReferenceTransforms(StaticFunctionTag* base, TESObjectREFR * refr)
@@ -1303,7 +1255,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return;
 
-		g_transformInterface.UpdateNodeAllTransforms(refr);
+		g_transformInterface.Impl_UpdateNodeAllTransforms(refr);
 	}
 
 	void RemoveAllTransforms(StaticFunctionTag* base)
@@ -1316,7 +1268,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return;
 
-		g_transformInterface.RemoveAllReferenceTransforms(refr);
+		g_transformInterface.Impl_RemoveAllReferenceTransforms(refr);
 	}
 
 	void UpdateNodeTransform(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node)
@@ -1333,7 +1285,7 @@ namespace papyrusNiOverride
 		if (gender != realGender)
 			return;
 
-		g_transformInterface.UpdateNodeTransforms(refr, isFirstPerson, isFemale, node);
+		g_transformInterface.Impl_UpdateNodeTransforms(refr, isFirstPerson, isFemale, node);
 	}
 
 	void SetNodeDestination(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node, BSFixedString destination)
@@ -1344,7 +1296,7 @@ namespace papyrusNiOverride
 		OverrideVariant value;
 		SKEEFixedString str = destination;
 		PackValue(&value, OverrideVariant::kParam_NodeDestination, -1, &str);
-		g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "NodeDestination", value);
+		g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, "NodeDestination", value);
 	}
 
 	BSFixedString GetNodeDestination(StaticFunctionTag* base, TESObjectREFR * refr, bool isFirstPerson, bool isFemale, BSFixedString node)
@@ -1353,7 +1305,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return ret;
 
-		OverrideVariant value = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "NodeDestination", OverrideVariant::kParam_NodeDestination, -1);
+		OverrideVariant value = g_transformInterface.Impl_GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "NodeDestination", OverrideVariant::kParam_NodeDestination, -1);
 		SKEEFixedString str;
 		UnpackValue(&str, &value);
 		return str;
@@ -1365,7 +1317,7 @@ namespace papyrusNiOverride
 			return false;
 
 		bool ret = false;
-		if (g_transformInterface.RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, "NodeDestination", OverrideVariant::kParam_NodeDestination, -1))
+		if (g_transformInterface.Impl_RemoveNodeTransformComponent(refr, isFirstPerson, isFemale, node, "NodeDestination", OverrideVariant::kParam_NodeDestination, -1))
 			ret = true;
 		return ret;
 	}
@@ -1425,7 +1377,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString key, OverrideRegistration<StringTableItem>*value)
+		g_transformInterface.Impl_VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString key, OverrideRegistration<StringTableItem>*value)
 		{
 			result.push_back(key);
 			return false;
@@ -1440,7 +1392,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return result;
 
-		g_transformInterface.VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString nodeName, OverrideRegistration<StringTableItem>*value)
+		g_transformInterface.Impl_VisitNodes(refr, isFirstPerson, isFemale, [&](BSFixedString nodeName, OverrideRegistration<StringTableItem>*value)
 		{
 			if (nodeName == node) {
 				for (auto key : *value)

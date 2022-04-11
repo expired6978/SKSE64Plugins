@@ -93,7 +93,7 @@ public:
 	BSFixedString m_name;
 };
 
-void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNode*, NiAVObject*)> functor);
+void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNode*, TESForm*, TESForm*, NiAVObject*)> functor);
 void VisitEquippedNodes(Actor* actor, UInt32 slotMask, std::function<void(TESObjectARMO*, TESObjectARMA*, NiAVObject*, bool)> functor);
 void VisitAllWornItems(Actor* thisActor, UInt32 slotMask, std::function<void(InventoryEntryData*)> functor);
 

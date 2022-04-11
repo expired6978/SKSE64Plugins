@@ -146,6 +146,8 @@ public:
 		Serialization::WriteData<UInt32>(intfc, &stringId);
 	}
 
+	void PrintDiagnostics();
+
 private:
 	std::unordered_map<SKEEFixedString, WeakTableItem>	m_table;
 	std::vector<WeakTableItem>							m_tableVector;

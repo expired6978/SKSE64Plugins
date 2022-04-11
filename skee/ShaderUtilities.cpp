@@ -509,7 +509,6 @@ NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial * material, UInt32 i
 	return nullptr;
 }
 
-#ifdef _DEBUG
 void DumpNodeChildren(NiAVObject * node)
 {
 	_MESSAGE("{%s} {%s} {%X}", node->GetRTTI()->name, node->m_name, node);
@@ -571,7 +570,6 @@ void DumpNodeChildren(NiAVObject * node)
 		gLog.Outdent();
 	}
 }
-#endif
 
 void NIOVTaskUpdateWorldData::Run()
 {

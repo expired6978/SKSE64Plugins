@@ -948,7 +948,7 @@ NiExtraData* FindExtraData(NiAVObject* object, BSFixedString name)
 	return extraData;
 }
 
-void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNode*, NiAVObject*)> functor)
+void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNode*, TESForm*, TESForm*, NiAVObject*)> functor)
 {
 	for (SInt32 k = 0; k <= 1; ++k)
 	{
@@ -957,18 +957,18 @@ void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNod
 		{
 			for (int i = 0; i < 42; ++i)
 			{
-				NiAVObject* node = weightModel->bipedData->unk10[i].object;
-				if (node)
+				auto& data = weightModel->bipedData->unk10[i];
+				if (data.object)
 				{
-					functor(k == 1, i, refr->GetNiRootNode(k), node);
+					functor(k == 1, i, refr->GetNiRootNode(k), data.armor, data.addon, data.object);
 				}
 			}
 			for (int i = 0; i < 42; ++i)
 			{
-				NiAVObject* node = weightModel->bipedData->unk13C0[i].object;
-				if (node)
+				auto& data = weightModel->bipedData->unk13C0[i];
+				if (data.object)
 				{
-					functor(k == 1, i, refr->GetNiRootNode(k), node);
+					functor(k == 1, i, refr->GetNiRootNode(k), data.armor, data.addon, data.object);
 				}
 			}
 		}
@@ -1007,8 +1007,6 @@ void VisitEquippedNodes(Actor* actor, UInt32 slotMask, std::function<void(TESObj
 
 void VisitSkeletalRoots(TESObjectREFR* ref, std::function<void(NiNode*, bool)> functor)
 {
-	BSFixedString rootName("NPC Root [Root]");
-
 	NiNode* skeletonRoot[2];
 	skeletonRoot[0] = ref->GetNiRootNode(0);
 	skeletonRoot[1] = ref->GetNiRootNode(1);
@@ -1021,14 +1019,10 @@ void VisitSkeletalRoots(TESObjectREFR* ref, std::function<void(NiNode*, bool)> f
 	{
 		if (skeletonRoot[i])
 		{
-			NiAVObject* root = skeletonRoot[i]->GetObjectByName(&rootName.data);
-			if (root)
+			NiNode* rootNode = skeletonRoot[i]->GetAsNiNode();
+			if (rootNode)
 			{
-				NiNode* rootNode = root->GetAsNiNode();
-				if (rootNode)
-				{
-					functor(rootNode, i == 1);
-				}
+				functor(rootNode, i == 1);
 			}
 		}
 	}
@@ -1044,9 +1038,11 @@ void VisitArmorAddon(Actor* actor, TESObjectARMO* armor, TESObjectARMA* arma, st
 
 	std::unordered_set<NiAVObject*> touched;
 
-	VisitBipedNodes(actor, [&](bool isFirstPerson, UInt32 slot, NiNode* rootNode, NiAVObject* object)
+	VisitBipedNodes(actor, [&](bool isFirstPerson, UInt32 slot, NiNode* rootNode, TESForm* bipedArmor, TESForm* bipedArma, NiAVObject* object)
 	{
-		if (object->m_name == addonName.data && !touched.count(object))
+		bool isSame = (bipedArmor->formType == TESObjectARMO::kTypeID && bipedArmor->formID == armor->formID && bipedArma->formType == TESObjectARMA::kTypeID && bipedArma->formID == arma->formID) || 
+					  (bipedArmor->formType == TESObjectARMA::kTypeID && bipedArmor->formID == arma->formID) || object->m_name == addonName.data;
+		if (isSame && !touched.count(object))
 		{
 			touched.emplace(object);
 			functor(isFirstPerson, rootNode, object);

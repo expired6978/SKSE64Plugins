@@ -149,7 +149,7 @@ void SkeletonExtenderInterface::AddTransforms(TESObjectREFR * refr, bool isFirst
 
 	for (auto & node : diffs)
 	{
-		g_transformInterface.RemoveNodeTransform(refr, isFirstPerson, gender == 1, node, "internal");
+		g_transformInterface.Impl_RemoveNodeTransform(refr, isFirstPerson, gender == 1, node, "internal");
 	}
 
 	diffs.clear();
@@ -178,7 +178,7 @@ void SkeletonExtenderInterface::AddTransforms(TESObjectREFR * refr, bool isFirst
 
 	for (auto & node : update)
 	{
-		g_transformInterface.UpdateNodeTransforms(refr, isFirstPerson, gender == 1, node);
+		g_transformInterface.Impl_UpdateNodeTransforms(refr, isFirstPerson, gender == 1, node);
 	}
 
 	std::vector<BSFixedString> newNodes;
@@ -241,7 +241,7 @@ void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char 
 					float oldPosition[3];
 					for (UInt32 i = 0; i < 3; i++)
 					{
-						OverrideVariant posOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformPosition, i);
+						OverrideVariant posOld = g_transformInterface.Impl_GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformPosition, i);
 						UnpackValue<float>(&oldPosition[i], &posOld);
 
 						if (position[i] != oldPosition[i])
@@ -251,7 +251,7 @@ void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char 
 					for (UInt32 i = 0; i < 3; i++)
 					{
 						PackValue<float>(&posV[i], OverrideVariant::kParam_NodeTransformPosition, i, &position[i]);
-						g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", posV[i]);
+						g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", posV[i]);
 					}
 				}
 
@@ -268,7 +268,7 @@ void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char 
 					float oldRotation[9];
 					for (UInt32 i = 0; i < 9; i++)
 					{
-						OverrideVariant potOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformRotation, i);
+						OverrideVariant potOld = g_transformInterface.Impl_GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformRotation, i);
 						UnpackValue<float>(&oldRotation[i], &potOld);
 
 						if (rotation.arr[i] != oldRotation[i])
@@ -278,7 +278,7 @@ void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char 
 					OverrideVariant rotV[9];
 					for (UInt32 i = 0; i < 9; i++) {
 						PackValue<float>(&rotV[i], OverrideVariant::kParam_NodeTransformRotation, i, &rotation.arr[i]);
-						g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", rotV[i]);
+						g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", rotV[i]);
 					}
 				}
 
@@ -286,13 +286,13 @@ void SkeletonExtenderInterface::ReadTransforms(TESObjectREFR * refr, const char 
 				if (scale.isDouble() && scale.asFloat() > 0)
 				{
 					float oldScale = 0;
-					OverrideVariant scaleOld = g_transformInterface.GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformScale, 0);
+					OverrideVariant scaleOld = g_transformInterface.Impl_GetOverrideNodeValue(refr, isFirstPerson, isFemale, node, "internal", OverrideVariant::kParam_NodeTransformScale, 0);
 					UnpackValue<float>(&oldScale, &scaleOld);
 
 					float fScale = scale.asFloat();
 					OverrideVariant scaleV;
 					PackValue<float>(&scaleV, OverrideVariant::kParam_NodeTransformScale, 0, &fScale);
-					g_transformInterface.AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", scaleV);
+					g_transformInterface.Impl_AddNodeTransform(refr, isFirstPerson, isFemale, node, "internal", scaleV);
 
 					if (fScale != oldScale)
 						changed = true;

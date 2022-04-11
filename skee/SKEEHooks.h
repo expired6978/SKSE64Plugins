@@ -33,18 +33,10 @@ extern RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs;
 typedef void(*_UpdateNPCMorph)(TESNPC * npc, BGSHeadPart * headPart, BSFaceGenNiNode * faceNode);
 extern RelocAddr<_UpdateNPCMorph> UpdateNPCMorph;
 
-typedef NiNode * (*_CreateArmorNode)(void * unk1, void * unk2, UInt64 unk3, UInt64 unk4, UInt64 unk5, UInt64 unk6, UInt64 unk7);
-extern RelocAddr<_CreateArmorNode> CreateArmorNode;
+typedef NiNode * (*_AttachBipedObject)(Biped* bipedInfo, NiNode* objectRoot, UInt32 bipedIndex, UInt32 unkIndex, UInt64 unk5, UInt64 unk6, UInt64 unk7);
+extern RelocAddr<_AttachBipedObject> AttachBipedObject;
 
-class BipedParam
-{
-public:
-	UInt64		unk00;					// 00 - ?
-	UInt64		unk08;					// 08 - inited to zero
-	Biped::Data	data;					// 10
-};
-
-void InstallArmorAddonHook(TESObjectREFR * refr, BipedParam * params, NiNode * boneTree, NiAVObject * resultNode);
+void InstallArmorAddonHook(TESObjectREFR * refr, Biped::Data& params, NiNode * boneTree, NiAVObject * resultNode);
 void InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall, bool immediate);
 
 bool InstallSKEEHooks();

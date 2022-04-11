@@ -25,7 +25,6 @@ extern bool	g_playerOnly;
 extern bool	g_enableBodyGen;
 extern bool	g_enableAutoTransforms;
 extern bool	g_enableBodyInit;
-extern bool g_isReverting;
 
 EventResult ActorUpdateManager::ReceiveEvent(TESObjectLoadedEvent * evn, EventDispatcher<TESObjectLoadedEvent>* dispatcher)
 {
@@ -40,7 +39,7 @@ EventResult ActorUpdateManager::ReceiveEvent(TESObjectLoadedEvent * evn, EventDi
 						if (total) {
 							_DMESSAGE("%s - ObjectLoad applied %d morph(s) to %s", __FUNCTION__, total, CALL_MEMBER_FN(reference, GetReferenceName)());
 
-							if (g_isReverting)
+							if (m_isReverting)
 							{
 								AddBodyUpdate(evn->formId);
 							}
@@ -53,7 +52,7 @@ EventResult ActorUpdateManager::ReceiveEvent(TESObjectLoadedEvent * evn, EventDi
 					}
 
 					if (g_enableAutoTransforms) {
-						if (g_isReverting)
+						if (m_isReverting)
 						{
 							AddTransformUpdate(evn->formId);
 						}
@@ -90,6 +89,17 @@ EventResult ActorUpdateManager::ReceiveEvent(TESInitScriptEvent * evn, EventDisp
 EventResult ActorUpdateManager::ReceiveEvent(TESLoadGameEvent* evn, EventDispatcher<TESLoadGameEvent>* dispatcher)
 {
 	Flush();
+	m_isReverting = false;
+	m_isNewGame = false;
+	return kEvent_Continue;
+}
+
+EventResult ActorUpdateManager::ReceiveEvent(TESCellFullyLoadedEvent* evn, EventDispatcher<TESCellFullyLoadedEvent>* dispatcher)
+{
+	if (m_isNewGame) {
+		Flush();
+		m_isNewGame = false;
+	}
 	return kEvent_Continue;
 }
 
@@ -123,48 +133,56 @@ void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, T
 
 void ActorUpdateManager::AddBodyUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_bodyUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddTransformUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_transformUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddOverlayUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_overlayUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddNodeOverrideUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_overrideNodeUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddWeaponOverrideUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_overrideWeapUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddAddonOverrideUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_overrideAddonUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddSkinOverrideUpdate(UInt32 formId)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_overrideSkinUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddDyeUpdate_Internal(NIOVTaskUpdateItemDye* itemUpdateTask)
 {
+	IScopedCriticalSection scs(&m_cs);
 	m_dyeUpdates.emplace(itemUpdateTask);
 }
 
 void ActorUpdateManager::Flush()
 {
-	PlayerCharacter* player = (*g_thePlayer);
-	g_task->AddTask(new SKSETaskApplyMorphs(player));
+	IScopedCriticalSection scs(&m_cs);
+	g_task->AddTask(new SKSETaskApplyMorphs(*g_thePlayer));
 
 	for (UInt32 formId : m_bodyUpdates)
 	{
@@ -185,7 +203,7 @@ void ActorUpdateManager::Flush()
 		auto refr = LookupFormByID(formId);
 		if (refr && refr->formType == Character::kTypeID)
 		{
-			g_overlayInterface.AddOverlays(static_cast<TESObjectREFR*>(refr));
+			g_overlayInterface.QueueOverlayBuild(static_cast<TESObjectREFR*>(refr));
 		}
 	}
 
@@ -222,6 +240,23 @@ void ActorUpdateManager::Flush()
 	m_overrideAddonUpdates.clear();
 	m_overrideSkinUpdates.clear();
 	m_dyeUpdates.clear();
+}
 
-	g_isReverting = false;
+void ActorUpdateManager::Revert()
+{
+	m_isReverting = true;
+}
+
+void ActorUpdateManager::PrintDiagnostics()
+{
+	IScopedCriticalSection scs(&m_cs);
+	Console_Print("ActorUpdateManager Diagnostics:");
+	Console_Print("\t%lld pending body updates", m_bodyUpdates.size());
+	Console_Print("\t%lld pending transform updates", m_transformUpdates.size());
+	Console_Print("\t%lld pending overlay install updates", m_overlayUpdates.size());
+	Console_Print("\t%lld pending node overlay updates", m_overrideNodeUpdates.size());
+	Console_Print("\t%lld pending weapon overlay updates", m_overrideWeapUpdates.size());
+	Console_Print("\t%lld pending addon overlay updates", m_overrideAddonUpdates.size());
+	Console_Print("\t%lld pending skin updates", m_overrideSkinUpdates.size());
+	Console_Print("\t%lld pending dye updates", m_dyeUpdates.size());
 }

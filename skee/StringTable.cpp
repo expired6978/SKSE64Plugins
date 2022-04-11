@@ -6,6 +6,20 @@ extern StringTable g_stringTable;
 
 using namespace Serialization;
 
+void StringTable::PrintDiagnostics()
+{
+	Console_Print("StringTable Diagnostics:");
+	IScopedCriticalSection locker(&m_lock);
+	Console_Print("\t%llu string entries", m_table.size());
+	size_t byteSize = 0;
+	for (auto& item : m_table)
+	{
+		byteSize += item.first.length();
+		_MESSAGE("String: %s", item.first.c_str());
+	}
+	Console_Print("\t%llu total bytes", byteSize);
+}
+
 void DeleteStringEntry(const SKEEFixedString* string)
 {
 	g_stringTable.RemoveString(*string);
