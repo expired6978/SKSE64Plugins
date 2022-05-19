@@ -533,6 +533,19 @@ bool RegisterPapyrusFunctions(VMClassRegistry * registry)
 	return true;
 }
 
+void InterfaceExchangeMessageHandler(SKSEMessagingInterface::Message* message)
+{
+	switch (message->type)
+	{
+	case InterfaceExchangeMessage::kMessage_ExchangeInterface:
+	{
+		InterfaceExchangeMessage* exchangeMessage = (InterfaceExchangeMessage*)message->data;
+		exchangeMessage->interfaceMap = &g_interfaceMap;
+	}
+	break;
+	}
+}
+
 void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 {
 	switch (message->type)
@@ -574,19 +587,9 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 			g_morphInterface.LoadMods();
 		}
 		break;
-	}
-}
-
-void InterfaceExchangeMessageHandler(SKSEMessagingInterface::Message * message)
-{
-	switch (message->type)
-	{
-	case InterfaceExchangeMessage::kMessage_ExchangeInterface:
-	{
-		InterfaceExchangeMessage * exchangeMessage = (InterfaceExchangeMessage*)message->data;
-		exchangeMessage->interfaceMap = &g_interfaceMap;
-	}
-	break;
+		case SKSEMessagingInterface::kMessage_PostLoad:
+			g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
+			break;
 	}
 }
 
@@ -882,7 +885,6 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 
 	if (g_messaging) {
 		g_messaging->RegisterListener(g_pluginHandle, "SKSE", SKSEMessageHandler);
-		g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
 
 		if (g_enableTintHairSlot)
 		{
