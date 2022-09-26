@@ -682,7 +682,7 @@ NiTransform GetGeometryTransform(BSGeometry * geometry)
 	NiTransform transform = geometry->m_localTransform;
 	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 	if (dstSkin) {
-		ScopedCriticalSection cs(&dstSkin->lock);
+		utils::ScopedCriticalSection cs(&dstSkin->lock);
 		NiSkinData * skinData = dstSkin->m_spSkinData;
 		if (skinData) {
 			transform = transform * skinData->m_kRootParentToSkin;
@@ -705,7 +705,7 @@ NiTransform GetLegacyGeometryTransform(NiGeometry * geometry)
 	NiTransform transform = geometry->m_localTransform;
 	NiSkinInstance * dstSkin = niptr_cast<NiSkinInstance>(geometry->m_spSkinInstance);
 	if (dstSkin) {
-		ScopedCriticalSection cs(&dstSkin->lock);
+		utils::ScopedCriticalSection cs(&dstSkin->lock);
 		NiSkinData * skinData = dstSkin->m_spSkinData;
 		if (skinData) {
 			transform = transform * skinData->m_kRootParentToSkin;

@@ -119,9 +119,6 @@
     <ClCompile Include="CDXBrushMesh.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
-    <ClCompile Include="..\skse64\ScaleformLoader.cpp">
-      <Filter>scaleform\functions</Filter>
-    </ClCompile>
     <ClCompile Include="CDXNifMaterial.cpp">
       <Filter>renderer</Filter>
     </ClCompile>
@@ -157,6 +154,21 @@
     </ClCompile>
     <ClCompile Include="Morpher.cpp">
       <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="SkinLayerInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="ActorArmorTangentUpdater.cpp">
+      <Filter>handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="AttachmentInterface.cpp">
+      <Filter>interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="PapyrusUtilities.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="CommandInterface.cpp">
+      <Filter>interfaces</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -336,9 +348,6 @@
     <ClInclude Include="CDXBrushMesh.h">
       <Filter>renderer</Filter>
     </ClInclude>
-    <ClInclude Include="..\skse64\ScaleformLoader.h">
-      <Filter>scaleform\functions</Filter>
-    </ClInclude>
     <ClInclude Include="CDXNifMaterial.h">
       <Filter>renderer</Filter>
     </ClInclude>
@@ -386,6 +395,21 @@
     </ClInclude>
     <ClInclude Include="shape.hpp">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SkinLayerInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="ActorArmorTangentUpdater.h">
+      <Filter>handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="AttachmentInterface.h">
+      <Filter>interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="PapyrusUtilities.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="CommandInterface.h">
+      <Filter>interfaces</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -1,28 +1,43 @@
 #pragma once
 
-class ScopedCriticalSection
+#include <mutex>
+
+namespace utils
 {
-public:
-	ScopedCriticalSection(LPCRITICAL_SECTION cs) : m_cs(cs)
+	class ScopedCriticalSection
 	{
-		EnterCriticalSection(m_cs);
+	public:
+		ScopedCriticalSection(LPCRITICAL_SECTION cs) : m_cs(cs)
+		{
+			EnterCriticalSection(m_cs);
+		};
+		~ScopedCriticalSection()
+		{
+			LeaveCriticalSection(m_cs);
+		}
+
+	private:
+		LPCRITICAL_SECTION m_cs;
 	};
-	~ScopedCriticalSection()
-	{
-		LeaveCriticalSection(m_cs);
+
+	inline void hash_combine(std::size_t& seed) { }
+
+	template <typename T, typename... Rest>
+	inline void hash_combine(std::size_t& seed, const T& v, Rest... rest) {
+		std::hash<T> hasher;
+		seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		hash_combine(seed, rest...);
 	}
 
-private:
-	LPCRITICAL_SECTION m_cs;
-};
+	size_t hash_lower(const char* str, size_t count);
 
-inline void hash_combine(std::size_t& seed) { }
+	std::string format(const char* format, ...);
 
-template <typename T, typename... Rest>
-inline void hash_combine(std::size_t& seed, const T& v, Rest... rest) {
-	std::hash<T> hasher;
-	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-	hash_combine(seed, rest...);
+#if __cplusplus > 201703L
+	template<typename T = std::mutex>
+	using scoped_lock = std::scoped_lock<T>;
+#else
+	template<typename T = std::mutex>
+	using scoped_lock = std::lock_guard<T>;
+#endif
 }
-
-std::string format(const char* format, ...);

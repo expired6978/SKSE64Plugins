@@ -7,6 +7,8 @@ class TESObjectARMA;
 class NiNode;
 class NiAVObject;
 class NiTransform;
+class TESForm;
+class BaseExtraList;
 
 class IPluginInterface
 {
@@ -166,6 +168,119 @@ public:
 	virtual bool DetachMesh(TESObjectREFR* ref, const char* name, bool firstPerson) = 0;
 };
 
+
+class IItemDataInterface : public IPluginInterface
+{
+public:
+	// Use this data structure to form an item query, this will identify a specific item through various means
+	struct Identifier
+	{
+		enum
+		{
+			kTypeNone = 0,
+			kTypeRank = (1 << 0),
+			kTypeUID = (1 << 1),
+			kTypeSlot = (1 << 2),
+			kTypeSelf = (1 << 3),
+			kTypeDirect = (1 << 4)
+		};
+
+		enum
+		{
+			kHandSlot_Left = 0,
+			kHandSlot_Right
+		};
+
+		UInt16			type = kTypeNone;
+		UInt16			uid = 0;
+		UInt32			ownerForm = 0;
+		UInt32			weaponSlot = 0;
+		UInt32			slotMask = 0;
+		UInt32			rankId = 0;
+		TESForm* form = nullptr;
+		BaseExtraList* extraData = nullptr;
+
+		void SetRankID(UInt32 _rank)
+		{
+			type |= kTypeRank;
+			rankId = _rank;
+		}
+		void SetSlotMask(UInt32 _slotMask, UInt32 _weaponSlot = 0)
+		{
+			type |= kTypeSlot;
+			slotMask = _slotMask;
+			weaponSlot = _weaponSlot;
+		}
+		void SetUniqueID(UInt16 _uid, UInt32 _ownerForm)
+		{
+			type |= kTypeUID;
+			uid = _uid;
+			ownerForm = _ownerForm;
+		}
+		void SetDirect(TESForm* _baseForm, BaseExtraList* _extraData)
+		{
+			type |= kTypeDirect;
+			form = _baseForm;
+			extraData = _extraData;
+		}
+
+		bool IsDirect()
+		{
+			return (type & kTypeDirect) == kTypeDirect;
+		}
+
+		bool IsSelf()
+		{
+			return (type & kTypeSelf) == kTypeSelf;
+		}
+
+		void SetSelf()
+		{
+			type |= kTypeSelf;
+		}
+	};
+
+	class StringVisitor
+	{
+	public:
+		virtual void Visit(const char*) = 0;
+	};
+
+	virtual UInt32 GetItemUniqueID(TESObjectREFR* reference, Identifier& identifier, bool makeUnique) = 0; // Make unique will create an identifier if it does not exist for the specified item
+	virtual void SetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color) = 0;
+	virtual void SetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 type) = 0;
+	virtual void SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, const char* blendMode) = 0;
+	virtual void SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, const char* texture) = 0;
+
+	virtual UInt32 GetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual UInt32 GetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual bool GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, StringVisitor& visitor) = 0;
+	virtual bool GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, StringVisitor& visitor) = 0;
+
+	virtual void ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual void ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual void ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual void ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) = 0;
+	virtual void ClearItemTextureLayer(UInt32 uniqueID, SInt32 textureIndex) = 0;
+
+	virtual TESForm* GetFormFromUniqueID(UInt32 uniqueID) = 0;
+	virtual TESForm* GetOwnerOfUniqueID(UInt32 uniqueID) = 0;
+
+	// Generic key-value pair string interface
+	virtual bool HasItemData(UInt32 uniqueID, const char* key) = 0;
+	virtual bool GetItemData(UInt32 uniqueID, const char* key, StringVisitor& visitor) = 0;
+	virtual void SetItemData(UInt32 uniqueID, const char* key, const char* value) = 0;
+	virtual void ClearItemData(UInt32 uniqueID, const char* key) = 0;
+};
+
+class ICommandInterface : public IPluginInterface
+{
+public:
+	// Return true indicates callback was handled and not to proceed to next command with the same command name
+	using CommandCallback = bool (*)(TESObjectREFR* ref, const char* argumentString);
+	virtual bool RegisterCommand(const char* command, const char* desc, CommandCallback cb) = 0;
+};
+
 class IActorUpdateManager : public IPluginInterface
 {
 public:
@@ -177,4 +292,6 @@ public:
 	virtual void AddAddonOverrideUpdate(UInt32 formId) = 0;
 	virtual void AddSkinOverrideUpdate(UInt32 formId) = 0;
 	virtual void Flush() = 0;
+	virtual void AddInterface(IAddonAttachmentInterface* observer) = 0;
+	virtual void RemoveInterface(IAddonAttachmentInterface* observer) = 0;
 };

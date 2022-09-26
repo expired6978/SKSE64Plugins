@@ -14,8 +14,8 @@ class Actor;
 class SKSEAttachSkinnedMesh : public TaskDelegate
 {
 public:
-	virtual void Run();
-	virtual void Dispose() { delete this; }
+	virtual void Run() override;
+	virtual void Dispose() override { delete this; }
 
 	SKSEAttachSkinnedMesh(TESObjectREFR* ref, const BSFixedString& nifPath, const BSFixedString& name, bool firstPerson, bool replace, const std::vector<BSFixedString>& filter);
 
@@ -31,8 +31,8 @@ protected:
 class SKSEDetachSkinnedMesh : public TaskDelegate
 {
 public:
-	virtual void Run();
-	virtual void Dispose() { delete this; }
+	virtual void Run() override;
+	virtual void Dispose() override { delete this; }
 
 	SKSEDetachSkinnedMesh(TESObjectREFR* ref, const BSFixedString& name, bool firstPerson);
 
@@ -45,8 +45,8 @@ protected:
 class SKSEDetachAllSkinnedMeshes : public TaskDelegate
 {
 public:
-	virtual void Run();
-	virtual void Dispose() { delete this; }
+	virtual void Run() override;
+	virtual void Dispose() override { delete this; }
 
 	SKSEDetachAllSkinnedMeshes(UInt32 formId) : m_formId(formId) { }
 
@@ -64,11 +64,11 @@ public:
 		kCurrentPluginVersion = 1,
 		kSerializationVersion = 0
 	};
-	virtual UInt32 GetVersion() { return kCurrentPluginVersion; };
-	virtual void Revert();
+	virtual UInt32 GetVersion() override { return kCurrentPluginVersion; };
+	virtual void Revert() override;
 
-	virtual bool AttachMesh(TESObjectREFR* ref, const char* nifPath, const char* name, bool firstPerson, bool replace, const char** filter, UInt32 filterSize, NiAVObject*& out, char* err, size_t errBufLen);
-	virtual bool DetachMesh(TESObjectREFR* ref, const char* name, bool firstPerson);
+	virtual bool AttachMesh(TESObjectREFR* ref, const char* nifPath, const char* name, bool firstPerson, bool replace, const char** filter, UInt32 filterSize, NiAVObject*& out, char* err, size_t errBufLen) override;
+	virtual bool DetachMesh(TESObjectREFR* ref, const char* name, bool firstPerson) override;
 
 protected:
 	std::mutex m_attachedLock;

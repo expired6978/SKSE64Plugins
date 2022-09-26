@@ -829,7 +829,7 @@ bool OverlayInterface::HasOverlays(TESObjectREFR * reference)
 	if(reference == (*g_thePlayer)) // Always true for the player
 		return true;
 
-	auto & it = overlays.find(reference->formID);
+	auto it = overlays.find(reference->formID);
 	if(it != overlays.end())
 		return true;
 

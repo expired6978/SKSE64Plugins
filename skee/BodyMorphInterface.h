@@ -264,11 +264,13 @@ public:
 	virtual void Run();
 	virtual void Dispose();
 
-	NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition);
+	NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition, bool gpuCopy = false, bool rebindDynamic = false);
 
 private:
 	NiPointer<NiSkinPartition>	m_partition;
 	NiPointer<NiSkinInstance>	m_skinInstance;
+	bool m_copyGPU;
+	bool m_rebindDynamic;
 };
 
 class BodyGenMorphData

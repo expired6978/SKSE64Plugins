@@ -92,17 +92,15 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 		masks[base.first].color |= (UInt32)(base.second * 255) << 24;
 	}
 
-	if (overrides) {
-		auto layer = overrides->m_tintData.find(layerTarget.targetIndex);
-		if (layer != overrides->m_tintData.end())
+	if (overrides)
+	{
+		overrides->GetLayer(layerTarget.targetIndex, [&](auto layerData)
 		{
-			auto & layerData = layer->second;
-
 			for (auto base : layerData.m_textureMap) {
 				auto it = masks.find(base.first);
-				if (it != masks.end()) {
-					masks[base.first].texture = *base.second;
-				}
+					if (it != masks.end()) {
+						masks[base.first].texture = *base.second;
+					}
 			}
 
 			if (layerTarget.slots.empty())
@@ -127,7 +125,7 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 				}
 			}
 
-			
+
 			for (auto base : layerData.m_blendMap) {
 				auto it = masks.find(base.first);
 				if (it != masks.end()) {
@@ -140,7 +138,7 @@ void TintMaskInterface::CreateTintsFromData(TESObjectREFR * refr, std::map<SInt3
 					masks[base.first].textureType = static_cast<CDXTextureRenderer::TextureType>(base.second);
 				}
 			}
-		}
+		});
 	}
 }
 
@@ -156,7 +154,7 @@ NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPer
 
 void NIOVTaskDeferredMask::Dispose()
 {
-
+	delete this;
 }
 
 void NIOVTaskDeferredMask::Run()
@@ -410,9 +408,9 @@ void TintMaskMap::ManageRenderTargetGroups()
 
 std::shared_ptr<CDXNifTextureRenderer> TintMaskMap::GetRenderTarget(BSLightingShaderProperty* key, SInt32 index)
 {
-	auto & it = m_data.find(key);
+	auto it = m_data.find(key);
 	if (it != m_data.end()) {
-		auto & idx = it->second.find(index);
+		auto idx = it->second.find(index);
 		if (idx != it->second.end()) {
 			return idx->second;
 		}
@@ -436,7 +434,7 @@ void TintMaskMap::ReleaseRenderTargetGroups()
 
 TextureLayer * TextureLayerMap::GetTextureLayer(SKEEFixedString texture)
 {
-	auto & it = find(texture);
+	auto it = find(texture);
 	if (it != end()) {
 		return &it->second;
 	}
@@ -446,7 +444,7 @@ TextureLayer * TextureLayerMap::GetTextureLayer(SKEEFixedString texture)
 
 TextureLayerMap * MaskTriShapeMap::GetTextureMap(SKEEFixedString triShape)
 {
-	auto & it = find(triShape);
+	auto it = find(triShape);
 	if (it != end()) {
 		return &it->second;
 	}
@@ -461,7 +459,7 @@ TextureLayer * MaskModelMap::GetMask(SKEEFixedString nif, SKEEFixedString trisha
 
 MaskTriShapeMap * MaskModelMap::GetTriShapeMap(SKEEFixedString nifPath)
 {
-	auto & it = m_data.find(nifPath);
+	auto it = m_data.find(nifPath);
 	if (it != m_data.end()) {
 		return &it->second;
 	}

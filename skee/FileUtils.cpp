@@ -13,13 +13,13 @@
 namespace std
 {
 	std::string &ltrim(std::string &s) {
-		s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+		s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int s) { return !std::isspace(s); }));
 		return s;
 	}
 
 	// trim from end
 	std::string &rtrim(std::string &s) {
-		s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+		s.erase(std::find_if(s.rbegin(), s.rend(), [](int s) { return !std::isspace(s); }).base(), s.end());
 		return s;
 	}
 
@@ -268,5 +268,6 @@ void ForEachMod(std::function<void(ModInfo *)> functor)
 		std::function<void(ModInfo *)> m_function;
 	};
 
-	(*g_dataHandler)->modList.modInfoList.Visit(ActiveModVisitor(functor));
+	ActiveModVisitor visitor(functor);
+	(*g_dataHandler)->modList.modInfoList.Visit(visitor);
 }

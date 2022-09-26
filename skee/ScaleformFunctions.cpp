@@ -22,7 +22,7 @@ extern DyeMap			g_dyeMap;
 class DyeableItemCollector
 {
 public:
-	typedef std::vector<ModifiedItemIdentifier> FoundItems;
+	typedef std::vector<IItemDataInterface::Identifier> FoundItems;
 
 	DyeableItemCollector() {}
 
@@ -44,25 +44,25 @@ public:
 		{
 			// Only armor right now
 			if (TESObjectARMO * armor = DYNAMIC_CAST(pEntryData->type, TESForm, TESObjectARMO)) {
-				ModifiedItemIdentifier itemData;
+				IItemDataInterface::Identifier itemData;
 				if (ExtraRank * extraRank = static_cast<ExtraRank*>(pExtraDataList->GetByType(kExtraData_Rank)))
 				{
-					itemData.type |= ModifiedItemIdentifier::kTypeRank;
+					itemData.type |= IItemDataInterface::Identifier::kTypeRank;
 					itemData.rankId = extraRank->rank;
 				}
 				if (ExtraUniqueID * extraUID = static_cast<ExtraUniqueID*>(pExtraDataList->GetByType(kExtraData_UniqueID)))
 				{
-					itemData.type |= ModifiedItemIdentifier::kTypeUID;
+					itemData.type |= IItemDataInterface::Identifier::kTypeUID;
 					itemData.uid = extraUID->uniqueId;
 					itemData.ownerForm = extraUID->ownerFormId;
 				}
 				if (pExtraDataList->HasType(kExtraData_Worn) || pExtraDataList->HasType(kExtraData_WornLeft))
 				{
-					itemData.type |= ModifiedItemIdentifier::kTypeSlot;
+					itemData.type |= IItemDataInterface::Identifier::kTypeSlot;
 					itemData.slotMask = armor->bipedObject.GetSlotMask();
 				}
 
-				if (itemData.type != ModifiedItemIdentifier::kTypeNone && g_tintMaskInterface.IsDyeable(armor)) {
+				if (itemData.type != IItemDataInterface::Identifier::kTypeNone && g_tintMaskInterface.IsDyeable(armor)) {
 					itemData.form = pEntryData->type;
 					itemData.extraData = pExtraDataList;
 					m_found.push_back(itemData);
@@ -207,7 +207,7 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 					}
 
 					std::shared_ptr<ItemAttributeData> itemData;
-					if ((item.type & ModifiedItemIdentifier::kTypeRank) == ModifiedItemIdentifier::kTypeRank)
+					if ((item.type & IItemDataInterface::Identifier::kTypeRank) == IItemDataInterface::Identifier::kTypeRank)
 						itemData = g_itemDataInterface.GetData(item.rankId);
 
 					// This is an approx color lookup, its possible multiple shapes may have differing color templates but use the same override
@@ -233,13 +233,12 @@ void SKSEScaleform_GetDyeableItems::Invoke(Args * args)
 					for (UInt32 i = 0; i < 15; i++) {
 						UInt32 color = 0;
 						if (itemData) {
-							const auto & layerData = itemData->m_tintData.find(0);
-							if (layerData != itemData->m_tintData.end())
+							itemData->GetLayer(0, [&](auto layerData)
 							{
-								const auto & it = layerData->second.m_colorMap.find(i);
-								if (it != layerData->second.m_colorMap.end())
+								const auto& it = layerData.m_colorMap.find(i);
+								if (it != layerData.m_colorMap.end())
 									color = it->second;
-							}
+							});
 						}
 
 						GFxValue colorValue;
@@ -351,7 +350,7 @@ void SKSEScaleform_SetItemDyeColor::Invoke(Args * args)
 		return;
 	}
 
-	ModifiedItemIdentifier identifier;
+	IItemDataInterface::Identifier identifier;
 	GFxValue param[6];
 
 	if (args->args[1].HasMember("type")) {
@@ -416,7 +415,7 @@ void SKSEScaleform_SetItemDyeColors::Invoke(Args * args)
 		return;
 	}
 
-	ModifiedItemIdentifier identifier;
+	IItemDataInterface::Identifier identifier;
 	GFxValue param[6];
 
 	if (args->args[1].HasMember("type")) {

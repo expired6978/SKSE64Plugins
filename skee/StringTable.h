@@ -3,6 +3,7 @@
 #include "skse64/GameTypes.h"
 #include "skse64/PluginAPI.h"
 #include "common/ICriticalSection.h"
+#include "Utilities.h"
 #include <unordered_map>
 #include <memory>
 #include <vector>
@@ -12,10 +13,10 @@ struct SKSESerializationInterface;
 class SKEEFixedString
 {
 public:
-	SKEEFixedString() : m_internal() { m_hash = hash_lower(m_internal.c_str(), m_internal.size()); }
-	SKEEFixedString(const char * str) : m_internal(str) { m_hash = hash_lower(m_internal.c_str(), m_internal.size()); }
-	SKEEFixedString(const std::string & str) : m_internal(str) { m_hash = hash_lower(m_internal.c_str(), m_internal.size()); }
-	SKEEFixedString(const BSFixedString & str) : m_internal(str.c_str()) { m_hash = hash_lower(m_internal.c_str(), m_internal.size()); }
+	SKEEFixedString() : m_internal() { m_hash = utils::hash_lower(m_internal.c_str(), m_internal.size()); }
+	SKEEFixedString(const char * str) : m_internal(str) { m_hash = utils::hash_lower(m_internal.c_str(), m_internal.size()); }
+	SKEEFixedString(const std::string & str) : m_internal(str) { m_hash = utils::hash_lower(m_internal.c_str(), m_internal.size()); }
+	SKEEFixedString(const BSFixedString & str) : m_internal(str.c_str()) { m_hash = utils::hash_lower(m_internal.c_str(), m_internal.size()); }
 
 	bool operator<(const SKEEFixedString& x) const
 	{
@@ -35,25 +36,12 @@ public:
 	
 	size_t length() const { return m_internal.size(); }
 
+	std::string AsString() const { return m_internal; }
 	operator BSFixedString() const { return BSFixedString(m_internal.c_str()); }
 	BSFixedString AsBSFixedString() const { return operator BSFixedString(); }
 
 	const char * c_str() const { return operator const char *(); }
 	operator const char *() const { return m_internal.c_str(); }
-
-	size_t hash_lower(const char * str, size_t count)
-	{
-		const size_t _FNV_offset_basis = 14695981039346656037ULL;
-		const size_t _FNV_prime = 1099511628211ULL;
-
-		size_t _Val = _FNV_offset_basis;
-		for (size_t _Next = 0; _Next < count; ++_Next)
-		{	// fold in another byte
-			_Val ^= (size_t)tolower(str[_Next]);
-			_Val *= _FNV_prime;
-		}
-		return _Val;
-	}
 
 	size_t GetHash() const
 	{

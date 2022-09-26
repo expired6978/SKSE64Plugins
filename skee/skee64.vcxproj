@@ -15,18 +15,18 @@
     <ProjectGuid>{FC9A1EE6-D9DB-47F6-B0ED-8867439C43CE}</ProjectGuid>
     <RootNamespace>skee64</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -51,7 +51,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)skse64;$(SolutionDir)jsoncpp;$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)..\common;$(SolutionDir)..\skse64;$(SolutionDir)jsoncpp;$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;HALF_ROUND_STYLE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -88,8 +88,8 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)skse64;$(SolutionDir)jsoncpp;$(WindowsSDK_IncludePath);$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;HALF_ROUND_STYLE=1;HALF_ENABLE_CPP11_CMATH=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\..;$(SolutionDir)..\common;$(SolutionDir)..\skse64;$(SolutionDir)jsoncpp;$(WindowsSDK_IncludePath);$(SolutionDir)DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;HALF_ROUND_STYLE=1;HALF_ENABLE_CPP11_CMATH=0;XBYAK_NO_OP_NAMES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <PrecompiledHeader>
@@ -100,6 +100,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>true</StringPooling>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
@@ -124,8 +125,9 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\skse64\ScaleformLoader.cpp" />
+    <ClCompile Include="ActorArmorTangentUpdater.cpp" />
     <ClCompile Include="ActorUpdateManager.cpp" />
+    <ClCompile Include="AttachmentInterface.cpp" />
     <ClCompile Include="BodyMorphInterface.cpp" />
     <ClCompile Include="CDXBrush.cpp" />
     <ClCompile Include="CDXBrushMesh.cpp" />
@@ -153,8 +155,10 @@
     <ClCompile Include="CDXStroke.cpp" />
     <ClCompile Include="CDXTextureRenderer.cpp" />
     <ClCompile Include="CDXUndo.cpp" />
+    <ClCompile Include="CommandInterface.cpp" />
     <ClCompile Include="FileUtils.cpp" />
     <ClCompile Include="Morpher.cpp" />
+    <ClCompile Include="PapyrusUtilities.cpp" />
     <ClCompile Include="SKEEHooks.cpp" />
     <ClCompile Include="PluginInterface.cpp" />
     <ClCompile Include="ItemDataInterface.cpp" />
@@ -173,14 +177,16 @@
     <ClCompile Include="ScaleformUtils.cpp" />
     <ClCompile Include="ShaderUtilities.cpp" />
     <ClCompile Include="SkeletonExtender.cpp" />
+    <ClCompile Include="SkinLayerInterface.cpp" />
     <ClCompile Include="StringTable.cpp" />
     <ClCompile Include="TintMaskInterface.cpp" />
     <ClCompile Include="tinyxml2.cpp" />
     <ClCompile Include="Utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\skse64\ScaleformLoader.h" />
+    <ClInclude Include="ActorArmorTangentUpdater.h" />
     <ClInclude Include="ActorUpdateManager.h" />
+    <ClInclude Include="AttachmentInterface.h" />
     <ClInclude Include="BodyMorphInterface.h" />
     <ClInclude Include="CDXBrush.h" />
     <ClInclude Include="CDXBrushMesh.h" />
@@ -210,11 +216,13 @@
     <ClInclude Include="CDXTypes.h" />
     <ClInclude Include="CDXUndo.h" />
     <ClInclude Include="CDXNifPixelShaderCache.h" />
+    <ClInclude Include="CommandInterface.h" />
     <ClInclude Include="FileUtils.h" />
     <ClInclude Include="half.hpp" />
     <ClInclude Include="IPluginInterface.h" />
     <ClInclude Include="kd_matcher.hpp" />
     <ClInclude Include="Morpher.h" />
+    <ClInclude Include="PapyrusUtilities.h" />
     <ClInclude Include="shape.hpp" />
     <ClInclude Include="SKEEHooks.h" />
     <ClInclude Include="IHashType.h" />
@@ -234,6 +242,7 @@
     <ClInclude Include="ScaleformUtils.h" />
     <ClInclude Include="ShaderUtilities.h" />
     <ClInclude Include="SkeletonExtender.h" />
+    <ClInclude Include="SkinLayerInterface.h" />
     <ClInclude Include="StringTable.h" />
     <ClInclude Include="TintMaskInterface.h" />
     <ClInclude Include="tinyxml2.h" />
@@ -243,8 +252,14 @@
     <None Include="exports.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\skse64\skse64.vcxproj">
+    <ProjectReference Include="..\..\common\common\common_vc14.vcxproj">
+      <Project>{472e19ab-def0-42df-819b-18722e8dc822}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\skse64\skse64\skse64.vcxproj">
       <Project>{7028b79c-06e3-4d9a-b38c-1dc3680b1bdb}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\skse64\skse64_common\skse64_common.vcxproj">
+      <Project>{5fd1c08d-db80-480c-a1c6-f0920005cd13}</Project>
     </ProjectReference>
     <ProjectReference Include="..\jsoncpp\jsoncpp.vcxproj">
       <Project>{522ec01c-c40f-4de4-a83e-06c5b56620e6}</Project>

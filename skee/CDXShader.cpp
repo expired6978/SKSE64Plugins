@@ -249,7 +249,7 @@ bool CDXShader::Initialize(const CDXInitParams & initParams)
 	if (FAILED(result))
 	{
 		_ERROR("%s - Failed to create wire blend state", __FUNCTION__);
-		return nullptr;
+		return false;
 	}
 #endif
 

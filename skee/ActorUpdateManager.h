@@ -2,7 +2,8 @@
 
 #include <vector>
 #include <unordered_set>
-#include "common/ICriticalSection.h"
+#include <mutex>
+
 #include "skse64/GameEvents.h"
 #include "IPluginInterface.h"
 #include "Utilities.h"
@@ -22,22 +23,22 @@ class ActorUpdateManager
 	, public BSTEventSink<TESCellFullyLoadedEvent>
 {
 public:
-	virtual void AddInterface(IAddonAttachmentInterface* observer);
-	virtual void RemoveInterface(IAddonAttachmentInterface* observer);
+	virtual void AddInterface(IAddonAttachmentInterface* observer) override;
+	virtual void RemoveInterface(IAddonAttachmentInterface* observer) override;
 
 	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root);
 
-	virtual void AddBodyUpdate(UInt32 formId);
-	virtual void AddTransformUpdate(UInt32 formId);
-	virtual void AddOverlayUpdate(UInt32 formId);
-	virtual void AddNodeOverrideUpdate(UInt32 formId);
-	virtual void AddWeaponOverrideUpdate(UInt32 formId);
-	virtual void AddAddonOverrideUpdate(UInt32 formId);
-	virtual void AddSkinOverrideUpdate(UInt32 formId);
+	virtual void AddBodyUpdate(UInt32 formId) override;
+	virtual void AddTransformUpdate(UInt32 formId) override;
+	virtual void AddOverlayUpdate(UInt32 formId) override;
+	virtual void AddNodeOverrideUpdate(UInt32 formId) override;
+	virtual void AddWeaponOverrideUpdate(UInt32 formId) override;
+	virtual void AddAddonOverrideUpdate(UInt32 formId) override;
+	virtual void AddSkinOverrideUpdate(UInt32 formId) override;
 
 	void AddDyeUpdate_Internal(NIOVTaskUpdateItemDye* task);
 
-	virtual void Flush();
+	virtual void Flush() override;
 	virtual void Revert() override;
 
 	bool isReverting() const { return m_isReverting; }
@@ -52,12 +53,12 @@ protected:
 	virtual	EventResult ReceiveEvent(TESInitScriptEvent * evn, EventDispatcher<TESInitScriptEvent> * dispatcher) override;
 	virtual	EventResult ReceiveEvent(TESLoadGameEvent* evn, EventDispatcher<TESLoadGameEvent>* dispatcher) override;
 
-	virtual UInt32 GetVersion() override { return 0; };
+	virtual UInt32 GetVersion() override { return 1; };
 
 	bool m_isReverting = false;
 	bool m_isNewGame = false;
 	
-	ICriticalSection m_cs;
+	std::recursive_mutex m_lock;
 	std::unordered_set<UInt32> m_bodyUpdates;
 	std::unordered_set<UInt32> m_transformUpdates;
 	std::unordered_set<UInt32> m_overlayUpdates;

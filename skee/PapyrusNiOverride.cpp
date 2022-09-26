@@ -877,7 +877,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return 0;
 
-		ModifiedItemIdentifier identifier;
+		IItemDataInterface::Identifier identifier;
 		identifier.SetSlotMask(slotMask, weaponSlot);
 		return g_itemDataInterface.GetItemUniqueID(refr, identifier, makeUnique);
 	}
@@ -892,7 +892,7 @@ namespace papyrusNiOverride
 			return 0;
 		}
 
-		ModifiedItemIdentifier identifier;
+		IItemDataInterface::Identifier identifier;
 		identifier.SetSelf();
 		return g_itemDataInterface.GetItemUniqueID(refr, identifier, makeUnique);
 	}
@@ -959,12 +959,12 @@ namespace papyrusNiOverride
 
 	void SetItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, BSFixedString texture)
 	{
-		g_itemDataInterface.SetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex, texture);
+		g_itemDataInterface.Impl_SetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex, texture);
 	}
 
 	BSFixedString GetItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
 	{
-		return g_itemDataInterface.GetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex);
+		return g_itemDataInterface.Impl_GetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex);
 	}
 
 	void ClearItemTextureLayerTexture(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
@@ -974,12 +974,12 @@ namespace papyrusNiOverride
 
 	void SetItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, BSFixedString texture)
 	{
-		g_itemDataInterface.SetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex, texture);
+		g_itemDataInterface.Impl_SetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex, texture);
 	}
 
 	BSFixedString GetItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
 	{
-		return g_itemDataInterface.GetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex);
+		return g_itemDataInterface.Impl_GetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex);
 	}
 
 	void ClearItemTextureLayerBlendMode(StaticFunctionTag* base, UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
@@ -990,7 +990,7 @@ namespace papyrusNiOverride
 	void UpdateItemTextureLayers(StaticFunctionTag* base, TESObjectREFR * refr, UInt32 uniqueID)
 	{
 		if (Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor)) {
-			ModifiedItemIdentifier identifier;
+			IItemDataInterface::Identifier identifier;
 			identifier.SetRankID(uniqueID);
 			g_task->AddTask(new NIOVTaskUpdateItemDye(actor, identifier, TintMaskInterface::kUpdate_All, false));
 		}

@@ -97,22 +97,22 @@ OverrideVariant * OverrideInterface::GetOverride(TESObjectREFR * refr, bool isFe
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID);
+	auto it = armorData.m_data.find(refr->formID);
 	if(it != armorData.m_data.end())
 	{
-		auto & ait = it->second[gender].find(armor->formID);
+		auto ait = it->second[gender].find(armor->formID);
 		if(ait != it->second[gender].end())
 		{
-			auto & dit = ait->second.find(addon->formID);
+			auto dit = ait->second.find(addon->formID);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
+				auto oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					OverrideVariant ovr;
 					ovr.key = key;
 					ovr.index = index;
-					auto & ost = oit->second.find(ovr);
+					auto ost = oit->second.find(ovr);
 					if(ost != oit->second.end())
 					{
 						return const_cast<OverrideVariant*>(&(*ost));
@@ -129,16 +129,16 @@ OverrideVariant * OverrideInterface::GetNodeOverride(TESObjectREFR * refr, bool 
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & it = nodeData.m_data.find(refr->formID);
+	auto it = nodeData.m_data.find(refr->formID);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
+		auto oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			OverrideVariant ovr;
 			ovr.key = key;
 			ovr.index = index;
-			auto & ost = oit->second.find(ovr);
+			auto ost = oit->second.find(ovr);
 			if(ost != oit->second.end())
 			{
 				return const_cast<OverrideVariant*>(&(*ost));
@@ -153,19 +153,19 @@ OverrideVariant * OverrideInterface::GetWeaponOverride(TESObjectREFR * refr, boo
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&weaponData.m_lock);
-	auto & it = weaponData.m_data.find(refr->formID);
+	auto it = weaponData.m_data.find(refr->formID);
 	if (it != weaponData.m_data.end())
 	{
-		auto & ait = it->second[gender][firstPerson].find(weapon->formID);
+		auto ait = it->second[gender][firstPerson].find(weapon->formID);
 		if (ait != it->second[gender][firstPerson].end())
 		{
-			auto & oit = ait->second.find(g_stringTable.GetString(nodeName));
+			auto oit = ait->second.find(g_stringTable.GetString(nodeName));
 			if (oit != ait->second.end())
 			{
 				OverrideVariant ovr;
 				ovr.key = key;
 				ovr.index = index;
-				auto & ost = oit->second.find(ovr);
+				auto ost = oit->second.find(ovr);
 				if (ost != oit->second.end())
 				{
 					return const_cast<OverrideVariant*>(&(*ost));
@@ -181,16 +181,16 @@ OverrideVariant * OverrideInterface::GetSkinOverride(TESObjectREFR * refr, bool 
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&skinData.m_lock);
-	auto & it = skinData.m_data.find(refr->formID);
+	auto it = skinData.m_data.find(refr->formID);
 	if (it != skinData.m_data.end())
 	{
-		auto & slot = it->second[gender][firstPerson].find(slotMask);
+		auto slot = it->second[gender][firstPerson].find(slotMask);
 		if(slot != it->second[gender][firstPerson].end())
 		{
 			OverrideVariant ovr;
 			ovr.key = key;
 			ovr.index = index;
-			auto & ost = slot->second.find(ovr);
+			auto ost = slot->second.find(ovr);
 			if (ost != slot->second.end())
 			{
 				return const_cast<OverrideVariant*>(&(*ost));
@@ -233,10 +233,10 @@ void OverrideInterface::RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFem
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID);
+	auto it = armorData.m_data.find(refr->formID);
 	if(it != armorData.m_data.end())
 	{
-		auto & nit = it->second[gender].find(armor->formID);
+		auto nit = it->second[gender].find(armor->formID);
 		if(nit != it->second[gender].end()) {
 			nit->second.clear();
 		}
@@ -247,13 +247,13 @@ void OverrideInterface::RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool 
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID);
+	auto it = armorData.m_data.find(refr->formID);
 	if(it != armorData.m_data.end())
 	{
-		auto & ait = it->second[gender].find(armor->formID);
+		auto ait = it->second[gender].find(armor->formID);
 		if(ait != it->second[gender].end())
 		{
-			auto & dit = ait->second.find(addon->formID);
+			auto dit = ait->second.find(addon->formID);
 			if(dit != ait->second.end())
 			{
 				ait->second.erase(dit);
@@ -266,16 +266,16 @@ void OverrideInterface::RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, b
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID);
+	auto it = armorData.m_data.find(refr->formID);
 	if(it != armorData.m_data.end())
 	{
-		auto & ait = it->second[gender].find(armor->formID);
+		auto ait = it->second[gender].find(armor->formID);
 		if(ait != it->second[gender].end())
 		{
-			auto & dit = ait->second.find(addon->formID);
+			auto dit = ait->second.find(addon->formID);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
+				auto oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					dit->second.erase(oit);
@@ -289,22 +289,22 @@ void OverrideInterface::RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFe
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID);
+	auto it = armorData.m_data.find(refr->formID);
 	if(it != armorData.m_data.end())
 	{
-		auto & ait = it->second[gender].find(armor->formID);
+		auto ait = it->second[gender].find(armor->formID);
 		if(ait != it->second[gender].end())
 		{
-			auto & dit = ait->second.find(addon->formID);
+			auto dit = ait->second.find(addon->formID);
 			if(dit != ait->second.end())
 			{
-				auto & oit = dit->second.find(g_stringTable.GetString(nodeName));
+				auto oit = dit->second.find(g_stringTable.GetString(nodeName));
 				if(oit != dit->second.end())
 				{
 					OverrideVariant ovr;
 					ovr.key = key;
 					ovr.index = index;
-					auto & ost = oit->second.find(ovr);
+					auto ost = oit->second.find(ovr);
 					if(ost != oit->second.end())
 					{
 						oit->second.erase(ost);
@@ -319,10 +319,10 @@ void OverrideInterface::RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool is
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & it = nodeData.m_data.find(refr->formID);
+	auto it = nodeData.m_data.find(refr->formID);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
+		auto oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			it->second[gender].erase(oit);
@@ -334,16 +334,16 @@ void OverrideInterface::RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, 
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & it = nodeData.m_data.find(refr->formID);
+	auto it = nodeData.m_data.find(refr->formID);
 	if(it != nodeData.m_data.end())
 	{
-		auto & oit = it->second[gender].find(g_stringTable.GetString(nodeName));
+		auto oit = it->second[gender].find(g_stringTable.GetString(nodeName));
 		if(oit != it->second[gender].end())
 		{
 			OverrideVariant ovr;
 			ovr.key = key;
 			ovr.index = index;
-			auto & ost = oit->second.find(ovr);
+			auto ost = oit->second.find(ovr);
 			if(ost != oit->second.end())
 			{
 				oit->second.erase(ost);
@@ -356,7 +356,7 @@ void OverrideInterface::RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFe
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&weaponData.m_lock);
-	auto & it = weaponData.m_data.find(refr->formID);
+	auto it = weaponData.m_data.find(refr->formID);
 	if(it != weaponData.m_data.end())
 	{
 		WeaponRegistration::iterator ait = it->second[gender][firstPerson ? 1 : 0].find(weapon->formID);
@@ -373,7 +373,7 @@ void OverrideInterface::RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool 
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
 	SimpleLocker locker(&weaponData.m_lock);
-	auto & it = weaponData.m_data.find(refr->formID);
+	auto it = weaponData.m_data.find(refr->formID);
 	if(it != weaponData.m_data.end())
 	{
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weapon->formID);
@@ -394,7 +394,7 @@ void OverrideInterface::RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
 	SimpleLocker locker(&weaponData.m_lock);
-	auto & it = weaponData.m_data.find(refr->formID);
+	auto it = weaponData.m_data.find(refr->formID);
 	if(it != weaponData.m_data.end())
 	{
 		WeaponRegistration::iterator ait = it->second[gender][fPerson].find(weapon->formID);
@@ -420,10 +420,10 @@ void OverrideInterface::RemoveAllSkinOverrides(TESObjectREFR * refr, bool isFema
 {
 	UInt8 gender = isFemale ? 1 : 0;
 	SimpleLocker locker(&skinData.m_lock);
-	auto & it = skinData.m_data.find(refr->formID);
+	auto it = skinData.m_data.find(refr->formID);
 	if (it != skinData.m_data.end())
 	{
-		auto & slot = it->second[gender][firstPerson].find(slotMask);
+		auto slot = it->second[gender][firstPerson].find(slotMask);
 		if (slot != it->second[gender][firstPerson].end())
 		{
 			it->second[gender][firstPerson].erase(slot);
@@ -437,10 +437,10 @@ void OverrideInterface::RemoveSkinOverride(TESObjectREFR * refr, bool isFemale, 
 	UInt8 fPerson = firstPerson ? 1 : 0;
 
 	SimpleLocker locker(&skinData.m_lock);
-	auto & it = skinData.m_data.find(refr->formID);
+	auto it = skinData.m_data.find(refr->formID);
 	if (it != skinData.m_data.end())
 	{
-		auto & slot = it->second[gender][firstPerson].find(slotMask);
+		auto slot = it->second[gender][firstPerson].find(slotMask);
 		if (slot != it->second[gender][firstPerson].end())
 		{
 			OverrideVariant ovr;
@@ -708,7 +708,7 @@ void OverrideInterface::SetProperties(OverrideHandle formId, bool immediate)
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(formId); // Find ActorHandle
+	auto it = armorData.m_data.find(formId); // Find ActorHandle
 	if(it != armorData.m_data.end())
 	{
 		for(ArmorRegistration::iterator ait = it->second[gender].begin(); ait != it->second[gender].end(); ++ait) // Loop Armors
@@ -794,7 +794,7 @@ void OverrideInterface::SetNodeProperties(OverrideHandle formId, bool immediate)
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & nit = nodeData.m_data.find(formId); // Find ActorHandle
+	auto nit = nodeData.m_data.find(formId); // Find ActorHandle
 	if(nit != nodeData.m_data.end())
 	{
 		NiNode * lastRoot = NULL;
@@ -846,7 +846,7 @@ void OverrideInterface::SetWeaponProperties(OverrideHandle formId, bool immediat
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&weaponData.m_lock);
-	auto & it = weaponData.m_data.find(refr->formID); // Find ActorHandle
+	auto it = weaponData.m_data.find(refr->formID); // Find ActorHandle
 	if (it != weaponData.m_data.end())
 	{
 		for (UInt8 i = 0; i <= 1; i++)
@@ -916,7 +916,7 @@ void OverrideInterface::SetSkinProperties(OverrideHandle formId, bool immediate)
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&skinData.m_lock);
-	auto & it = skinData.m_data.find(refr->formID); // Find ActorHandle
+	auto it = skinData.m_data.find(refr->formID); // Find ActorHandle
 	if (it != skinData.m_data.end())
 	{
 		for (UInt8 fp = 0; fp <= 1; fp++)
@@ -981,7 +981,7 @@ void OverrideInterface::VisitNodes(TESObjectREFR * refr, std::function<void(SKEE
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & nit = nodeData.m_data.find(refr->formID); // Find ActorHandle
+	auto nit = nodeData.m_data.find(refr->formID); // Find ActorHandle
 	if (nit != nodeData.m_data.end())
 	{
 		for (auto & ovr : nit->second[gender]) // Loop Overrides
@@ -1002,7 +1002,7 @@ void OverrideInterface::VisitSkin(TESObjectREFR * refr, bool isFemale, bool firs
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&skinData.m_lock);
-	auto & it = skinData.m_data.find(refr->formID);
+	auto it = skinData.m_data.find(refr->formID);
 	if (it != skinData.m_data.end())
 	{
 		for (auto & ovr : it->second[gender][fp])
@@ -1087,7 +1087,7 @@ void OverrideInterface::SetHandleArmorAddonProperties(UInt64 handle, UInt64 armo
 class NodeOverrideApplicator : public GeometryVisitor
 {
 public:
-	NodeOverrideApplicator::NodeOverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
+	NodeOverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
 
 	virtual bool Accept(BSGeometry * geometry)
 	{
@@ -1111,7 +1111,7 @@ public:
 class OverrideApplicator : public GeometryVisitor
 {
 public:
-	OverrideApplicator::OverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
+	OverrideApplicator(OverrideRegistration<StringTableItem> * overrides, bool immediate) : m_overrides(overrides), m_immediate(immediate) {}
 
 	virtual bool Accept(BSGeometry * geometry)
 	{
@@ -1145,7 +1145,7 @@ public:
 class SkinOverrideApplicator : public GeometryVisitor
 {
 public:
-	SkinOverrideApplicator::SkinOverrideApplicator(TESObjectARMO * armor, TESObjectARMA * addon, UInt32 slotMask, OverrideSet * overrides, bool immediate) : m_armor(armor), m_addon(addon), m_overrides(overrides), m_slotMask(slotMask), m_immediate(immediate) {}
+	SkinOverrideApplicator(TESObjectARMO * armor, TESObjectARMA * addon, UInt32 slotMask, OverrideSet * overrides, bool immediate) : m_armor(armor), m_addon(addon), m_overrides(overrides), m_slotMask(slotMask), m_immediate(immediate) {}
 
 	virtual bool Accept(BSGeometry * geometry)
 	{
@@ -1250,7 +1250,7 @@ void OverrideInterface::ApplyNodeOverrides(TESObjectREFR * refr, NiAVObject * ob
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&nodeData.m_lock);
-	auto & nit = nodeData.m_data.find(refr->formID);
+	auto nit = nodeData.m_data.find(refr->formID);
 	if(nit != nodeData.m_data.end()) {
 		NodeOverrideApplicator applicator(&nit->second[gender], immediate);
 		VisitGeometry(object, &applicator);
@@ -1265,7 +1265,7 @@ void OverrideInterface::ApplyOverrides(TESObjectREFR * refr, TESObjectARMO * arm
 		gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 	SimpleLocker locker(&armorData.m_lock);
-	auto & it = armorData.m_data.find(refr->formID); // Find ActorHandle
+	auto it = armorData.m_data.find(refr->formID); // Find ActorHandle
 	if(it != armorData.m_data.end())
 	{
 		auto ait = it->second[gender].find(armor->formID); // Find ArmorHandle
@@ -1335,7 +1335,7 @@ void OverrideSet::Visit(std::function<bool(OverrideVariant*)> functor)
 template<typename T>
 void OverrideRegistration<T>::Visit(std::function<bool(const T & key, OverrideSet * set)> functor)
 {
-	for(auto it = begin(); it != end(); ++it) {
+	for(auto it = OverrideRegistration<T>::template begin(); it != OverrideRegistration<T>::template end(); ++it) {
 		if(functor(it->first, &it->second))
 			break;
 	}
@@ -1783,7 +1783,7 @@ bool OverrideRegistration<T>::Load(SKSESerializationInterface * intfc, UInt32 kV
 					} else { // No existing, create
 						OverrideSet set;
 						error = set.Load(intfc, version, stringTable);
-						emplace(key, set);
+						this->emplace(key, set);
 					}
 					if(loadError)
 					{

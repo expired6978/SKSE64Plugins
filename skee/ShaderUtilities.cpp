@@ -406,7 +406,7 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 
 SKEEFixedString GetSanitizedPath(const SKEEFixedString & path)
 {
-	std::string fullPath = path;
+	std::string fullPath = path.AsString();
 
 	fullPath = std::regex_replace(fullPath, std::regex("/+|\\\\+"), "\\"); // Replace multiple slashes or forward slashes with one backslash
 	fullPath = std::regex_replace(fullPath, std::regex("^\\\\+"), ""); // Remove all backslashes from the front

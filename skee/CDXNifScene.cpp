@@ -59,7 +59,7 @@ void CDXNifScene::CreateBrushes()
 
 bool CDXNifScene::Setup(const CDXInitParams & initParams)
 {
-	ScopedCriticalSection locker(&g_renderManager->lock);
+	utils::ScopedCriticalSection locker(&g_renderManager->lock);
 	if (m_renderTexture)
 		Release();
 
@@ -259,7 +259,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, UInt32 width, UInt3
 
 void CDXNifScene::Release()
 {
-	ScopedCriticalSection locker(&g_renderManager->lock);
+	utils::ScopedCriticalSection locker(&g_renderManager->lock);
 	if(m_renderTexture) {
 		BSScaleformImageLoader * imageLoader = GFxLoader::GetSingleton()->imageLoader;
 		UInt8 ret = imageLoader->ReleaseVirtualImage(&m_renderTexture.m_pObject);

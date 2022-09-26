@@ -43,6 +43,8 @@ extern UInt16							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
 extern bool								g_enableBodyNormalRecalculate;
+extern bool								g_bodyMorphGPUCopy;
+extern bool								g_bodyMorphRebind;
 
 UInt32 BodyMorphInterface::GetVersion()
 {
@@ -153,13 +155,13 @@ void BodyMorphInterface::Impl_SetMorph(TESObjectREFR * actor, SKEEFixedString mo
 float BodyMorphInterface::Impl_GetMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if(it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(g_stringTable.GetString(morphName));
+		auto mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
-			auto & kit = mit->second.find(g_stringTable.GetString(morphKey));
+			auto kit = mit->second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit->second.end())
 			{
 				return kit->second;
@@ -173,13 +175,13 @@ float BodyMorphInterface::Impl_GetMorph(TESObjectREFR * actor, SKEEFixedString m
 void BodyMorphInterface::Impl_ClearMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(g_stringTable.GetString(morphName));
+		auto mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
-			auto & kit = mit->second.find(g_stringTable.GetString(morphKey));
+			auto kit = mit->second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit->second.end())
 			{
 				mit->second.erase(kit);
@@ -191,13 +193,13 @@ void BodyMorphInterface::Impl_ClearMorph(TESObjectREFR * actor, SKEEFixedString 
 bool BodyMorphInterface::Impl_HasBodyMorph(TESObjectREFR * actor, SKEEFixedString morphName, SKEEFixedString morphKey)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & kit = it->second.find(g_stringTable.GetString(morphName));
+		auto kit = it->second.find(g_stringTable.GetString(morphName));
 		if (kit != it->second.end())
 		{
-			auto & mit = kit->second.find(g_stringTable.GetString(morphKey));
+			auto mit = kit->second.find(g_stringTable.GetString(morphKey));
 			if(mit != kit->second.end())
 				return true;
 		}
@@ -209,10 +211,10 @@ bool BodyMorphInterface::Impl_HasBodyMorph(TESObjectREFR * actor, SKEEFixedStrin
 float BodyMorphInterface::Impl_GetBodyMorphs(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(g_stringTable.GetString(morphName));
+		auto mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
 			float morphSum = 0;
@@ -243,12 +245,12 @@ float BodyMorphInterface::Impl_GetBodyMorphs(TESObjectREFR * actor, SKEEFixedStr
 bool BodyMorphInterface::Impl_HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		for (auto & mit : it->second)
+		for (auto& mit : it->second)
 		{
-			auto & kit = mit.second.find(g_stringTable.GetString(morphKey));
+			auto kit = mit.second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit.second.end())
 			{
 				return true;
@@ -262,12 +264,12 @@ bool BodyMorphInterface::Impl_HasBodyMorphKey(TESObjectREFR * actor, SKEEFixedSt
 void BodyMorphInterface::Impl_ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixedString morphKey)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		for (auto & mit : it->second)
+		for (auto& mit : it->second)
 		{
-			auto & kit = mit.second.find(g_stringTable.GetString(morphKey));
+			auto kit = mit.second.find(g_stringTable.GetString(morphKey));
 			if (kit != mit.second.end())
 			{
 				mit.second.erase(kit);
@@ -279,10 +281,10 @@ void BodyMorphInterface::Impl_ClearBodyMorphKeys(TESObjectREFR * actor, SKEEFixe
 bool BodyMorphInterface::Impl_HasBodyMorphName(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & kit = it->second.find(g_stringTable.GetString(morphName));
+		auto kit = it->second.find(g_stringTable.GetString(morphName));
 		if (kit != it->second.end())
 		{
 			return true;
@@ -295,10 +297,10 @@ bool BodyMorphInterface::Impl_HasBodyMorphName(TESObjectREFR * actor, SKEEFixedS
 void BodyMorphInterface::Impl_ClearBodyMorphNames(TESObjectREFR * actor, SKEEFixedString morphName)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(g_stringTable.GetString(morphName));
+		auto mit = it->second.find(g_stringTable.GetString(morphName));
 		if (mit != it->second.end())
 		{
 			mit->second.clear();
@@ -309,7 +311,7 @@ void BodyMorphInterface::Impl_ClearBodyMorphNames(TESObjectREFR * actor, SKEEFix
 void BodyMorphInterface::Impl_ClearMorphs(TESObjectREFR * actor)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if(it != actorMorphs.m_data.end())
 	{
 		actorMorphs.m_data.erase(it);
@@ -319,7 +321,7 @@ void BodyMorphInterface::Impl_ClearMorphs(TESObjectREFR * actor)
 bool BodyMorphInterface::Impl_HasMorphs(TESObjectREFR * actor)
 {
 	SimpleLocker locker(&actorMorphs.m_lock);
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
 		return true;
@@ -583,7 +585,7 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
 								}
 
-								auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
+								auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition, g_bodyMorphGPUCopy, g_bodyMorphRebind);
 								newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
 
 								if (deferred)
@@ -675,7 +677,7 @@ void MorphCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool i
 		if (stringData) {
 			SKEEFixedString filePath = CreateTRIPath(stringData->m_pString);
 			CacheFile(filePath.c_str());
-			auto & it = m_data.find(filePath);
+			auto it = m_data.find(filePath);
 			if (it != m_data.end()) {
 				fileCache = &it->second;
 				return true;
@@ -739,7 +741,7 @@ void MorphCache::Shrink()
 {
 	while (totalMemory > memoryLimit && m_data.size() > 0)
 	{
-		auto & it = std::min_element(m_data.begin(), m_data.end(), [](std::pair<SKEEFixedString, MorphFileCache> a, std::pair<SKEEFixedString, MorphFileCache> b)
+		auto it = std::min_element(m_data.begin(), m_data.end(), [](std::pair<SKEEFixedString, MorphFileCache> a, std::pair<SKEEFixedString, MorphFileCache> b)
 		{
 			return (a.second.accessed < b.second.accessed);
 		});
@@ -769,7 +771,7 @@ bool MorphCache::CacheFile(const char * relativePath)
 	if(relativePath == "")
 		return false;
 
-	auto & it = m_data.find(filePath);
+	auto it = m_data.find(filePath);
 	if (it != m_data.end()) {
 		it->second.accessed = std::time(nullptr);
 		it->second.accessed = std::time(nullptr);
@@ -1098,10 +1100,12 @@ void NIOVTaskUpdateModelWeight::Run()
 	}
 }
 
-NIOVTaskUpdateSkinPartition::NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition)
+NIOVTaskUpdateSkinPartition::NIOVTaskUpdateSkinPartition(NiSkinInstance * skinInstance, NiSkinPartition * partition, bool gpuCopy, bool rebindDynamic)
 {
 	m_skinInstance = skinInstance;
 	m_partition = partition;
+	m_copyGPU = gpuCopy;
+	m_rebindDynamic = rebindDynamic;
 }
 
 void NIOVTaskUpdateSkinPartition::Dispose(void)
@@ -1122,6 +1126,38 @@ void NIOVTaskUpdateSkinPartition::Run()
 		D3D11_BUFFER_DESC desc;
 		partition.shapeData->m_VertexBuffer->GetDesc(&desc);
 
+		// Rebind functionality to switch buffer to be dynamic, and then re-use it across all partitions
+		if (m_rebindDynamic && desc.Usage != D3D11_USAGE_DYNAMIC)
+		{
+			D3D11_BUFFER_DESC newDesc = desc;
+			newDesc.Usage = D3D11_USAGE_DYNAMIC;
+			newDesc.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+
+			ID3D11Buffer* buffer = nullptr;
+			D3D11_SUBRESOURCE_DATA data;
+			data.pSysMem = partition.shapeData->m_RawVertexData;
+			data.SysMemPitch = vertexCount * vertexSize;
+			data.SysMemSlicePitch = 0;
+			
+			if (SUCCEEDED(g_renderManager->forwarder->CreateBuffer(&newDesc, &data, &buffer)))
+			{
+				// Borrow the exact same partition and skip the copy entirely
+				for (UInt32 p = 0; p < m_partition->m_uiPartitions; ++p)
+				{
+					auto& pPartition = m_partition->m_pkPartitions[p];
+					pPartition.shapeData->m_VertexBuffer->Release();
+					pPartition.shapeData->m_VertexBuffer = buffer;
+					pPartition.shapeData->m_VertexBuffer->AddRef();
+				}
+
+				// The partitions will now take ownership
+				partition.shapeData->m_VertexBuffer->Release();
+
+				desc = newDesc;
+			}
+		}
+		
+		// Perform the resource copy either on CPU or GPU, and only on partitions that differ
 		auto deviceContext = g_renderManager->context;
 		switch (desc.Usage)
 		{
@@ -1129,10 +1165,25 @@ void NIOVTaskUpdateSkinPartition::Run()
 		{
 			deviceContext->UpdateSubresource(partition.shapeData->m_VertexBuffer, 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
 
-			for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+			if (m_copyGPU)
 			{
-				auto& pPartition = m_partition->m_pkPartitions[p];
-				deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+				for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+				{
+					auto& pPartition = m_partition->m_pkPartitions[p];
+					if (pPartition.shapeData->m_VertexBuffer != partition.shapeData->m_VertexBuffer) {
+						deviceContext->CopyResource(pPartition.shapeData->m_VertexBuffer, partition.shapeData->m_VertexBuffer);
+					}
+				}
+			}
+			else
+			{
+				for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+				{
+					auto& pPartition = m_partition->m_pkPartitions[p];
+					if (pPartition.shapeData->m_VertexBuffer != partition.shapeData->m_VertexBuffer) {
+						deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+					}
+				}
 			}
 			break;
 		}
@@ -1145,15 +1196,33 @@ void NIOVTaskUpdateSkinPartition::Run()
 					deviceContext->Unmap(partition.shapeData->m_VertexBuffer, 0);
 				}
 
-				for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+				if (m_copyGPU)
 				{
-					auto& pPartition = m_partition->m_pkPartitions[p];
-					if (deviceContext->Map(pPartition.shapeData->m_VertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) == S_OK) {
-						memcpy(mappedResource.pData, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize);
-						deviceContext->Unmap(pPartition.shapeData->m_VertexBuffer, 0);
+					for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+					{
+						auto& pPartition = m_partition->m_pkPartitions[p];
+						if (pPartition.shapeData->m_VertexBuffer != partition.shapeData->m_VertexBuffer) {
+							deviceContext->CopyResource(pPartition.shapeData->m_VertexBuffer, partition.shapeData->m_VertexBuffer);
+						}
+					}
+				}
+				else
+				{
+					for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+					{
+						auto& pPartition = m_partition->m_pkPartitions[p];
+						if (pPartition.shapeData->m_VertexBuffer != partition.shapeData->m_VertexBuffer) {
+							if (deviceContext->Map(pPartition.shapeData->m_VertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource) == S_OK) {
+								memcpy(mappedResource.pData, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize);
+								deviceContext->Unmap(pPartition.shapeData->m_VertexBuffer, 0);
+							}
+						}
 					}
 				}
 			}
+			break;
+		default:
+			_ERROR("%s - Failure to copy morph data into resource", __FUNCTION__);
 			break;
 		}
 		}
@@ -1166,7 +1235,7 @@ void NIOVTaskUpdateSkinPartition::Run()
 
 void BodyMorphInterface::Impl_VisitMorphs(TESObjectREFR * actor, std::function<void(SKEEFixedString name, std::unordered_map<StringTableItem, float> * map)> functor)
 {
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
 		for (auto & morph : it->second)
@@ -1178,10 +1247,10 @@ void BodyMorphInterface::Impl_VisitMorphs(TESObjectREFR * actor, std::function<v
 
 void BodyMorphInterface::Impl_VisitKeys(TESObjectREFR * actor, SKEEFixedString name, std::function<void(SKEEFixedString, float)> functor)
 {
-	auto & it = actorMorphs.m_data.find(actor->formID);
+	auto it = actorMorphs.m_data.find(actor->formID);
 	if (it != actorMorphs.m_data.end())
 	{
-		auto & mit = it->second.find(g_stringTable.GetString(name));
+		auto mit = it->second.find(g_stringTable.GetString(name));
 		if (mit != it->second.end())
 		{
 			for (auto & morph : mit->second)
@@ -1593,7 +1662,7 @@ bool BodyMorphInterface::Impl_ReadBodyMorphs(SKEEFixedString filePath)
 			for (UInt32 k = 0; k < selectors.size(); k++) {
 				selectors[k] = std::trim(selectors[k]);
 				BSFixedString templateName(selectors[k].c_str());
-				auto & temp = bodyGenTemplates.find(templateName);
+				auto temp = bodyGenTemplates.find(templateName);
 				if (temp != bodyGenTemplates.end())
 					templateList.push_back(temp->second);
 				else

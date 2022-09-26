@@ -8,11 +8,11 @@
 #include <locale>
 
 #include "skse64/GameTypes.h"
+#include "skse64/GameStreams.h"
 #include "StringTable.h"
 
 class TESRace;
 class BGSHeadPart;
-class BSResourceNiBinaryStream;
 struct ModInfo;
 class TESLevCharacter;
 class TESNPC;

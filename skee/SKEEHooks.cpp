@@ -25,6 +25,7 @@
 #include "ItemDataInterface.h"
 #include "NiTransformInterface.h"
 #include "AttachmentInterface.h"
+#include "CommandInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -55,6 +56,7 @@ extern OverlayInterface		g_overlayInterface;
 extern OverrideInterface	g_overrideInterface;
 extern ActorUpdateManager	g_actorUpdateManager;
 extern NiTransformInterface	g_transformInterface;
+extern CommandInterface		g_commandInterface;
 
 extern bool					g_enableFaceOverlays;
 extern bool					g_enableTintSync;
@@ -90,40 +92,40 @@ extern bool					g_hookSliderCallbacks;
 extern bool					g_hookHeadPreprocessing;
 extern bool					g_hookMorphUpdates;
 
-RelocAddr<_AttachBipedObject> AttachBipedObject(0x001D6360);
+RelocAddr<_AttachBipedObject> AttachBipedObject(0x001D8070);
 _AttachBipedObject AttachBipedObject_Original = nullptr;
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
 RelocAddr <_RegenerateHead> RegenerateHead(FaceGen::RegenerateHead_Address);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7F110);
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7D188);
 
 // ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168F260);
+RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168D330);
 
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00884530);
+RelocAddr<_AddGFXArgument> AddGFXArgument(0x00895AC0);
 
 typedef UInt8 (*_BSFaceGenModel_ApplyMorph)(BSFaceGenModel* model, BSFixedString* morphName, TESModelTri* modelMorph, NiAVObject** headNode, float relative, UInt8 unk1);
 RelocAddr <_BSFaceGenModel_ApplyMorph> BSFaceGenModel_ApplyMorph(BSFaceGenModel::ApplyMorph_Address);
 _BSFaceGenModel_ApplyMorph BSFaceGenModel_ApplyMorph_Original = nullptr;
 
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003E9BC0);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008EBEA0);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008E5210);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003EBD20);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008FD5F0);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008F6960);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003775A0);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x00377790);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003795D0);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x003797C0);
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
-RelocAddr<_UpdateHeadState> UpdateHeadState(0x00379CF0);
+RelocAddr<_UpdateHeadState> UpdateHeadState(0x0037BD20);
 
 typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
-RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008B9360);
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008CAAC0);
 _SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
 
 typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
-RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008B8E30);
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008CA590);
 
 typedef void(*_TransferItemUID)(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1);
 _TransferItemUID TransferItemUID_Original = nullptr;
@@ -433,7 +435,7 @@ extern CDXModelViewerCamera			g_Camera;
 void RaceSexMenu_Render_Hooked(RaceSexMenu * rsm)
 {
 	if (g_Device && g_World.IsVisible() && g_World.GetRenderTargetView()) {
-		ScopedCriticalSection cs(&g_renderManager->lock);
+		utils::ScopedCriticalSection cs(&g_renderManager->lock);
 		g_World.Begin(&g_Camera, g_Device);
 		g_World.Render(&g_Camera, g_Device);
 		g_World.End(&g_Camera, g_Device);
@@ -557,8 +559,10 @@ UInt8 GetSex_Hooked(TESNPC* npc)
 		BGSHeadPart* headPart = nullptr;
 		(*g_dataHandler)->headParts.GetNthItem(i, headPart);
 
+		RaceVisitor raceVisitor((*g_thePlayer)->race);
+
 		bool isPlayable = headPart->partFlags & BGSHeadPart::kFlagPlayable;
-		bool isValidForRace = g_allowAnyRacePart || (headPart->validRaces ? headPart->validRaces->Visit(RaceVisitor((*g_thePlayer)->race)) : false);
+		bool isValidForRace = g_allowAnyRacePart || (headPart->validRaces ? headPart->validRaces->Visit(raceVisitor) : false);
 		bool isValidForGender = g_allowAnyGenderPart || (isFemale ? (headPart->partFlags & BGSHeadPart::kFlagFemale) == BGSHeadPart::kFlagFemale : (headPart->partFlags & BGSHeadPart::kFlagMale) == BGSHeadPart::kFlagMale);
 
 		if (isPlayable && isValidForRace && isValidForGender)
@@ -603,7 +607,7 @@ UInt8 GetSex_Hooked(TESNPC* npc)
 class MorphVisitor : public MorphMap::Visitor
 {
 public:
-	MorphVisitor::MorphVisitor(BSFaceGenModel * model, SKEEFixedString morphName, NiAVObject ** headNode, float relative, UInt8 unk1)
+	MorphVisitor(BSFaceGenModel * model, SKEEFixedString morphName, NiAVObject ** headNode, float relative, UInt8 unk1)
 	{
 		m_model = model;
 		m_morphName = morphName;
@@ -971,7 +975,7 @@ void UpdateModelSkin_Hooked(NiAVObject * object, NiColor *& color)
 		UInt32 mask = 1;
 		for (UInt32 i = 0; i < 32; ++i)
 		{
-			ModifiedItemIdentifier identifier;
+			IItemDataInterface::Identifier identifier;
 			identifier.SetSlotMask(mask);
 			g_task->AddTask(new NIOVTaskUpdateItemDye(static_cast<Actor*>(rootNode->m_owner), identifier, TintMaskInterface::kUpdate_Skin, true));
 			mask <<= 1;
@@ -989,7 +993,7 @@ void UpdateModelHair_Hooked(NiAVObject * object, NiColor *& color)
 		UInt32 mask = 1;
 		for (UInt32 i = 0; i < 32; ++i)
 		{
-			ModifiedItemIdentifier identifier;
+			IItemDataInterface::Identifier identifier;
 			identifier.SetSlotMask(mask);
 			g_task->AddTask(new NIOVTaskUpdateItemDye(static_cast<Actor*>(rootNode->m_owner), identifier, TintMaskInterface::kUpdate_Hair, true));
 			mask <<= 1;
@@ -1082,453 +1086,8 @@ bool SKEE_Execute(const ObScriptParam * paramInfo, ScriptData * scriptData, TESO
 		return false;
 	}
 
-	if (_strnicmp(buffer, "reload", MAX_PATH) == 0)
-	{
-		if (_strnicmp(buffer2, "tints", MAX_PATH) == 0)
-		{
-			g_tintMaskInterface.LoadMods();
-			Console_Print("Tint XMLs reloaded");
-		}
-	}
-	else if (_strnicmp(buffer, "erase", MAX_PATH) == 0)
-	{
-		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Erasing BodyMorphs requires a console target");
-				return false;
-			}
-
-			g_bodyMorphInterface.ClearMorphs(thisObj);
-			g_bodyMorphInterface.UpdateModelWeight(thisObj);
-			Console_Print("Erased all bodymorphs");
-		}
-		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Erasing transforms requires a console target");
-				return false;
-			}
-
-			g_transformInterface.Impl_RemoveAllReferenceTransforms(thisObj);
-			g_transformInterface.Impl_UpdateNodeAllTransforms(thisObj);
-			Console_Print("Erased all transforms");
-		}
-		else if (_strnicmp(buffer2, "sculpt", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Erasing sculpt requires a console target");
-				return false;
-			}
-			if (thisObj->formType != Character::kTypeID) {
-				Console_Print("Console target must be an actor");
-				return false;
-			}
-			Actor* actor = static_cast<Actor*>(thisObj);
-			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
-			if (!npc) {
-				Console_Print("Failed to acquire ActorBase for specified reference");
-				return false;
-			}
-
-			g_morphInterface.EraseSculptData(npc);
-			g_task->AddTask(new SKSEUpdateFaceModel(actor));
-
-			Console_Print("Erased all sculpting");
-		}
-		else if (_strnicmp(buffer2, "overlays", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Erasing overlays requires a console target");
-				return false;
-			}
-			if (thisObj->formType != Character::kTypeID) {
-				Console_Print("Console target must be an actor");
-				return false;
-			}
-			Actor* actor = static_cast<Actor*>(thisObj);
-			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
-			if (!npc) {
-				Console_Print("Failed to acquire ActorBase for specified reference");
-				return false;
-			}
-
-			g_overlayInterface.EraseOverlays(actor);
-
-			Console_Print("Erased and reverted all overlays");
-		}
-		else if (_strnicmp(buffer2, "bodymorph-cache", MAX_PATH) == 0)
-		{
-			size_t freedMem = g_bodyMorphInterface.ClearMorphCache();
-			Console_Print("Erased %I64u bytes from BodyMorph Cache", freedMem);
-		}
-	}
-	else if (_strnicmp(buffer, "preset-save", MAX_PATH) == 0)
-	{
-		char slotPath[MAX_PATH];
-		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", buffer2);
-		char tintPath[MAX_PATH];
-		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
-
-		g_morphInterface.SaveJsonPreset(slotPath);
-
-		g_task->AddTask(new SKSETaskExportTintMask(tintPath, buffer2));
-		Console_Print("Preset saved");
-	}
-	else if (_strnicmp(buffer, "preset-load", MAX_PATH) == 0)
-	{
-		if (!thisObj) {
-			Console_Print("Applying a preset requires a console target");
-			return false;
-		}
-		if (thisObj->formType != Character::kTypeID) {
-			Console_Print("Console target must be an actor");
-			return false;
-		}
-		Actor* actor = static_cast<Actor*>(thisObj);
-		TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
-		if (!npc) {
-			Console_Print("Failed to acquire ActorBase for specified reference");
-			return false;
-		}
-
-		char slotPath[MAX_PATH];
-		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", buffer2);
-		char tintPath[MAX_PATH];
-		sprintf_s(tintPath, "Textures\\CharGen\\Exported\\%s.dds", buffer2);
-
-		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
-		if (loadError) {
-			Console_Print("Failed to load preset at %s", slotPath);
-			return false;
-		}
-
-		presetData->tintTexture = tintPath;
-		g_morphInterface.AssignPreset(npc, presetData);
-		g_morphInterface.ApplyPresetData(actor, presetData, true, FaceMorphInterface::ApplyTypes::kPresetApplyAll);
-
-		// Queue a node update
-		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
-		Console_Print("Preset loaded");
-	}
-#if _DEBUG
-	else if (_strnicmp(buffer, "attach", MAX_PATH) == 0)
-	{
-		if (!thisObj) {
-			Console_Print("Attaching mesh requires object");
-			return false;
-		}
-
-		g_task->AddTask(new SKSEAttachSkinnedMesh(static_cast<Actor*>(thisObj), buffer2, "TestRoot", false, true, std::vector<BSFixedString>()));
-	}
-#endif
-	else if (_strnicmp(buffer, "diagnostics", MAX_PATH) == 0)
-	{
-		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
-		{
-			g_bodyMorphInterface.PrintDiagnostics();
-		}
-		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
-		{
-			g_transformInterface.PrintDiagnostics();
-		}
-		else if (_strnicmp(buffer2, "strings", MAX_PATH) == 0)
-		{
-			g_stringTable.PrintDiagnostics();
-		}
-		else if (_strnicmp(buffer2, "updates", MAX_PATH) == 0)
-		{
-			g_actorUpdateManager.PrintDiagnostics();
-		}
-	}
-	else if (_strnicmp(buffer, "dump", MAX_PATH) == 0)
-	{
-		if (_strnicmp(buffer2, "bodymorph", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping transforms requires a console target");
-				return false;
-			}
-
-			Console_Print("Dumping body morphs for %08X", thisObj->formID);
-
-			class Visitor : public IBodyMorphInterface::MorphValueVisitor
-			{
-			public:
-				Visitor() { }
-
-				virtual void Visit(TESObjectREFR * ref, const char* morphKey, const char* key, float value)
-				{
-					m_mapping[key][morphKey] = value;
-				}
-				std::map<SKEEFixedString, std::map<SKEEFixedString, float>> m_mapping;
-			};
-			Visitor visitor;
-			g_bodyMorphInterface.VisitMorphValues(thisObj, visitor);
-				
-			UInt32 totalMorphs = 0;
-			for (auto & key : visitor.m_mapping)
-			{
-				Console_Print("Key: %s", key.first.c_str());
-				for (auto & morph : key.second)
-				{
-					Console_Print("\tMorph: %s\t\tValue: %f", morph.first.c_str(), morph.second);
-				}
-				Console_Print("Dumped %d morphs for key %s", key.second.size(), key.first.c_str());
-				totalMorphs += key.second.size();
-			}
-			Console_Print("Dumped %d total morphs", totalMorphs);
-		}
-		else if (_strnicmp(buffer2, "morphnames", MAX_PATH) == 0)
-		{
-			Console_Print("Dumping morph names");
-			auto morphNames = g_bodyMorphInterface.GetCachedMorphNames();
-			for (auto& name : morphNames)
-			{
-				Console_Print("\t%s", name.c_str());
-			}
-			Console_Print("%d total morphs", morphNames.size());
-		}
-		else if (_strnicmp(buffer2, "transforms", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping transforms requires a console target");
-				return false;
-			}
-			if (thisObj->formType != Character::kTypeID) {
-				Console_Print("Console target must be an actor");
-				return false;
-			}
-			Actor* actor = static_cast<Actor*>(thisObj);
-			TESNPC * npc = DYNAMIC_CAST(thisObj->baseForm, TESForm, TESNPC);
-			if (!npc) {
-				Console_Print("Failed to acquire ActorBase for specified reference");
-				return false;
-			}
-
-			Console_Print("Dumping transforms for %08X", thisObj->formID);
-
-			UInt32 totalTransforms = 0;
-			g_transformInterface.Impl_VisitNodes(thisObj, false, CALL_MEMBER_FN(npc, GetSex)() == 1, [&](const SKEEFixedString& node, OverrideRegistration<StringTableItem> * keys)
-			{
-				Console_Print("Node: %s", node.c_str());
-				for (auto& item : *keys)
-				{
-					Console_Print("\tKey: %s\t\tProperties %d", item.first ? item.first->c_str() : "", item.second.size());
-					totalTransforms++;
-				}
-				return false;
-			});
-			Console_Print("Dumped %d total transforms", totalTransforms);
-		}
-		else if (_strnicmp(buffer2, "tints", MAX_PATH) == 0)
-		{
-			if (thisObj && thisObj->formType != Character::kTypeID) {
-				Console_Print("Console target must be an actor");
-				return false;
-			}
-
-			UInt32 mask = 1;
-			for (UInt32 i = 0; i < 32; ++i)
-			{
-				ModifiedItemIdentifier identifier;
-				identifier.SetSlotMask(mask);
-				g_task->AddTask(new NIOVTaskUpdateItemDye(thisObj ? static_cast<Actor*>(thisObj) : (*g_thePlayer), identifier, TintMaskInterface::kUpdate_All, true, [mask](TESObjectARMO* armo, TESObjectARMA* arma, const char* path, NiTexturePtr texture, LayerTarget& layer)
-				{
-					char texturePath[MAX_PATH];
-					_snprintf_s(texturePath, MAX_PATH, "Data\\SKSE\\Plugins\\NiOverride\\Exported\\TintMasks\\%s", path);
-
-					IFileStream::MakeAllDirs(texturePath);
-
-					SaveRenderedDDS(texture, texturePath);
-
-					Console_Print("Dumped result for slot %08X at %s on shape", mask, texturePath, layer.object->m_name);
-				}));
-				mask <<= 1;
-			}
-		}
-		else if (_strnicmp(buffer2, "overrides", MAX_PATH) == 0)
-		{
-			Console_Print("Dumping node overrides...");
-			g_overrideInterface.Dump();
-			Console_Print("Dump complete. See log file for details.");
-		}
-		else if (_strnicmp(buffer2, "itemdata", MAX_PATH) == 0)
-		{
-			g_itemDataInterface.ForEachItemAttribute([](const ItemAttribute& item)
-			{
-				_MESSAGE("Item UID: %d ID: %d Owner: %08X Form: %08X", item.uid, item.rank, item.ownerForm, item.formId);
-				gLog.Indent();
-				for (auto& tintData : item.data->m_tintData)
-				{
-					_MESSAGE("Tint Index: %d", tintData.first);
-					gLog.Indent();
-					for (auto& color : tintData.second.m_colorMap)
-					{
-						_MESSAGE("ColorIndex: %d Color: %08X", color.first, color.second);
-					}
-					for (auto& blend : tintData.second.m_blendMap)
-					{
-						_MESSAGE("BlendIndex: %d Blend: %s", blend.first, blend.second->c_str());
-					}
-					for (auto& texture : tintData.second.m_textureMap)
-					{
-						_MESSAGE("TextureIndex: %d Texture: %s", texture.first, texture.second->c_str());
-					}
-					for (auto& type : tintData.second.m_typeMap)
-					{
-						_MESSAGE("TypeIndex: %d Type: %d", type.first, type.second);
-					}
-					gLog.Outdent();
-				}
-				gLog.Outdent();
-				Console_Print("Item UID: %d ID: %d Owner: %08X Form: %08X", item.uid, item.rank, item.ownerForm, item.formId);
-			});
-		}
-		else if (_strnicmp(buffer2, "itembinding", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping itembinding requires a console target");
-				return false;
-			}
-
-			class RankItemFinder
-			{
-			public:
-				bool Accept(InventoryEntryData* pEntryData)
-				{
-					if (!pEntryData)
-						return true;
-
-					ExtendDataList* pExtendList = pEntryData->extendDataList;
-					if (!pExtendList)
-						return true;
-
-					SInt32 n = 0;
-					BaseExtraList* pExtraDataList = pExtendList->GetNthItem(n);
-					while (pExtraDataList)
-					{
-						if (pExtraDataList->HasType(kExtraData_Rank))
-						{
-							ExtraRank* extraRank = static_cast<ExtraRank*>(pExtraDataList->GetByType(kExtraData_Rank));
-							Console_Print("\tItem ID: %d Form: %08X", extraRank->rank, pEntryData->type->formID);
-							auto itemData = g_itemDataInterface.GetData(extraRank->rank);
-							if (itemData)
-							{
-								for (auto& tintData : itemData->m_tintData)
-								{
-									Console_Print("\t\tTint Index: %d", tintData.first);
-									for (auto& color : tintData.second.m_colorMap)
-									{
-										Console_Print("\t\t\tColorIndex: %d Color: %08X", color.first, color.second);
-									}
-									for (auto& blend : tintData.second.m_blendMap)
-									{
-										Console_Print("\t\t\tBlendIndex: %d Blend: %s", blend.first, blend.second->c_str());
-									}
-									for (auto& texture : tintData.second.m_textureMap)
-									{
-										Console_Print("\t\t\tTextureIndex: %d Texture: %s", texture.first, texture.second->c_str());
-									}
-									for (auto& type : tintData.second.m_typeMap)
-									{
-										Console_Print("\t\t\tTypeIndex: %d Type: %d", type.first, type.second);
-									}
-								}
-							}
-							foundItems++;
-						}
-
-						n++;
-						pExtraDataList = pExtendList->GetNthItem(n);
-					}
-					return true;
-				}
-
-				UInt32 foundItems = 0;
-			};
-
-			Console_Print("Finding items with extended data inside %08X", thisObj->formID);
-
-			ExtraContainerChanges* pContainerChanges = static_cast<ExtraContainerChanges*>(thisObj->extraData.GetByType(kExtraData_ContainerChanges));
-			if (pContainerChanges) {
-				RankItemFinder itemFinder;
-				auto data = pContainerChanges->data;
-				if (data) {
-					auto objList = data->objList;
-					if (objList) {
-						objList->Visit(itemFinder);
-
-						Console_Print("Found %d items with extended data inside %08X", itemFinder.foundItems, thisObj->formID);
-					}
-				}
-			}
-		}
-		else if (_strnicmp(buffer2, "skeleton_3p", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping nodes requires a reference");
-				return false;
-			}
-
-			Console_Print("Dumping reference third person skeleton...");
-			DumpNodeChildren(thisObj->GetNiRootNode(0));
-			Console_Print("Dumped reference. See log for more details.");
-		}
-		else if (_strnicmp(buffer2, "skeleton_1p", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping nodes requires a reference");
-				return false;
-			}
-
-			Console_Print("Dumping reference first person skeleton...");
-			DumpNodeChildren(thisObj->GetNiRootNode(1));
-			Console_Print("Dumped reference. See log for more details.");
-		}
-		else if (_strnicmp(buffer2, "equipped", MAX_PATH) == 0)
-		{
-			if (!thisObj) {
-				Console_Print("Dumping biped nodes requires a reference");
-				return false;
-			}
-			for (int k = 0; k <= 1; ++k)
-			{
-				auto weightModel = thisObj->GetBiped(k);
-				_MESSAGE("Biped Set %d", k);
-				if (weightModel && weightModel->bipedData)
-				{
-					for (int i = 0; i < 42; ++i)
-					{
-						_MESSAGE("Biped 1 Slot: %d Armor: %08X Arma: %08X", i, weightModel->bipedData->unk10[i].armor ? weightModel->bipedData->unk10[i].armor->formID : 0, weightModel->bipedData->unk10[i].addon ? weightModel->bipedData->unk10[i].addon->formID : 0);
-						TESForm* armor = weightModel->bipedData->unk10[i].armor;
-						NiAVObject* node = weightModel->bipedData->unk10[i].object;
-						if (armor && armor->formType == TESObjectARMO::kTypeID)
-						{
-							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
-						}
-					}
-					for (int i = 0; i < 42; ++i)
-					{
-						_MESSAGE("Biped 2 Slot: %d Armor: %08X Arma: %08X", i, weightModel->bipedData->unk13C0[i].armor ? weightModel->bipedData->unk13C0[i].armor->formID : 0, weightModel->bipedData->unk13C0[i].addon ? weightModel->bipedData->unk13C0[i].addon->formID : 0);
-						TESForm* armor = weightModel->bipedData->unk13C0[i].armor;
-						NiAVObject* node = weightModel->bipedData->unk13C0[i].object;
-						if (armor && armor->formType == TESObjectARMO::kTypeID)
-						{
-							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
-						}
-					}
-				}
-			}
-			
-		}
-	}
-	
-	return true;
+	return g_commandInterface.ExecuteCommand(buffer, thisObj, buffer2);
 }
-
-
 
 bool InstallSKEEHooks()
 {
@@ -1571,7 +1130,7 @@ bool InstallSKEEHooks()
 	
 	if (g_hookNativeSliders)
 	{
-		RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008E5C10 + 0x4D6);
+		RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008F7360 + 0x4D6);
 		g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
 		RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x3583);
@@ -1583,7 +1142,7 @@ bool InstallSKEEHooks()
 		RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3A03);
 		g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-		RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008E2850 + 0x50); // ChangeDoubleMorph callback
+		RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008F3FA0 + 0x50); // ChangeDoubleMorph callback
 		g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 	}
 
@@ -1620,7 +1179,7 @@ bool InstallSKEEHooks()
 
 	if (g_hookHeadPreprocessing && !g_externalHeads)
 	{
-		static const uintptr_t PreprocessedHeads = 0x0037AF20;
+		static const uintptr_t PreprocessedHeads = 0x0037CF50;
 
 		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
 		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
@@ -1719,16 +1278,16 @@ bool InstallSKEEHooks()
 		BSFaceGenModel_ApplyMorph_Original = (_BSFaceGenModel_ApplyMorph)codeBuf;
 		g_branchTrampoline.Write5Branch(BSFaceGenModel_ApplyMorph.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003E9EC0 + 0x124);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003EC020 + 0x124);
 		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked); // Revisit
 	}
 
 	if (g_hookMorphUpdates)
 	{
-		RelocAddr <uintptr_t> UpdateMorphs_Target(0x003E9DB0 + 0xB7);
+		RelocAddr <uintptr_t> UpdateMorphs_Target(0x003EBF10 + 0xB7);
 		g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-		RelocAddr <uintptr_t> UpdateMorph_Target(0x003F4610 + 0x7E);
+		RelocAddr <uintptr_t> UpdateMorph_Target(0x003F6770 + 0x7E);
 		g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 	}
 
@@ -1737,7 +1296,7 @@ bool InstallSKEEHooks()
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
 	if(g_enableFaceOverlays)
 	{
-		static const uintptr_t NiAllocate_Geom_Address = 0x00C9B3E0;
+		static const uintptr_t NiAllocate_Geom_Address = 0x00CACFC0;
 
 		RelocAddr <uintptr_t> NiAllocate_Geom_Target(NiAllocate_Geom_Address + 0x147);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
@@ -1745,25 +1304,25 @@ bool InstallSKEEHooks()
 		RelocAddr <uintptr_t> NiFree_Geom_Target(NiAllocate_Geom_Address + 0x140);
 		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00C9B920 + 0x76);
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00CAD500 + 0x76);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00C9C3E0 + 0x2F);
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00CADFC0 + 0x2F);
 		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037B060 + 0x169);
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037D090 + 0x169);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x00379E90 + 0x2EB);
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x0037BEC0 + 0x2EB);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AE950 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AE980 + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008E3750);
+		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008F4EA0);
 		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
@@ -1801,7 +1360,7 @@ bool InstallSKEEHooks()
 
 	if (g_enableTintInventory)
 	{
-		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008B9410 + 0x1C3);
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008CAB70 + 0x1C3);
 		struct TintInventoryItem_Code : Xbyak::CodeGenerator {
 			TintInventoryItem_Code(void* buf) : Xbyak::CodeGenerator(4096, buf)
 			{
@@ -1869,20 +1428,17 @@ bool InstallSKEEHooks()
 	}
 	if (hijackedCommand)
 	{
-		static ObScriptParam params[2];
-		params[0].typeID = ObScriptParam::kType_String;
-		params[0].typeStr = "String";
-		params[0].isOptional = 0;
-		params[1].typeID = ObScriptParam::kType_String;
-		params[1].typeStr = "String (optional)";
-		params[1].isOptional = 1;
+		static ObScriptParam params[] = {
+			{"String", ObScriptParam::kType_String, 0},
+			{"String (optional)", ObScriptParam::kType_String, 1}
+		};
 
 		ObScriptCommand cmd = *hijackedCommand;
 		cmd.longName = "skee";
 		cmd.shortName = "skee";
-		cmd.helpText = "skee <reload|erase> <tints|bodymorph>";
+		cmd.helpText = "skee help";
 		cmd.needsParent = 0;
-		cmd.numParams = 2;
+		cmd.numParams = sizeof(params) / sizeof(ObScriptParam);
 		cmd.params = params;
 		cmd.execute = SKEE_Execute;
 		cmd.flags = 0;

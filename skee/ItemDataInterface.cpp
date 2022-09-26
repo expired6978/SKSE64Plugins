@@ -55,7 +55,7 @@ bool ModifiedItemFinder::Accept(InventoryEntryData* pEntryData)
 		if (hasWorn || hasWornLeft)
 			isWorn = true;
 
-		if ((m_identifier.type & ModifiedItemIdentifier::kTypeRank) == ModifiedItemIdentifier::kTypeRank) {
+		if ((m_identifier.type & IItemDataInterface::Identifier::kTypeRank) == IItemDataInterface::Identifier::kTypeRank) {
 			if (pExtraDataList->HasType(kExtraData_Rank)) {
 				ExtraRank * extraRank = static_cast<ExtraRank*>(pExtraDataList->GetByType(kExtraData_Rank));
 				if (m_identifier.rankId == extraRank->rank)
@@ -63,7 +63,7 @@ bool ModifiedItemFinder::Accept(InventoryEntryData* pEntryData)
 			}
 		}
 		
-		if ((m_identifier.type & ModifiedItemIdentifier::kTypeUID) == ModifiedItemIdentifier::kTypeUID) {
+		if ((m_identifier.type & IItemDataInterface::Identifier::kTypeUID) == IItemDataInterface::Identifier::kTypeUID) {
 			if (pExtraDataList->HasType(kExtraData_UniqueID)) {
 				ExtraUniqueID * extraUID = static_cast<ExtraUniqueID*>(pExtraDataList->GetByType(kExtraData_UniqueID));
 				if (m_identifier.uid == extraUID->uniqueId && m_identifier.ownerForm == extraUID->ownerFormId)
@@ -71,7 +71,7 @@ bool ModifiedItemFinder::Accept(InventoryEntryData* pEntryData)
 			}
 		}
 		
-		if ((m_identifier.type & ModifiedItemIdentifier::kTypeSlot) == ModifiedItemIdentifier::kTypeSlot) {
+		if ((m_identifier.type & IItemDataInterface::Identifier::kTypeSlot) == IItemDataInterface::Identifier::kTypeSlot) {
 			if (isWorn) {
 				TESObjectARMO * armor = DYNAMIC_CAST(pEntryData->type, TESForm, TESObjectARMO);
 
@@ -82,7 +82,7 @@ bool ModifiedItemFinder::Accept(InventoryEntryData* pEntryData)
 				}
 				// Is not an armor, we don't have a slot mask search, and it's equipped
 				else if (!armor && m_identifier.slotMask == 0) {
-					if ((m_identifier.weaponSlot == ModifiedItemIdentifier::kHandSlot_Left && hasWornLeft) || (m_identifier.weaponSlot == ModifiedItemIdentifier::kHandSlot_Right && hasWorn))
+					if ((m_identifier.weaponSlot == IItemDataInterface::Identifier::kHandSlot_Left && hasWornLeft) || (m_identifier.weaponSlot == IItemDataInterface::Identifier::kHandSlot_Right && hasWorn))
 						isMatch = true;
 				}
 			}
@@ -102,7 +102,7 @@ bool ModifiedItemFinder::Accept(InventoryEntryData* pEntryData)
 	return true;
 }
 
-bool ResolveModifiedIdentifier(TESObjectREFR * reference, ModifiedItemIdentifier & identifier, ModifiedItem & itemData)
+bool ResolveModifiedIdentifier(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, ModifiedItem & itemData)
 {
 	if (!reference)
 		return false;
@@ -185,7 +185,7 @@ std::shared_ptr<ItemAttributeData> ModifiedItem::GetAttributeData(TESObjectREFR 
 	return NULL;
 }
 
-std::shared_ptr<ItemAttributeData> ItemDataInterface::GetExistingData(TESObjectREFR * reference, ModifiedItemIdentifier & identifier)
+std::shared_ptr<ItemAttributeData> ItemDataInterface::GetExistingData(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier)
 {
 	ModifiedItem foundData;
 	if (ResolveModifiedIdentifier(reference, identifier, foundData)) {
@@ -195,7 +195,7 @@ std::shared_ptr<ItemAttributeData> ItemDataInterface::GetExistingData(TESObjectR
 	return NULL;
 }
 
-NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, ModifiedItemIdentifier & identifier, UInt32 flags, bool forced, LayerFunctor layerFunctor)
+NIOVTaskUpdateItemDye::NIOVTaskUpdateItemDye(Actor * actor, IItemDataInterface::Identifier & identifier, UInt32 flags, bool forced, LayerFunctor layerFunctor)
 {
 	m_formId = actor->formID;
 	m_identifier = identifier;
@@ -238,7 +238,7 @@ void NIOVTaskUpdateItemDye::Run()
 	}
 }
 
-UInt32 ItemDataInterface::GetItemUniqueID(TESObjectREFR * reference, ModifiedItemIdentifier & identifier, bool makeUnique)
+UInt32 ItemDataInterface::GetItemUniqueID(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, bool makeUnique)
 {
 	ModifiedItem foundData;
 	if (ResolveModifiedIdentifier(reference, identifier, foundData)) {
@@ -256,15 +256,15 @@ void ItemDataInterface::SetItemTextureLayerColor(UInt32 uniqueID, SInt32 texture
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		data->m_tintData[textureIndex].m_colorMap[layerIndex] = color;
+		data->SetLayerColor(textureIndex, layerIndex, color);
 	}
 }
 
-void ItemDataInterface::SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString blendMode)
+void ItemDataInterface::Impl_SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString blendMode)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		data->m_tintData[textureIndex].m_blendMap[layerIndex] = g_stringTable.GetString(blendMode);
+		data->SetLayerBlendMode(textureIndex, layerIndex, blendMode);
 	}
 }
 
@@ -272,52 +272,35 @@ void ItemDataInterface::SetItemTextureLayerType(UInt32 uniqueID, SInt32 textureI
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		data->m_tintData[textureIndex].m_typeMap[layerIndex] = static_cast<UInt8>(type);
+		data->SetLayerType(textureIndex, layerIndex, type);
 	}
 }
 
-void ItemDataInterface::SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString texture)
+void ItemDataInterface::Impl_SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString texture)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		data->m_tintData[textureIndex].m_textureMap[layerIndex] = g_stringTable.GetString(texture);
+		data->SetLayerTexture(textureIndex, layerIndex, texture);
 	}
 }
 
 UInt32 ItemDataInterface::GetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
 {
-	UInt32 color = 0;
 	auto data = GetData(uniqueID);
 	if (data)
 	{
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_colorMap.find(layerIndex);
-			if (it != layerData->second.m_colorMap.end()) {
-				return it->second;
-			}
-		}
-		
+		return data->GetLayerColor(textureIndex, layerIndex);
 	}
 
-	return color;
+	return 0;
 }
 
-SKEEFixedString ItemDataInterface::GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+SKEEFixedString ItemDataInterface::Impl_GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data)
 	{
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_blendMap.find(layerIndex);
-			if (it != layerData->second.m_blendMap.end()) {
-				return it->second ? *it->second : "";
-			}
-		}
-
+		return data->GetLayerBlendMode(textureIndex, layerIndex);
 	}
 
 	return "";
@@ -328,33 +311,40 @@ UInt32 ItemDataInterface::GetItemTextureLayerType(UInt32 uniqueID, SInt32 textur
 	auto data = GetData(uniqueID);
 	if (data)
 	{
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_typeMap.find(layerIndex);
-			if (it != layerData->second.m_typeMap.end()) {
-				return it->second;
-			}
-		}
-
+		return data->GetLayerType(textureIndex, layerIndex);
 	}
 
 	return -1;
 }
 
-SKEEFixedString ItemDataInterface::GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+bool ItemDataInterface::GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor)
 {
 	auto data = GetData(uniqueID);
 	if (data)
 	{
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_textureMap.find(layerIndex);
-			if (it != layerData->second.m_textureMap.end()) {
-				return it->second ? *it->second : "";
-			}
-		}
+		visitor.Visit(data->GetLayerBlendMode(textureIndex, layerIndex).c_str());
+		return true;
+	}
+	return false;
+}
+
+bool ItemDataInterface::GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		visitor.Visit(data->GetLayerTexture(textureIndex, layerIndex).c_str());
+		return true;
+	}
+	return false;
+}
+
+SKEEFixedString ItemDataInterface::Impl_GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		return data->GetLayerTexture(textureIndex, layerIndex);
 	}
 
 	return "";
@@ -364,19 +354,7 @@ void ItemDataInterface::ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textu
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_colorMap.find(layerIndex);
-			if (it != layerData->second.m_colorMap.end()) {
-				layerData->second.m_colorMap.erase(it);
-			}
-
-			// The whole layer is now empty as a result, erase the parent
-			if (layerData->second.empty()) {
-				data->m_tintData.erase(layerData);
-			}
-		}
+		data->ClearLayerColor(textureIndex, layerIndex);
 	}
 }
 
@@ -384,19 +362,7 @@ void ItemDataInterface::ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 t
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_blendMap.find(layerIndex);
-			if (it != layerData->second.m_blendMap.end()) {
-				layerData->second.m_blendMap.erase(it);
-			}
-
-			// The whole layer is now empty as a result, erase the parent
-			if (layerData->second.empty()) {
-				data->m_tintData.erase(layerData);
-			}
-		}
+		data->ClearLayerBlendMode(textureIndex, layerIndex);
 	}
 }
 
@@ -404,19 +370,7 @@ void ItemDataInterface::ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textur
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_typeMap.find(layerIndex);
-			if (it != layerData->second.m_typeMap.end()) {
-				layerData->second.m_typeMap.erase(it);
-			}
-
-			// The whole layer is now empty as a result, erase the parent
-			if (layerData->second.empty()) {
-				data->m_tintData.erase(layerData);
-			}
-		}
+		data->ClearLayerType(textureIndex, layerIndex);
 	}
 }
 
@@ -424,19 +378,7 @@ void ItemDataInterface::ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 tex
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end())
-		{
-			auto & it = layerData->second.m_textureMap.find(layerIndex);
-			if (it != layerData->second.m_textureMap.end()) {
-				layerData->second.m_textureMap.erase(it);
-			}
-
-			// The whole layer is now empty as a result, erase the parent
-			if (layerData->second.empty()) {
-				data->m_tintData.erase(layerData);
-			}
-		}
+		data->ClearLayerTexture(textureIndex, layerIndex);
 	}
 }
 
@@ -444,10 +386,7 @@ void ItemDataInterface::ClearItemTextureLayer(UInt32 uniqueID, SInt32 textureInd
 {
 	auto data = GetData(uniqueID);
 	if (data) {
-		auto & layerData = data->m_tintData.find(textureIndex);
-		if (layerData != data->m_tintData.end()) {
-			data->m_tintData.erase(layerData);
-		}
+		data->ClearLayer(textureIndex);
 	}
 }
 
@@ -509,6 +448,55 @@ TESForm * ItemDataInterface::GetOwnerOfUniqueID(UInt32 uniqueID)
 	}
 
 	return nullptr;
+}
+
+bool ItemDataInterface::HasItemData(UInt32 uniqueID, const char* key)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		return data->HasData(key);
+	}
+	return false;
+}
+
+bool ItemDataInterface::GetItemData(UInt32 uniqueID, const char* key, IItemDataInterface::StringVisitor& visitor)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		visitor.Visit(data->GetData(key).c_str());
+		return true;
+	}
+	return false;
+}
+
+SKEEFixedString ItemDataInterface::Impl_GetItemData(UInt32 uniqueID, SKEEFixedString key)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		return data->GetData(key);
+	}
+	return "";
+}
+
+void ItemDataInterface::Impl_SetItemData(UInt32 uniqueID, SKEEFixedString key, SKEEFixedString value)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		data->SetData(key, value);
+	}
+}
+
+void ItemDataInterface::Impl_ClearItemData(UInt32 uniqueID, SKEEFixedString key)
+{
+	auto data = GetData(uniqueID);
+	if (data)
+	{
+		data->ClearData(key);
+	}
 }
 
 std::shared_ptr<ItemAttributeData> ItemDataInterface::CreateData(UInt32 rankId, UInt16 uid, UInt32 ownerId, UInt32 formId)
@@ -626,7 +614,7 @@ void ItemDataInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TE
 	UInt32 armorMask = armor->bipedObject.GetSlotMask();
 	Actor * actor = DYNAMIC_CAST(refr, TESForm, Actor);
 	if (actor) {
-		ModifiedItemIdentifier identifier;
+		IItemDataInterface::Identifier identifier;
 		identifier.SetSlotMask(armorMask);
 		g_task->AddTask(new NIOVTaskDeferredMask(refr, isFirstPerson, armor, addon, object, g_itemDataInterface.GetExistingData(actor, identifier)));
 	}
@@ -647,7 +635,7 @@ void ItemDataInterface::Revert()
 		Actor * actor = DYNAMIC_CAST(ownerForm, TESForm, Actor);
 		TESObjectARMO * armor = DYNAMIC_CAST(itemForm, TESForm, TESObjectARMO);
 		if (actor && armor) {
-			ModifiedItemIdentifier identifier;
+			IItemDataInterface::Identifier identifier;
 			identifier.SetRankID(itemAttribute.rank);
 			identifier.SetUniqueID(itemAttribute.uid, itemAttribute.ownerForm);
 			identifier.SetSlotMask(armor->bipedObject.GetSlotMask());
@@ -667,7 +655,7 @@ bool DyeMap::IsValidDye(TESForm * form)
 {
 	SimpleLocker lock(&m_lock);
 
-	auto & it = m_data.find(form->formID);
+	auto it = m_data.find(form->formID);
 	if (it != m_data.end()) {
 		return true;
 	}
@@ -679,7 +667,7 @@ UInt32 DyeMap::GetDyeColor(TESForm * form)
 {
 	SimpleLocker lock(&m_lock);
 
-	auto & it = m_data.find(form->formID);
+	auto it = m_data.find(form->formID);
 	if (it != m_data.end()) {
 		return it->second;
 	}
@@ -696,7 +684,7 @@ void DyeMap::RegisterDyeForm(TESForm * form, UInt32 color)
 void DyeMap::UnregisterDyeForm(TESForm * form)
 {
 	SimpleLocker lock(&m_lock);
-	auto & it = m_data.find(form->formID);
+	auto it = m_data.find(form->formID);
 	if (it != m_data.end())
 		m_data.erase(it);
 }
@@ -846,23 +834,25 @@ bool ItemAttributeData::TintData::Load(SKSESerializationInterface * intfc, UInt3
 
 void ItemAttributeData::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 {
-	if (!m_tintData.empty()) {
-		UInt32 numSubrecords = m_tintData.size();
-		intfc->WriteRecordData(&numSubrecords, sizeof(numSubrecords));
+	utils::scoped_lock<> locker(m_lock);
+	UInt32 numSubrecords = m_tintData.size() + m_data.size();
 
-		for (auto & layer : m_tintData)
-		{
-			intfc->OpenRecord('TINT', kVersion);
+	intfc->WriteRecordData(&numSubrecords, sizeof(numSubrecords));
 
-			SInt32 layerIndex = layer.first;
-			intfc->WriteRecordData(&layerIndex, sizeof(layerIndex));
+	for (auto& layer : m_tintData)
+	{
+		intfc->OpenRecord('TINT', kVersion);
 
-			layer.second.Save(intfc, kVersion);
-		}
+		SInt32 layerIndex = layer.first;
+		intfc->WriteRecordData(&layerIndex, sizeof(layerIndex));
+
+		layer.second.Save(intfc, kVersion);
 	}
-	else {
-		UInt32 numSubrecords = 0;
-		intfc->WriteRecordData(&numSubrecords, sizeof(numSubrecords));
+	for (auto& kvp : m_data)
+	{
+		intfc->OpenRecord('IKVP', kVersion);
+		g_stringTable.WriteString(intfc, kvp.first);
+		g_stringTable.WriteString(intfc, kvp.second);
 	}
 }
 
@@ -898,6 +888,7 @@ bool ItemAttributeData::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 							}
 						}
 
+						utils::scoped_lock<> locker(m_lock);
 						if (m_tintData[layerIndex].Load(intfc, version, stringTable))
 						{
 							error = true;
@@ -905,6 +896,17 @@ bool ItemAttributeData::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						}
 					}
 					break;
+				case 'IKVP':
+				{
+					auto key = StringTable::ReadString(intfc, stringTable);
+					auto value = StringTable::ReadString(intfc, stringTable);
+					if (key && value)
+					{
+						utils::scoped_lock<> locker(m_lock);
+						m_data.emplace(key, value);
+					}
+					break;
+				}
 				default:
 					_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
 					error = true;
@@ -1094,7 +1096,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 						TESForm * itemForm = LookupFormByID(itemFormId);
 						if (actor)
 						{
-							ModifiedItemIdentifier identifier;
+							IItemDataInterface::Identifier identifier;
 							identifier.SetRankID(rankId);
 							identifier.SetUniqueID(uid, ownerFormId);
 
@@ -1148,4 +1150,227 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 
 	m_loadQueue.clear();
 	return error;
+}
+
+void ItemAttributeData::SetLayerColor(SInt32 textureIndex, SInt32 layerIndex, UInt32 color)
+{
+	utils::scoped_lock<> locker(m_lock);
+	m_tintData[textureIndex].m_colorMap[layerIndex] = color;
+}
+
+void ItemAttributeData::SetLayerType(SInt32 textureIndex, SInt32 layerIndex, UInt32 type)
+{
+	utils::scoped_lock<> locker(m_lock);
+	m_tintData[textureIndex].m_typeMap[layerIndex] = static_cast<UInt8>(type);
+}
+
+void ItemAttributeData::SetLayerBlendMode(SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString blendMode)
+{
+	utils::scoped_lock<> locker(m_lock);
+	m_tintData[textureIndex].m_blendMap[layerIndex] = g_stringTable.GetString(blendMode);
+}
+
+void ItemAttributeData::SetLayerTexture(SInt32 textureIndex, SInt32 layerIndex, SKEEFixedString texture)
+{
+	utils::scoped_lock<> locker(m_lock);
+	m_tintData[textureIndex].m_textureMap[layerIndex] = g_stringTable.GetString(texture);
+}
+
+UInt32 ItemAttributeData::GetLayerColor(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_colorMap.find(layerIndex);
+		if (it != layerData->second.m_colorMap.end()) {
+			return it->second;
+		}
+	}
+	return 0;
+}
+
+UInt32 ItemAttributeData::GetLayerType(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_typeMap.find(layerIndex);
+		if (it != layerData->second.m_typeMap.end()) {
+			return it->second;
+		}
+	}
+	return -1;
+}
+
+SKEEFixedString ItemAttributeData::GetLayerBlendMode(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_blendMap.find(layerIndex);
+		if (it != layerData->second.m_blendMap.end()) {
+			return it->second ? *it->second : SKEEFixedString("");
+		}
+	}
+	return SKEEFixedString("");
+}
+
+SKEEFixedString ItemAttributeData::GetLayerTexture(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_textureMap.find(layerIndex);
+		if (it != layerData->second.m_textureMap.end()) {
+			return it->second ? *it->second : SKEEFixedString("");
+		}
+	}
+	return SKEEFixedString("");
+}
+
+void ItemAttributeData::ClearLayerColor(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_colorMap.find(layerIndex);
+		if (it != layerData->second.m_colorMap.end()) {
+			layerData->second.m_colorMap.erase(it);
+		}
+
+		// The whole layer is now empty as a result, erase the parent
+		if (layerData->second.empty()) {
+			m_tintData.erase(layerData);
+		}
+	}
+}
+
+void ItemAttributeData::ClearLayerType(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_typeMap.find(layerIndex);
+		if (it != layerData->second.m_typeMap.end()) {
+			layerData->second.m_typeMap.erase(it);
+		}
+
+		// The whole layer is now empty as a result, erase the parent
+		if (layerData->second.empty()) {
+			m_tintData.erase(layerData);
+		}
+	}
+}
+
+void ItemAttributeData::ClearLayerBlendMode(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_blendMap.find(layerIndex);
+		if (it != layerData->second.m_blendMap.end()) {
+			layerData->second.m_blendMap.erase(it);
+		}
+
+		// The whole layer is now empty as a result, erase the parent
+		if (layerData->second.empty()) {
+			m_tintData.erase(layerData);
+		}
+	}
+}
+
+void ItemAttributeData::ClearLayerTexture(SInt32 textureIndex, SInt32 layerIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end())
+	{
+		auto it = layerData->second.m_textureMap.find(layerIndex);
+		if (it != layerData->second.m_textureMap.end()) {
+			layerData->second.m_textureMap.erase(it);
+		}
+
+		// The whole layer is now empty as a result, erase the parent
+		if (layerData->second.empty()) {
+			m_tintData.erase(layerData);
+		}
+	}
+}
+
+void ItemAttributeData::ClearLayer(SInt32 textureIndex)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto layerData = m_tintData.find(textureIndex);
+	if (layerData != m_tintData.end()) {
+		m_tintData.erase(layerData);
+	}
+}
+
+void ItemAttributeData::SetData(SKEEFixedString key, SKEEFixedString value)
+{
+	utils::scoped_lock<> locker(m_lock);
+	m_data[g_stringTable.GetString(key)] = g_stringTable.GetString(value);
+}
+
+SKEEFixedString ItemAttributeData::GetData(SKEEFixedString key)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto it = m_data.find(g_stringTable.GetString(key));
+	if (it != m_data.end())
+	{
+		return *it->second;
+	}
+	return "";
+}
+
+bool ItemAttributeData::HasData(SKEEFixedString key)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto it = m_data.find(g_stringTable.GetString(key));
+	if (it != m_data.end())
+	{
+		return true;
+	}
+	return false;
+}
+
+void ItemAttributeData::ClearData(SKEEFixedString key)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto it = m_data.find(g_stringTable.GetString(key));
+	if (it != m_data.end())
+	{
+		m_data.erase(it);
+	}
+}
+
+void ItemAttributeData::ForEachLayer(std::function<bool(SInt32, TintData&)> functor)
+{
+	utils::scoped_lock<> locker(m_lock);
+	for (auto it : m_tintData)
+	{
+		if (functor(it.first, it.second))
+		{
+			break;
+		}
+	}
+}
+
+bool ItemAttributeData::GetLayer(SInt32 layerIndex, std::function<void(TintData&)> functor)
+{
+	utils::scoped_lock<> locker(m_lock);
+	auto it = m_tintData.find(layerIndex);
+	if (it != m_tintData.end())
+	{
+		functor(it->second);
+		return true;
+	}
+	return false;
 }

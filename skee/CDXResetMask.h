@@ -9,7 +9,7 @@
 class CDXResetMask : public CDXUndoCommand
 {
 public:
-	CDXResetMask::CDXResetMask(CDXMesh * mesh);
+	CDXResetMask(CDXMesh * mesh);
 	virtual ~CDXResetMask();
 
 	virtual UndoType GetUndoType();

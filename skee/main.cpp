@@ -32,6 +32,7 @@
 #include "AttachmentInterface.h"
 #include "ActorUpdateManager.h"
 #include "ActorArmorTangentUpdater.h"
+#include "CommandInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -78,6 +79,7 @@ SkeletonExtenderInterface	g_skeletonExtenderInterface;
 ActorUpdateManager			g_actorUpdateManager;
 ActorArmorTangentUpdater	g_actorArmorTangentUpdater;
 AttachmentInterface			g_attachmentInterface;
+CommandInterface			g_commandInterface;
 PartSet	g_partSet;
 
 StringTable g_stringTable;
@@ -100,6 +102,7 @@ bool	g_hookNativeSliders = true;
 bool	g_hookSliderCallbacks = true;
 bool	g_hookHeadPreprocessing = true;
 bool	g_hookMorphUpdates = true;
+bool	g_enableEarlyRegistration = false;
 
 bool	g_playerOnly = true;
 UInt32	g_numBodyOverlays = 3;
@@ -127,6 +130,8 @@ bool	g_parallelMorphing = true;
 bool	g_deferredBodyMorph = false;
 UInt16	g_scaleMode = 0;
 UInt16	g_bodyMorphMode = 0;
+bool	g_bodyMorphGPUCopy = true;
+bool	g_bodyMorphRebind = true;
 
 bool	g_externalHeads = false;
 bool	g_extendedMorphs = true;
@@ -533,10 +538,32 @@ bool RegisterPapyrusFunctions(VMClassRegistry * registry)
 	return true;
 }
 
+void InterfaceExchangeMessageHandler(SKSEMessagingInterface::Message* message)
+{
+	switch (message->type)
+	{
+	case InterfaceExchangeMessage::kMessage_ExchangeInterface:
+	{
+		InterfaceExchangeMessage* exchangeMessage = (InterfaceExchangeMessage*)message->data;
+		exchangeMessage->interfaceMap = &g_interfaceMap;
+	}
+	break;
+	}
+}
+
 void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 {
 	switch (message->type)
 	{
+		case SKSEMessagingInterface::kMessage_PostLoad:
+		{
+			if (!g_enableEarlyRegistration)
+			{
+				g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
+			}
+		}
+		break;
+
 		case SKSEMessagingInterface::kMessage_InputLoaded:
 		{
 			if (g_enableAutoTransforms || g_enableBodyGen) {
@@ -574,19 +601,6 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 			g_morphInterface.LoadMods();
 		}
 		break;
-	}
-}
-
-void InterfaceExchangeMessageHandler(SKSEMessagingInterface::Message * message)
-{
-	switch (message->type)
-	{
-	case InterfaceExchangeMessage::kMessage_ExchangeInterface:
-	{
-		InterfaceExchangeMessage * exchangeMessage = (InterfaceExchangeMessage*)message->data;
-		exchangeMessage->interfaceMap = &g_interfaceMap;
-	}
-	break;
 	}
 }
 
@@ -696,7 +710,8 @@ __declspec(dllexport) SKSEPluginVersionData SKSEPlugin_Version =
 	"Expired6978",
 	"expired6978@gmail.com",
 	0,	// not version independent
-	{ RUNTIME_VERSION_1_6_353, 0 },	// compatible with 1.6.353
+	0,
+	{ RUNTIME_VERSION_1_6_640, 0 },	// compatible with 1.6.640
 	0,	// works with any version of the script extender. you probably do not need to put anything here
 };
 
@@ -721,6 +736,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableTangentSpaceCorrection", &g_enableTangentSpaceCorrection);
 	SKEE64GetConfigValue("Features", "bEnableFaceNormalRecalculate", &g_enableFaceNormalRecalculate);
 	SKEE64GetConfigValue("Features", "bEnableBodyNormalRecalculate", &g_enableBodyNormalRecalculate);
+	SKEE64GetConfigValue("Features", "bEnableEarlyRegistration", &g_enableEarlyRegistration);
 
 	SKEE64GetConfigValue("Hooks", "bBipedAttach", &g_hookBipedAttach);
 	SKEE64GetConfigValue("Hooks", "bNativeSliders", &g_hookNativeSliders);
@@ -759,6 +775,8 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("General", "iBodyMorphMode", &g_bodyMorphMode);
 	SKEE64GetConfigValue("General", "bParallelMorphing", &g_parallelMorphing);
 	SKEE64GetConfigValue("General", "uTintHairSlot", &g_tintHairSlot);
+	SKEE64GetConfigValue("General", "bBodyMorphGPUCopy", &g_bodyMorphGPUCopy);
+	SKEE64GetConfigValue("General", "bBodyMorphRebind", &g_bodyMorphRebind);
 
 	UInt64 bodyMorphMemoryLimit = 256000000;
 	if (SKEE64GetConfigValue("General", "uBodyMorphMemoryLimit", &bodyMorphMemoryLimit))
@@ -863,6 +881,8 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 		}
 	}
 
+	g_commandInterface.RegisterCommands();
+
 	if (g_serialization) {
 		g_serialization->SetUniqueID(g_pluginHandle, 'SKEE');
 		g_serialization->SetRevertCallback(g_pluginHandle, SKEE64Serialization_Revert);
@@ -882,7 +902,10 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 
 	if (g_messaging) {
 		g_messaging->RegisterListener(g_pluginHandle, "SKSE", SKSEMessageHandler);
-		g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
+		if (g_enableEarlyRegistration)
+		{
+			g_messaging->RegisterListener(g_pluginHandle, nullptr, InterfaceExchangeMessageHandler);
+		}
 
 		if (g_enableTintHairSlot)
 		{
@@ -903,6 +926,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	g_interfaceMap.AddInterface("FaceMorph", &g_morphInterface);
 	g_interfaceMap.AddInterface("ActorUpdateManager", &g_actorUpdateManager);
 	g_interfaceMap.AddInterface("Attachment", &g_attachmentInterface);
+	g_interfaceMap.AddInterface("Command", &g_commandInterface);
 
 	if (g_enableTangentSpaceCorrection)
 	{

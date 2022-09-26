@@ -105,6 +105,7 @@ EventResult ActorUpdateManager::ReceiveEvent(TESCellFullyLoadedEvent* evn, Event
 
 void ActorUpdateManager::AddInterface(IAddonAttachmentInterface* observer)
 {
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	auto it = std::find_if(m_observers.begin(), m_observers.end(), [&](const IAddonAttachmentInterface* ob)
 	{
 		return ob == observer;
@@ -117,6 +118,7 @@ void ActorUpdateManager::AddInterface(IAddonAttachmentInterface* observer)
 
 void ActorUpdateManager::RemoveInterface(IAddonAttachmentInterface* observer)
 {
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_observers.erase(std::remove_if(m_observers.begin(), m_observers.end(), [&](const IAddonAttachmentInterface* ob)
 	{
 		return ob == observer;
@@ -125,6 +127,7 @@ void ActorUpdateManager::RemoveInterface(IAddonAttachmentInterface* observer)
 
 void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root)
 {
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	for (auto observer : m_observers)
 	{
 		observer->OnAttach(refr, armor, addon, object, isFirstPerson, skeleton, root);
@@ -133,55 +136,55 @@ void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, T
 
 void ActorUpdateManager::AddBodyUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_bodyUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddTransformUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_transformUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddOverlayUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overlayUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddNodeOverrideUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideNodeUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddWeaponOverrideUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideWeapUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddAddonOverrideUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideAddonUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddSkinOverrideUpdate(UInt32 formId)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideSkinUpdates.emplace(formId);
 }
 
 void ActorUpdateManager::AddDyeUpdate_Internal(NIOVTaskUpdateItemDye* itemUpdateTask)
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_dyeUpdates.emplace(itemUpdateTask);
 }
 
 void ActorUpdateManager::Flush()
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	g_task->AddTask(new SKSETaskApplyMorphs(*g_thePlayer));
 
 	for (UInt32 formId : m_bodyUpdates)
@@ -249,7 +252,7 @@ void ActorUpdateManager::Revert()
 
 void ActorUpdateManager::PrintDiagnostics()
 {
-	IScopedCriticalSection scs(&m_cs);
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	Console_Print("ActorUpdateManager Diagnostics:");
 	Console_Print("\t%lld pending body updates", m_bodyUpdates.size());
 	Console_Print("\t%lld pending transform updates", m_transformUpdates.size());

@@ -234,7 +234,7 @@ bool TRIFile::Apply(BSGeometry * geometry, SKEEFixedString morphName, float rela
 		return false;
 
 	// Morph name wasn't found
-	auto & morph = morphs.find(morphName);
+	auto morph = morphs.find(morphName);
 	if (morph == morphs.end())
 		return false;
 
@@ -281,7 +281,7 @@ void VisitRaceParts(TESRace * race, UInt32 gender, RacePartVisitor & visitor)
 class RacePartByType : public RacePartVisitor
 {
 public:
-	RacePartByType::RacePartByType(UInt32 partType) : m_type(partType), m_headPart(NULL) {}
+	RacePartByType(UInt32 partType) : m_type(partType), m_headPart(NULL) {}
 	virtual bool Accept(BGSHeadPart * headPart)
 	{
 		if(headPart->type == m_type) {
@@ -299,7 +299,7 @@ public:
 class RacePartDefaultGen : public RacePartVisitor
 {
 public:
-	RacePartDefaultGen::RacePartDefaultGen(TESRace * sourceRace, TESRace * targetRace, std::vector<BSFixedString> * parts, UInt32 gender) : m_sourceRace(sourceRace), m_targetRace(targetRace), m_gender(gender), m_partList(parts), m_acceptDefault(false) {}
+	RacePartDefaultGen(TESRace * sourceRace, TESRace * targetRace, std::vector<BSFixedString> * parts, UInt32 gender) : m_sourceRace(sourceRace), m_targetRace(targetRace), m_gender(gender), m_partList(parts), m_acceptDefault(false) {}
 
 	virtual bool Accept(BGSHeadPart * headPart)
 	{
@@ -356,7 +356,7 @@ public:
 class RacePartFiles : public RacePartVisitor
 {
 public:
-	RacePartFiles::RacePartFiles(std::vector<BSFixedString> * parts) : m_parts(parts) {}
+	RacePartFiles(std::vector<BSFixedString> * parts) : m_parts(parts) {}
 	virtual bool Accept(BGSHeadPart * headPart)
 	{
 		if (headPart->chargenMorph.name.data != BSFixedString("").data)
@@ -743,7 +743,7 @@ void FaceMorphInterface::ApplyPreset(TESNPC * npc, BSFaceGenNiNode * faceNode, B
 class ValidRaceFinder : public BGSListForm::Visitor
 {
 public:
-	ValidRaceFinder::ValidRaceFinder(TESRace * race) : m_race(race) { }
+	ValidRaceFinder(TESRace * race) : m_race(race) { }
 	virtual bool Accept(TESForm * form)
 	{
 		if (m_race == form)
@@ -1585,8 +1585,8 @@ SInt32 FaceMorphInterface::LoadSliders(tArray<RaceMenuSlider> * sliderArray, Rac
 		float value = valueSet ? valueSet->GetValue(slider->name) : 0.0;
 
 		UInt32 sliderIndex = morphIndex + i;
-		float lowerBound = slider->lowerBound == BSFixedString("") ? 0.0 : -1.0;
-		float upperBound = slider->upperBound == BSFixedString("") ? 0.0 : 1.0;
+		float lowerBound = slider->lowerBound == SKEEFixedString("") ? 0.0 : -1.0;
+		float upperBound = slider->upperBound == SKEEFixedString("") ? 0.0 : 1.0;
 		float interval = g_sliderInterval;
 		float lowerMultiplier = g_sliderMultiplier;
 		float upperMultiplier = g_sliderMultiplier;
@@ -2173,7 +2173,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 						jvalue["data"] = value.data.b;
 						break;
 						case OverrideVariant::kType_Int:
-						jvalue["data"] = value.data.i;
+						jvalue["data"] = static_cast<Json::Int>(value.data.i);
 						break;
 						case OverrideVariant::kType_Float:
 						jvalue["data"] = value.data.f;
@@ -2203,7 +2203,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 				jvalue["data"] = value.data.b;
 				break;
 				case OverrideVariant::kType_Int:
-				jvalue["data"] = value.data.i;
+				jvalue["data"] = static_cast<Json::Int>(value.data.i);
 				break;
 				case OverrideVariant::kType_Float:
 				jvalue["data"] = value.data.f;
@@ -2233,7 +2233,7 @@ bool FaceMorphInterface::SaveJsonPreset(const char * filePath)
 						jvalue["data"] = value.data.b;
 						break;
 					case OverrideVariant::kType_Int:
-						jvalue["data"] = value.data.i;
+						jvalue["data"] = static_cast<Json::Int>(value.data.i);
 						break;
 					case OverrideVariant::kType_Float:
 						jvalue["data"] = value.data.f;

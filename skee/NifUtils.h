@@ -85,7 +85,7 @@ public:
 class NiExtraDataFinder : public NiAVObjectVisitor
 {
 public:
-	NiExtraDataFinder::NiExtraDataFinder(BSFixedString name) : m_name(name), m_data(NULL) { }
+	NiExtraDataFinder(BSFixedString name) : m_name(name), m_data(NULL) { }
 
 	virtual bool Accept(NiAVObject* object);
 

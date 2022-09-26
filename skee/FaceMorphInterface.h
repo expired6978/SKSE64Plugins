@@ -48,7 +48,7 @@ class TESModelTri;
 class SliderInternal
 {
 public:
-	SliderInternal::SliderInternal()
+	SliderInternal()
 	{
 		category = -1;
 		name = "";
@@ -58,7 +58,7 @@ public:
 		presetCount = 0;
 	}
 
-	void SliderInternal::copy(SliderInternal * slider)
+	void copy(SliderInternal * slider)
 	{
 		category = slider->category;
 		name = slider->name;
@@ -101,7 +101,7 @@ typedef std::shared_ptr<SliderInternal> SliderInternalPtr;
 class SliderGender
 {
 public:
-	SliderGender::SliderGender()
+	SliderGender()
 	{
 		slider[0] = NULL;
 		slider[1] = NULL;
@@ -144,7 +144,7 @@ public:
 class SliderMap : public std::unordered_map<SKEEFixedString, SliderGenderPtr>
 {
 public:
-	SliderMap::SliderMap() : std::unordered_map<SKEEFixedString, SliderGenderPtr>(){ }
+	SliderMap() : std::unordered_map<SKEEFixedString, SliderGenderPtr>(){ }
 
 	void AddSlider(const SKEEFixedString & key, UInt8 gender, SliderInternal & slider);
 
