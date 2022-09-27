@@ -15,18 +15,18 @@
     <ProjectGuid>{FC9A1EE6-D9DB-47F6-B0ED-8867439C43CE}</ProjectGuid>
     <RootNamespace>hudextension</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -51,7 +51,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\common;$(SolutionDir)..\skse64;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -86,7 +86,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\..;$(SolutionDir)\..\..;$(SolutionDir)\skse64;$(SolutionDir)\jsoncpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..;$(SolutionDir)..\common;$(SolutionDir)..\skse64;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;PLUGIN_EXAMPLE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -95,6 +95,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ForcedIncludeFiles>common/IPrefix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
@@ -118,70 +119,28 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\skse\skse\HashUtil.cpp" />
-    <ClCompile Include="..\skse64\GameAPI.cpp" />
-    <ClCompile Include="..\skse64\GameBSExtraData.cpp" />
-    <ClCompile Include="..\skse64\GameData.cpp" />
-    <ClCompile Include="..\skse64\GameEvents.cpp" />
-    <ClCompile Include="..\skse64\GameExtraData.cpp" />
-    <ClCompile Include="..\skse64\GameFormComponents.cpp" />
-    <ClCompile Include="..\skse64\GameForms.cpp" />
-    <ClCompile Include="..\skse64\GameObjects.cpp" />
-    <ClCompile Include="..\skse64\GameReferences.cpp" />
-    <ClCompile Include="..\skse64\GameRTTI.cpp" />
-    <ClCompile Include="..\skse64\GameTypes.cpp" />
-    <ClCompile Include="..\skse64\NiObjects.cpp" />
-    <ClCompile Include="..\skse64\NiTypes.cpp" />
-    <ClCompile Include="..\skse64\ScaleformAPI.cpp" />
-    <ClCompile Include="..\skse64\ScaleformCallbacks.cpp" />
-    <ClCompile Include="..\skse64\ScaleformTypes.cpp" />
-    <ClCompile Include="..\skse64\ScaleformValue.cpp" />
-    <ClCompile Include="..\skse64\ScaleformVM.cpp" />
-    <ClCompile Include="Hooks.cpp" />
     <ClCompile Include="HUDExtension.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\skse\skse\HashUtil.h" />
-    <ClInclude Include="..\skse64\GameAPI.h" />
-    <ClInclude Include="..\skse64\GameBSExtraData.h" />
-    <ClInclude Include="..\skse64\GameData.h" />
-    <ClInclude Include="..\skse64\GameEvents.h" />
-    <ClInclude Include="..\skse64\GameExtraData.h" />
-    <ClInclude Include="..\skse64\GameFormComponents.h" />
-    <ClInclude Include="..\skse64\GameForms.h" />
-    <ClInclude Include="..\skse64\GameObjects.h" />
-    <ClInclude Include="..\skse64\GameReferences.h" />
-    <ClInclude Include="..\skse64\GameRTTI.h" />
-    <ClInclude Include="..\skse64\GameTypes.h" />
-    <ClInclude Include="..\skse64\NiObjects.h" />
-    <ClInclude Include="..\skse64\NiTypes.h" />
-    <ClInclude Include="..\skse64\ScaleformAPI.h" />
-    <ClInclude Include="..\skse64\ScaleformCallbacks.h" />
-    <ClInclude Include="..\skse64\ScaleformTypes.h" />
-    <ClInclude Include="..\skse64\ScaleformValue.h" />
-    <ClInclude Include="..\skse64\ScaleformVM.h" />
-    <ClInclude Include="Hooks.h" />
     <ClInclude Include="HUDExtension.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\common\common_vc14.vcxproj">
-      <Project>{d4c128a1-73dc-4941-a453-ce55af239ba8}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\skse64_common\skse64_common.vcxproj">
-      <Project>{20c6411c-596f-4b85-be4e-8bc91f59d8a6}</Project>
-      <Private>false</Private>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
-      <LinkLibraryDependencies>true</LinkLibraryDependencies>
-      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
-    </ProjectReference>
+    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="Resource.rc" />
+    <ProjectReference Include="..\common\common\common_vc14.vcxproj">
+      <Project>{472e19ab-def0-42df-819b-18722e8dc822}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\skse64\skse64\skse64.vcxproj">
+      <Project>{7028b79c-06e3-4d9a-b38c-1dc3680b1bdb}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\skse64\skse64_common\skse64_common.vcxproj">
+      <Project>{5fd1c08d-db80-480c-a1c6-f0920005cd13}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

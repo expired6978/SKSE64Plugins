@@ -19,13 +19,12 @@ IDebugLog	gLog;
 
 PluginHandle	g_pluginHandle = kPluginHandle_Invalid;
 
-SKSEMessagingInterface	* g_messagingInterface = NULL;
-SKSETaskInterface		* g_task = NULL;
-SKSEScaleformInterface	* g_scaleform = NULL;
+SKSEMessagingInterface	* g_messagingInterface = nullptr;
+SKSETaskInterface		* g_task = nullptr;
+SKSEScaleformInterface	* g_scaleform = nullptr;
+SKSETrampolineInterface* g_trampoline = nullptr;
 
-
-HUDExtension * g_hudExtension = NULL;
-
+HUDExtension * g_hudExtension = nullptr;
 
 class CombatEventHandler : public BSTEventSink < TESCombatEvent >
 {
@@ -115,9 +114,9 @@ bool RegisterScaleform(GFxMovieView * view, GFxValue * root)
 	return true;
 }
 
-RelocAddr<uintptr_t> HUDMenu_Hook_Target(0x0087CDD0 + 0x5D8);
+RelocAddr<uintptr_t> HUDMenu_Hook_Target(0x0008BE6E0 + 0x9E8); // HUDMenu::ctor
 typedef void(*_HUDMenu_RegisterMarkers)(GFxValue * value);
-RelocAddr<_HUDMenu_RegisterMarkers> HUDMenu_RegisterMarkers(0x00883430);
+RelocAddr<_HUDMenu_RegisterMarkers> HUDMenu_RegisterMarkers(0x008C5BF0);
 
 void HUDMenu_RegisterMarkers_Hook(GFxValue * value, HUDMenu * menu)
 {
@@ -137,16 +136,23 @@ void HUDMenu_RegisterMarkers_Hook(GFxValue * value, HUDMenu * menu)
 
 extern "C"
 {
+	__declspec(dllexport) SKSEPluginVersionData SKSEPlugin_Version =
+	{
+		SKSEPluginVersionData::kVersion,
+		1,
+		"hudextension",
+		"Expired6978",
+		"expired6978@gmail.com",
+		0,	// not version independent
+		0,
+		{ RUNTIME_VERSION_1_6_640, 0 },	// compatible with 1.6.640
+		0,	// works with any version of the script extender. you probably do not need to put anything here
+	};
 
-bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
+bool SKSEPlugin_Query(const SKSEInterface * skse)
 {
 	gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\skse_hudextension.log");
 	_MESSAGE("skse_hudextension");
-
-	// populate info structure
-	info->infoVersion =	PluginInfo::kInfoVersion;
-	info->name =		"hudextension";
-	info->version =		1;
 
 	// store plugin handle so we can identify ourselves later
 	g_pluginHandle = skse->GetPluginHandle();
@@ -154,11 +160,6 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 	if(skse->isEditor)
 	{
 		_MESSAGE("loaded in editor, marking as incompatible");
-		return false;
-	}
-	else if(skse->runtimeVersion != RUNTIME_VERSION_1_5_80)
-	{
-		_MESSAGE("unsupported runtime version %08X", skse->runtimeVersion);
 		return false;
 	}
 
@@ -195,27 +196,52 @@ bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
 		return false;
 	}
 
+	g_trampoline = (SKSETrampolineInterface*)skse->QueryInterface(kInterface_Trampoline);
+	if (!g_trampoline) {
+		_ERROR("couldn't get trampoline interface");
+	}
+
 	// supported runtime version
 	return true;
 }
 
 bool SKSEPlugin_Load(const SKSEInterface * skse)
 {
+	if (!SKSEPlugin_Query(skse))
+		return false;
+
 	_MESSAGE("Hud Extension Loaded");
 
 	g_messagingInterface->RegisterListener(0, "SKSE", MessageHandler);
 	g_scaleform->Register("HudExtension", RegisterScaleform);
 
-	if (!g_branchTrampoline.Create(1024 * 64))
-	{
-		_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
-		return false;
-	}
+	if (g_trampoline) {
+		void* branch = g_trampoline->AllocateFromBranchPool(g_pluginHandle, 32);
+		if (!branch) {
+			_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
+			return false;
+		}
 
-	if (!g_localTrampoline.Create(1024 * 64, nullptr))
-	{
-		_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
-		return false;
+		g_branchTrampoline.SetBase(32, branch);
+
+		void* local = g_trampoline->AllocateFromLocalPool(g_pluginHandle, 64);
+		if (!local) {
+			_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
+			return false;
+		}
+
+		g_localTrampoline.SetBase(64, local);
+	}
+	else {
+		if (!g_branchTrampoline.Create(32)) {
+			_ERROR("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
+			return false;
+		}
+		if (!g_localTrampoline.Create(64, nullptr))
+		{
+			_ERROR("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
+			return false;
+		}
 	}
 
 	{
@@ -225,7 +251,7 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 				Xbyak::Label retnLabel;
 				Xbyak::Label funcLabel;
 
-				mov(rdx, rdi);
+				mov(rdx, r13);
 				call(ptr[rip + funcLabel]);
 				jmp(ptr[rip + retnLabel]);
 
