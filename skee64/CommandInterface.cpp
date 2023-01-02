@@ -4,13 +4,13 @@ extern CommandInterface g_commandInterface;
 
 bool CommandInterface::RegisterCommand(const char* command, const char* desc, CommandCallback cb)
 {
-    std::lock_guard<std::mutex> locker(m_lock);
+    std::scoped_lock<lock_type> locker(m_lock);
 	return m_commandMap[command].emplace(CommandData{ desc, cb }).second;
 }
 
 bool CommandInterface::ExecuteCommand(const char* command, TESObjectREFR* ref, const char* argumentString)
 {
-	std::lock_guard<std::mutex> locker(m_lock);
+	std::scoped_lock<lock_type> locker(m_lock);
     auto it = m_commandMap.find(command);
     if (it != m_commandMap.end())
     {
@@ -527,7 +527,7 @@ void CommandInterface::RegisterCommands()
 	{
 		if (argument == nullptr || argument[0] == 0)
 		{
-			std::scoped_lock<std::mutex> locker(g_commandInterface.m_lock);
+			std::scoped_lock<lock_type> locker(g_commandInterface.m_lock);
 			for (auto& cmdItem : g_commandInterface.m_commandMap)
 			{
 				if (_stricmp(cmdItem.first.c_str(), "help") == 0)

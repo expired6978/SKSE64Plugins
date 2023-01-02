@@ -35,7 +35,7 @@ struct InterfaceExchangeMessage
 		kMessage_ExchangeInterface = 0x9E3779B9
 	};
 
-	IInterfaceMap * interfaceMap = NULL;
+	IInterfaceMap * interfaceMap = nullptr;
 };
 
 class IAddonAttachmentInterface

@@ -936,6 +936,9 @@ void OverrideInterface::SetSkinProperties(OverrideHandle formId, bool immediate)
 						for (UInt32 i = 0; i < armor->armorAddons.count; i++) {
 							TESObjectARMA * arma = NULL;
 							if (armor->armorAddons.GetNthItem(i, arma)) {
+								if (!IsSlotMatch(arma, ait->first)) {
+									continue;
+								}
 								VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, NiAVObject * rootNode, NiAVObject * parent)
 								{
 									if ((fp == 0 && isFirstPerson) || (fp == 1 && !isFirstPerson))

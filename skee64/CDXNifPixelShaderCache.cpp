@@ -2,7 +2,6 @@
 #include "CDXD3DDevice.h"
 #include "CDXBSShaderResource.h"
 
-#include "skse64/GameStreams.h"
 #include "FileUtils.h"
 
 #include <stdio.h>

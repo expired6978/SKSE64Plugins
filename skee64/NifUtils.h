@@ -104,6 +104,8 @@ NiExtraData* FindExtraData(NiAVObject* object, BSFixedString name);
 bool ResolveAnyForm(SKSESerializationInterface* intfc, UInt32 handle, UInt32* newHandle);
 bool ResolveAnyHandle(SKSESerializationInterface* intfc, UInt64 handle, UInt64* newHandle);
 
+bool IsSlotMatch(TESForm* pForm, UInt32 mask);
+
 TESObjectARMO* GetActorSkin(Actor* actor);
 BGSTextureSet * GetTextureSetForPart(TESNPC * npc, BGSHeadPart * headPart);
 std::pair<BGSTextureSet*, BGSHeadPart*> GetTextureSetForPartByName(TESNPC * npc, BSFixedString partName);

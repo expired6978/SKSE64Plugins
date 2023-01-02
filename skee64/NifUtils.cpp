@@ -800,15 +800,21 @@ public:
 	}
 
 	bool Matches(TESForm* pForm) const {
-		if (pForm) {
-			BGSBipedObjectForm* pBip = DYNAMIC_CAST(pForm, TESForm, BGSBipedObjectForm);
-			if (pBip) {
-				return (pBip->data.parts & m_mask) != 0;
-			}
-		}
-		return false;
+		return IsSlotMatch(pForm, m_mask);
 	}
 };
+
+bool IsSlotMatch(TESForm* pForm, UInt32 mask)
+{
+	if (pForm) {
+		BGSBipedObjectForm* pBip = DYNAMIC_CAST(pForm, TESForm, BGSBipedObjectForm);
+		if (pBip) {
+			return (pBip->data.parts & mask) != 0;
+		}
+	}
+
+	return false;
+}
 
 TESForm* GetSkinForm(Actor* thisActor, UInt32 mask)
 {

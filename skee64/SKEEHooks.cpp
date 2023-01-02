@@ -1,5 +1,4 @@
 #include "common/IFileStream.h"
-#include "skse64_common/SafeWrite.h"
 #include "skse64/PluginAPI.h"
 #include "skse64/PapyrusVM.h"
 
@@ -39,6 +38,7 @@
 #include "skse64_common/Relocation.h"
 #include "skse64_common/BranchTrampoline.h"
 #include "skse64_common/SafeWrite.h"
+#include "skse64_common/skse_version.h"
 #include "xbyak/xbyak.h"
 
 #include "common/ICriticalSection.h"
@@ -91,41 +91,107 @@ extern bool					g_hookNativeSliders;
 extern bool					g_hookSliderCallbacks;
 extern bool					g_hookHeadPreprocessing;
 extern bool					g_hookMorphUpdates;
+extern bool					g_hookMorphExtensions;
+extern bool					g_hookTintInventory;
+extern bool					g_hookTinting;
+extern bool					g_hookFaceOverlays;
 
-RelocAddr<_AttachBipedObject> AttachBipedObject(0x001D8070);
+namespace Addresses {
+#if STORE_VERSION == RUNTIME_TYPE_STEAM
+	// Hooks
+	static const uintptr_t InvokeCategoriesList_Target = 0x008F7360;
+	static const uintptr_t DoubleMorphCallback2_Target = 0x008F3FA0;
+	static const uintptr_t PreprocessedHeads = 0x0037CF50;
+	static const uintptr_t ApplyRaceMorph_Target = 0x003EC020;
+	static const uintptr_t UpdateMorphs_Target = 0x003EBF10;
+	static const uintptr_t UpdateMorph_Target = 0x003F6770;
+	static const uintptr_t NiAllocate_Geom = 0x00CACFC0;
+	static const uintptr_t NiAllocate_Geom2_Target = 0x00CAD500;
+	static const uintptr_t NiFree_Geom2_Target = 0x00CADFC0;
+	static const uintptr_t UpdateHeadState_Target1 = 0x0037D090;
+	static const uintptr_t UpdateHeadState_Target2 = 0x0037BEC0;
+	static const uintptr_t RaceSexMenu_Vtable = 0x017AE980; // ??_7RaceSexMenu@@6B@
+	static const uintptr_t CachePartsTarget_Target = 0x008F4EA0;
+	static const uintptr_t SetNewInventoryItemModel_Target = 0x008CAB70;
+	// Functions
+	static const uintptr_t AttachBipedObject = 0x001D8070;
+	static const uintptr_t useFaceGenPreProcessedHeads = 0x01E7D188;
+	static const uintptr_t TESModelTri_vtbl = 0x0168D330; // ??_7TESModelTri@@6B@
+	static const uintptr_t AddGFXArgument = 0x00895AC0;
+	static const uintptr_t FaceGenApplyMorph = 0x003EBD20;
+	static const uintptr_t AddRaceMenuSlider = 0x008FD5F0;
+	static const uintptr_t DoubleMorphCallback = 0x008F6960;
+	static const uintptr_t UpdateNPCMorphs = 0x003795D0;
+	static const uintptr_t UpdateNPCMorph = 0x003797C0;
+	static const uintptr_t UpdateHeadState = 0x0037BD20;
+	static const uintptr_t SetInventoryItemModel = 0x008CAAC0;
+	static const uintptr_t SetNewInventoryItemModel = 0x008CA590;
+#elif STORE_VERSION == RUNTIME_TYPE_GOG
+	// Hooks
+	static const uintptr_t InvokeCategoriesList_Target = 0x008F6AD0;
+	static const uintptr_t DoubleMorphCallback2_Target = 0x008F3710;
+	static const uintptr_t PreprocessedHeads = 0x0037CEE0;
+	static const uintptr_t ApplyRaceMorph_Target = 0x003EBFB0;
+	static const uintptr_t UpdateMorphs_Target = 0x003EBEA0;
+	static const uintptr_t UpdateMorph_Target = 0x003F6700;
+	static const uintptr_t NiAllocate_Geom = 0x00CAC720;
+	static const uintptr_t NiAllocate_Geom2_Target = 0x00CACC60;
+	static const uintptr_t NiFree_Geom2_Target = 0x00CAD720;
+	static const uintptr_t UpdateHeadState_Target1 = 0x0037D020;
+	static const uintptr_t UpdateHeadState_Target2 = 0x0037BE50;
+	static const uintptr_t RaceSexMenu_Vtable = 0x017A98F8; // ??_7RaceSexMenu@@6B@
+	static const uintptr_t CachePartsTarget_Target = 0x008F4610;
+	static const uintptr_t SetNewInventoryItemModel_Target = 0x008CA5B0;
+	// Functions
+	static const uintptr_t AttachBipedObject = 0x001D7E70;
+	static const uintptr_t useFaceGenPreProcessedHeads = 0x01E77188;
+	static const uintptr_t TESModelTri_vtbl = 0x01688320; // ??_7TESModelTri@@6B@
+	static const uintptr_t AddGFXArgument = 0x008955C0;
+	static const uintptr_t FaceGenApplyMorph = 0x003EBCB0;
+	static const uintptr_t AddRaceMenuSlider = 0x008FCD60;
+	static const uintptr_t DoubleMorphCallback = 0x008F60D0;
+	static const uintptr_t UpdateNPCMorphs = 0x00379560;
+	static const uintptr_t UpdateNPCMorph = 0x00379750;
+	static const uintptr_t UpdateHeadState = 0x0037BCB0;
+	static const uintptr_t SetInventoryItemModel = 0x008CA500;
+	static const uintptr_t SetNewInventoryItemModel = 0x008C9FD0;
+#endif
+};
+
+RelocAddr<_AttachBipedObject> AttachBipedObject(Addresses::AttachBipedObject);
 _AttachBipedObject AttachBipedObject_Original = nullptr;
 
 typedef void(*_RegenerateHead)(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc);
 RelocAddr <_RegenerateHead> RegenerateHead(FaceGen::RegenerateHead_Address);
 _RegenerateHead RegenerateHead_Original = nullptr;
 
-RelocPtr<bool> g_useFaceGenPreProcessedHeads(0x01E7D188);
+RelocPtr<bool> g_useFaceGenPreProcessedHeads(Addresses::useFaceGenPreProcessedHeads); // ini setting
 
-// ??_7TESModelTri@@6B@
-RelocAddr<uintptr_t> TESModelTri_vtbl(0x0168D330);
 
-RelocAddr<_AddGFXArgument> AddGFXArgument(0x00895AC0);
+RelocAddr<uintptr_t> TESModelTri_vtbl(Addresses::TESModelTri_vtbl); // ??_7TESModelTri@@6B@
+
+RelocAddr<_AddGFXArgument> AddGFXArgument(Addresses::AddGFXArgument);
 
 typedef UInt8 (*_BSFaceGenModel_ApplyMorph)(BSFaceGenModel* model, BSFixedString* morphName, TESModelTri* modelMorph, NiAVObject** headNode, float relative, UInt8 unk1);
 RelocAddr <_BSFaceGenModel_ApplyMorph> BSFaceGenModel_ApplyMorph(BSFaceGenModel::ApplyMorph_Address);
 _BSFaceGenModel_ApplyMorph BSFaceGenModel_ApplyMorph_Original = nullptr;
 
-RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(0x003EBD20);
-RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(0x008FD5F0);
-RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(0x008F6960);
+RelocAddr<_FaceGenApplyMorph> FaceGenApplyMorph(Addresses::FaceGenApplyMorph);
+RelocAddr<_AddRaceMenuSlider> AddRaceMenuSlider(Addresses::AddRaceMenuSlider);
+RelocAddr<_DoubleMorphCallback> DoubleMorphCallback(Addresses::DoubleMorphCallback);
 
-RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(0x003795D0);
-RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(0x003797C0);
+RelocAddr<_UpdateNPCMorphs> UpdateNPCMorphs(Addresses::UpdateNPCMorphs);
+RelocAddr<_UpdateNPCMorph> UpdateNPCMorph(Addresses::UpdateNPCMorph);
 
 typedef SInt32(*_UpdateHeadState)(TESNPC * npc, Actor * actor, UInt32 unk1);
-RelocAddr<_UpdateHeadState> UpdateHeadState(0x0037BD20);
+RelocAddr<_UpdateHeadState> UpdateHeadState(Addresses::UpdateHeadState);
 
 typedef void(*_SetInventoryItemModel)(void * unk1, void * unk2, void * unk3);
-RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(0x008CAAC0);
+RelocAddr <_SetInventoryItemModel> SetInventoryItemModel(Addresses::SetInventoryItemModel);
 _SetInventoryItemModel SetInventoryItemModel_Original = nullptr;
 
 typedef void(*_SetNewInventoryItemModel)(void * unk1, TESForm * form1, TESForm * form2, NiNode ** node);
-RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(0x008CA590);
+RelocAddr <_SetNewInventoryItemModel> SetNewInventoryItemModel(Addresses::SetNewInventoryItemModel);
 
 typedef void(*_TransferItemUID)(ExtraContainerChanges::Data* extraContainerChangeData, BaseExtraList* extraList, TESForm* oldForm, TESForm* newForm, UInt32 unk1);
 _TransferItemUID TransferItemUID_Original = nullptr;
@@ -1122,6 +1188,7 @@ bool InstallSKEEHooks()
 
 	static const uintptr_t LoadRaceMenuSliders = RaceSexMenu::LoadSliders_Address;
 
+
 	RelocAddr <uintptr_t> GetSex_Target(LoadRaceMenuSliders + 0x16F);
 	g_branchTrampoline.Write5Call(GetSex_Target.GetUIntPtr(), (uintptr_t)GetSex_Hooked);
 
@@ -1130,7 +1197,7 @@ bool InstallSKEEHooks()
 	
 	if (g_hookNativeSliders)
 	{
-		RelocAddr <uintptr_t> InvokeCategoriesList_Target(0x008F7360 + 0x4D6);
+		RelocAddr <uintptr_t> InvokeCategoriesList_Target(Addresses::InvokeCategoriesList_Target + 0x4D6);
 		g_branchTrampoline.Write5Call(InvokeCategoriesList_Target.GetUIntPtr(), (uintptr_t)InvokeCategoryList_Hook);
 
 		RelocAddr <uintptr_t> AddSlider_Target(LoadRaceMenuSliders + 0x3583);
@@ -1142,7 +1209,7 @@ bool InstallSKEEHooks()
 		RelocAddr <uintptr_t> DoubleMorphCallback1_Target(LoadRaceMenuSliders + 0x3A03);
 		g_branchTrampoline.Write5Call(DoubleMorphCallback1_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 
-		RelocAddr <uintptr_t> DoubleMorphCallback2_Target(0x008F3FA0 + 0x50); // ChangeDoubleMorph callback
+		RelocAddr <uintptr_t> DoubleMorphCallback2_Target(Addresses::DoubleMorphCallback2_Target + 0x50); // ChangeDoubleMorph callback
 		g_branchTrampoline.Write5Call(DoubleMorphCallback2_Target.GetUIntPtr(), (uintptr_t)DoubleMorphCallback_Hook);
 	}
 
@@ -1179,11 +1246,9 @@ bool InstallSKEEHooks()
 
 	if (g_hookHeadPreprocessing && !g_externalHeads)
 	{
-		static const uintptr_t PreprocessedHeads = 0x0037CF50;
-
-		RelocAddr<uintptr_t> PreprocessedHeads1_Target(PreprocessedHeads + 0x58);
-		RelocAddr<uintptr_t> PreprocessedHeads2_Target(PreprocessedHeads + 0x81);
-		RelocAddr<uintptr_t> PreprocessedHeads3_Target(PreprocessedHeads + 0x67);
+		RelocAddr<uintptr_t> PreprocessedHeads1_Target(Addresses::PreprocessedHeads + 0x58);
+		RelocAddr<uintptr_t> PreprocessedHeads2_Target(Addresses::PreprocessedHeads + 0x81);
+		RelocAddr<uintptr_t> PreprocessedHeads3_Target(Addresses::PreprocessedHeads + 0x67);
 		{
 			struct UsePreprocessedHeads_Entry_Code : Xbyak::CodeGenerator {
 				UsePreprocessedHeads_Entry_Code(void * buf, UInt64 funcAddr, UInt64 targetAddr) : Xbyak::CodeGenerator(4096, buf)
@@ -1253,7 +1318,7 @@ bool InstallSKEEHooks()
 	}
 
 
-	if (g_extendedMorphs)
+	if (g_hookMorphExtensions && g_extendedMorphs)
 	{
 		struct BSFaceGenModel_ApplyMorph_Code : Xbyak::CodeGenerator {
 			BSFaceGenModel_ApplyMorph_Code(void* buf, uintptr_t address) : Xbyak::CodeGenerator(4096, buf)
@@ -1278,51 +1343,50 @@ bool InstallSKEEHooks()
 		BSFaceGenModel_ApplyMorph_Original = (_BSFaceGenModel_ApplyMorph)codeBuf;
 		g_branchTrampoline.Write5Branch(BSFaceGenModel_ApplyMorph.GetUIntPtr(), (uintptr_t)ApplyChargenMorph_Hooked);
 
-		RelocAddr <uintptr_t> ApplyRaceMorph_Target(0x003EC020 + 0x124);
+		RelocAddr <uintptr_t> ApplyRaceMorph_Target(Addresses::ApplyRaceMorph_Target + 0x124);
 		g_branchTrampoline.Write5Call(ApplyRaceMorph_Target.GetUIntPtr(), (uintptr_t)ApplyRaceMorph_Hooked); // Revisit
 	}
 
+
 	if (g_hookMorphUpdates)
 	{
-		RelocAddr <uintptr_t> UpdateMorphs_Target(0x003EBF10 + 0xB7);
+		RelocAddr <uintptr_t> UpdateMorphs_Target(Addresses::UpdateMorphs_Target + 0xB7);
 		g_branchTrampoline.Write5Call(UpdateMorphs_Target.GetUIntPtr(), (uintptr_t)UpdateMorphs_Hooked);
 
-		RelocAddr <uintptr_t> UpdateMorph_Target(0x003F6770 + 0x7E);
+		RelocAddr <uintptr_t> UpdateMorph_Target(Addresses::UpdateMorph_Target + 0x7E);
 		g_branchTrampoline.Write5Call(UpdateMorph_Target.GetUIntPtr(), (uintptr_t)UpdateMorph_Hooked);
 	}
 
 
 	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount
 	// This hook is very sad but BSDynamicTriShape render data has no refcount so we need implement it
-	if(g_enableFaceOverlays)
+	if(g_hookFaceOverlays && g_enableFaceOverlays)
 	{
-		static const uintptr_t NiAllocate_Geom_Address = 0x00CACFC0;
-
-		RelocAddr <uintptr_t> NiAllocate_Geom_Target(NiAllocate_Geom_Address + 0x147);
+		RelocAddr <uintptr_t> NiAllocate_Geom_Target(Addresses::NiAllocate_Geom + 0x147);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom_Target(NiAllocate_Geom_Address + 0x140);
+		RelocAddr <uintptr_t> NiFree_Geom_Target(Addresses::NiAllocate_Geom + 0x140);
 		g_branchTrampoline.Write5Call(NiFree_Geom_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(0x00CAD500 + 0x76);
+		RelocAddr <uintptr_t> NiAllocate_Geom2_Target(Addresses::NiAllocate_Geom2_Target + 0x76);
 		g_branchTrampoline.Write5Call(NiAllocate_Geom2_Target.GetUIntPtr(), (uintptr_t)NiAllocate_Hooked);
 
-		RelocAddr <uintptr_t> NiFree_Geom2_Target(0x00CADFC0 + 0x2F);
+		RelocAddr <uintptr_t> NiFree_Geom2_Target(Addresses::NiFree_Geom2_Target + 0x2F);
 		g_branchTrampoline.Write5Call(NiFree_Geom2_Target.GetUIntPtr(), (uintptr_t)NiFree_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target1(0x0037D090 + 0x169);
+		RelocAddr<uintptr_t> UpdateHeadState_Target1(Addresses::UpdateHeadState_Target1 + 0x169);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target1.GetUIntPtr(), (uintptr_t)UpdateHeadState_Enable_Hooked);
 
-		RelocAddr<uintptr_t> UpdateHeadState_Target2(0x0037BEC0 + 0x2EB);
+		RelocAddr<uintptr_t> UpdateHeadState_Target2(Addresses::UpdateHeadState_Target2 + 0x2EB);
 		g_branchTrampoline.Write5Call(UpdateHeadState_Target2.GetUIntPtr(), (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
 
-	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(0x017AE980 + 0x30); // ??_7RaceSexMenu@@6B@
+	RelocAddr <uintptr_t> RaceSexMenu_Render_Target(Addresses::RaceSexMenu_Vtable + 0x30); // ??_7RaceSexMenu@@6B@
 	SafeWrite64(RaceSexMenu_Render_Target.GetUIntPtr(), (uintptr_t)RaceSexMenu_Render_Hooked);
 
 	if (g_disableFaceGenCache)
 	{
-		RelocAddr <uintptr_t> CachePartsTarget_Target(0x008F4EA0);
+		RelocAddr <uintptr_t> CachePartsTarget_Target(Addresses::CachePartsTarget_Target);
 		SafeWrite8(CachePartsTarget_Target.GetUIntPtr(), 0xC3);
 	}
 
@@ -1352,15 +1416,15 @@ bool InstallSKEEHooks()
 		g_branchTrampoline.Write6Branch(AttachBipedObject.GetUIntPtr(), (uintptr_t)AttachBipedObject_Hooked);
 	}
 
-	if (g_enableTintSync)
+	if (g_hookTinting && g_enableTintSync)
 	{
 		g_branchTrampoline.Write6Branch(UpdateModelSkin.GetUIntPtr(), (uintptr_t)UpdateModelSkin_Hooked);
 		g_branchTrampoline.Write6Branch(UpdateModelHair.GetUIntPtr(), (uintptr_t)UpdateModelHair_Hooked);
 	}
 
-	if (g_enableTintInventory)
+	if (g_hookTintInventory && g_enableTintInventory)
 	{
-		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(0x008CAB70 + 0x1C3);
+		RelocAddr<uintptr_t> SetNewInventoryItemModel_Target(Addresses::SetNewInventoryItemModel_Target + 0x1C3);
 		struct TintInventoryItem_Code : Xbyak::CodeGenerator {
 			TintInventoryItem_Code(void* buf) : Xbyak::CodeGenerator(4096, buf)
 			{

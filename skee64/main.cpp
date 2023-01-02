@@ -97,11 +97,18 @@ bool	g_enableTintHairSlot = true;
 bool	g_enableTangentSpaceCorrection = true;
 bool	g_enableFaceNormalRecalculate = true;
 bool	g_enableBodyNormalRecalculate = true;
+
 bool	g_hookBipedAttach = true;
 bool	g_hookNativeSliders = true;
 bool	g_hookSliderCallbacks = true;
 bool	g_hookHeadPreprocessing = true;
 bool	g_hookMorphUpdates = true;
+bool	g_hookMorphExtensions = true;
+bool	g_hookTintInventory = true;
+bool	g_hookTinting = true;
+bool	g_hookFaceOverlays = true;
+
+
 bool	g_enableEarlyRegistration = false;
 
 bool	g_playerOnly = true;
@@ -606,18 +613,17 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 bool SKSEPlugin_Query(const SKSEInterface* skse)
 {
-	// Loading SKEE64 into SKSEVR short circuit immediately
-	if (GET_EXE_VERSION_SUB(skse->runtimeVersion) != 0)
-	{
-		return false;
-	}
-
 	SInt32	logLevel = IDebugLog::kLevel_DebugMessage;
 	if (SKEE64GetConfigValue("Debug", "iLogLevel", &logLevel))
 		gLog.SetLogLevel((IDebugLog::LogLevel)logLevel);
 
+#if STORE_VERSION == RUNTIME_TYPE_BETHESDA
 	if (logLevel >= 0)
 		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\skee64.log");
+#elif STORE_VERSION == RUNTIME_TYPE_GOG
+	if (logLevel >= 0)
+		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition GOG\\SKSE\\skee64.log");
+#endif
 
 	// store plugin handle so we can identify ourselves later
 	g_pluginHandle = skse->GetPluginHandle();
@@ -711,7 +717,11 @@ __declspec(dllexport) SKSEPluginVersionData SKSEPlugin_Version =
 	"expired6978@gmail.com",
 	0,	// not version independent
 	0,
-	{ RUNTIME_VERSION_1_6_640, 0 },	// compatible with 1.6.640
+#if STORE_VERSION == RUNTIME_TYPE_BETHESDA
+	{ RUNTIME_VERSION_1_6_640, 0 },
+#elif STORE_VERSION == RUNTIME_TYPE_GOG
+	{ RUNTIME_VERSION_1_6_659_GOG, 0 },
+#endif
 	0,	// works with any version of the script extender. you probably do not need to put anything here
 };
 
@@ -738,13 +748,16 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Features", "bEnableBodyNormalRecalculate", &g_enableBodyNormalRecalculate);
 	SKEE64GetConfigValue("Features", "bEnableEarlyRegistration", &g_enableEarlyRegistration);
 
+	// Toggle Specific Hooks which interact with game code
 	SKEE64GetConfigValue("Hooks", "bBipedAttach", &g_hookBipedAttach);
 	SKEE64GetConfigValue("Hooks", "bNativeSliders", &g_hookNativeSliders);
 	SKEE64GetConfigValue("Hooks", "bMorphUpdates", &g_hookMorphUpdates);
-	SKEE64GetConfigValue("Hooks", "bSliderCallbacks", &g_enableTintSync);
-	SKEE64GetConfigValue("Hooks", "bTintInventory", &g_enableTintInventory);
+	SKEE64GetConfigValue("Hooks", "bMorphExtensions", &g_hookMorphExtensions);
+	SKEE64GetConfigValue("Hooks", "bSliderCallbacks", &g_hookSliderCallbacks);
+	SKEE64GetConfigValue("Hooks", "bTintInventory", &g_hookTintInventory);
 	SKEE64GetConfigValue("Hooks", "bHeadPreprocessing", &g_hookHeadPreprocessing);
-	SKEE64GetConfigValue("Hooks", "bFaceOverlays", &g_enableFaceOverlays);
+	SKEE64GetConfigValue("Hooks", "bFaceOverlays", &g_hookFaceOverlays);
+	SKEE64GetConfigValue("Hooks", "bTinting", &g_hookTinting);
 
 	SKEE64GetConfigValue("Overlays", "bPlayerOnly", &g_playerOnly);
 	SKEE64GetConfigValue("Overlays", "bImmediateArmor", &g_immediateArmor);
