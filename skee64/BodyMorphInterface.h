@@ -202,13 +202,14 @@ public:
 	size_t memoryUsage;
 };
 
+class NIOVTaskUpdateSkinPartition;
 class MorphFileCache
 {
 	friend class MorphCache;
 	friend class BodyMorphInterface;
 public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
-	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
+	std::vector<NIOVTaskUpdateSkinPartition*> ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph);
 	void ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const;
 
 	size_t GetByteSize() const { return vertexMap.memoryUsage; }

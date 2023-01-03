@@ -15,6 +15,7 @@
 #include <cctype>
 #include <random>
 #include <ppl.h>
+#include <ppltasks.h>
 
 #include "skse64/PluginAPI.h"
 #include "skse64/GameReferences.h"
@@ -496,8 +497,9 @@ void BodyMorphMap::ForEachMorph(std::function<void(const SKEEFixedString&, const
 #include <d3d11.h>
 #include <d3d11_4.h>
 
-void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
-{	
+std::vector<NIOVTaskUpdateSkinPartition*> MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph)
+{
+	std::vector<NIOVTaskUpdateSkinPartition*> partitionUpdates;
 	auto execMorphUpdate = [&](BSGeometry* bodyGeometry)
 	{
 		NiSkinInstance* skinInstance = niptr_cast<NiSkinInstance>(bodyGeometry->m_spSkinInstance);
@@ -585,20 +587,8 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 									memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
 								}
 
-								auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition, g_bodyMorphGPUCopy, g_bodyMorphRebind);
+								partitionUpdates.push_back(new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition, g_bodyMorphGPUCopy, g_bodyMorphRebind));
 								newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
-
-								if (deferred)
-								{
-									g_task->AddTask(updateTask);
-								}
-								else
-								{
-									if (mutex) mutex->lock();
-									updateTask->Run();
-									if (mutex) mutex->unlock();
-									updateTask->Dispose();
-								}
 							}
 						}
 					}
@@ -627,6 +617,8 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 			return false;
 		});
 	}
+
+	return partitionUpdates;
 }
 
 void MorphFileCache::ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const
@@ -639,30 +631,48 @@ void MorphFileCache::ForEachShape(std::function<void(const SKEEFixedString&, con
 
 void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, bool defer)
 {
+	using namespace concurrency;
+	using namespace std;
+
+	vector<NIOVTaskUpdateSkinPartition*> partitionUpdates;
 	if (g_parallelMorphing)
 	{
-		std::mutex mtx;
-		concurrency::structured_task_group task_group;
-		std::vector<concurrency::task_handle<std::function<void()>>> task_list;
-		for (const auto & it : vertexMap)
+		vector<task<vector<NIOVTaskUpdateSkinPartition*>>> tasks;
+		for (const auto& it : vertexMap)
 		{
-			task_list.push_back(concurrency::make_task<std::function<void()>>([&]()
-			{
-				ApplyMorph(refr, rootNode, isAttaching, it, &mtx, defer);
-			}));
-		}
-		for (auto & task : task_list)
-		{
-			task_group.run(task);
+			tasks.push_back(create_task([&]() { return ApplyMorph(refr, rootNode, isAttaching, it); }));
 		}
 
-		task_group.wait();
+		auto joinTask = when_all(begin(tasks), end(tasks));
+		joinTask.wait();
+
+		for (auto& task : tasks)
+		{
+			auto results = task.get();
+			partitionUpdates.insert(partitionUpdates.end(), results.begin(), results.end());
+		}
 	}
 	else
 	{
-		for (const auto & it : vertexMap)
+		for (const auto& it : vertexMap)
 		{
-			ApplyMorph(refr, rootNode, isAttaching, it, nullptr, defer);
+			auto results = ApplyMorph(refr, rootNode, isAttaching, it);
+			partitionUpdates.insert(partitionUpdates.end(), results.begin(), results.end());
+		}
+	}
+
+	defer = (*g_main)->threadId != GetCurrentThreadId();
+
+	for (auto update : partitionUpdates)
+	{
+		if (defer)
+		{
+			g_task->AddTask(update);
+		}
+		else
+		{
+			update->Run();
+			update->Dispose();
 		}
 	}
 }
