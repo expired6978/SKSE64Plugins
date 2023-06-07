@@ -79,7 +79,7 @@ void SKSEAttachSkinnedMesh::Run()
 	if (g_attachmentInterface.AttachMesh(reference, m_nifPath.c_str(), m_name.c_str(), m_firstPerson, m_replace, filter, m_filter.size(), outRoot, nullptr, 0) && form->formType == Character::kTypeID)
 	{
 		g_bodyMorphInterface.ApplyVertexDiff(reference, outRoot);
-		g_overrideInterface.ApplyNodeOverrides(reference, outRoot, true);
+		g_overrideInterface.Impl_ApplyNodeOverrides(reference, outRoot, true);
 	}
 
 	if (filter)
@@ -132,7 +132,7 @@ void AttachmentInterface::Revert()
 	}
 }
 
-bool AttachmentInterface::AttachMesh(TESObjectREFR* ref, const char* path, const char* nodeName, bool firstPerson, bool replace, const char** filter, UInt32 filterSize, NiAVObject*& out, char* errBuf, size_t errBufLen)
+bool AttachmentInterface::AttachMesh(TESObjectREFR* ref, const char* path, const char* nodeName, bool firstPerson, bool replace, const char** filter, skee_u32 filterSize, NiAVObject*& out, char* errBuf, skee_u64 errBufLen)
 {
 	NiNode* root = ref->GetNiRootNode(firstPerson ? 1 : 0);
 	if (!root) {

@@ -26,7 +26,7 @@ extern UInt16						g_scaleMode;
 extern SkeletonExtenderInterface	g_skeletonExtenderInterface;
 extern ActorUpdateManager			g_actorUpdateManager;
 
-UInt32 NiTransformInterface::GetVersion()
+skee_u32 NiTransformInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }
@@ -98,7 +98,7 @@ bool NodeTransformKeys::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 				}
 				default:
 				{
-					_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
+					_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, reinterpret_cast<char*>(&type));
 					error = true;
 					return error;
 				}
@@ -1040,10 +1040,11 @@ void NiTransformInterface::AddNodeTransformScale(TESObjectREFR* ref, bool firstP
 	Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, scaleVar);
 }
 
-void NiTransformInterface::AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, UInt32 scaleMode)
+void NiTransformInterface::AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, skee_u32 scaleMode)
 {
 	OverrideVariant scaleModeVar;
-	PackValue<UInt32>(&scaleModeVar, OverrideVariant::kParam_NodeTransformScaleMode, 0, &scaleMode);
+	UInt32 sMode = scaleMode;
+	PackValue<UInt32>(&scaleModeVar, OverrideVariant::kParam_NodeTransformScaleMode, 0, &sMode);
 	Impl_AddNodeTransform(ref, firstPerson, isFemale, node, name, scaleModeVar);
 }
 
@@ -1077,7 +1078,7 @@ float NiTransformInterface::GetNodeTransformScale(TESObjectREFR* ref, bool first
 	return transform.scale;
 }
 
-UInt32 NiTransformInterface::GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
+skee_u32 NiTransformInterface::GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name)
 {
 	OverrideVariant overrideVariant = Impl_GetOverrideNodeValue(ref, firstPerson, isFemale, node, name, OverrideVariant::kParam_NodeTransformScaleMode, 0);
 	if (overrideVariant.type == OverrideVariant::kType_Int && overrideVariant.key == OverrideVariant::kParam_NodeTransformScale)
@@ -1145,7 +1146,7 @@ void NiTransformInterface::RemoveAllReferenceTransforms(TESObjectREFR* refr)
 	Impl_RemoveAllReferenceTransforms(refr);
 }
 
-bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, UInt16 key, NiTransform* result)
+bool NiTransformInterface::GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, skee_u16 key, NiTransform* result)
 {
 	return Impl_GetOverrideNodeTransform(refr, firstPerson, isFemale, node, name, key, result);
 }

@@ -45,15 +45,7 @@ public:
 class NiTransformInterface : public INiTransformInterface
 {
 public:
-	enum
-	{
-		kCurrentPluginVersion = 3,
-		kSerializationVersion1 = 1,
-		kSerializationVersion2 = 2,
-		kSerializationVersion3 = 3,
-		kSerializationVersion = kSerializationVersion3
-	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
 	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
 	virtual bool Load(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
@@ -67,12 +59,12 @@ public:
 	virtual void AddNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Position& position); // X,Y,Z
 	virtual void AddNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, Rotation& rotation); // Euler angles
 	virtual void AddNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, float scale);
-	virtual void AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, UInt32 scaleMode);
+	virtual void AddNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name, skee_u32 scaleMode);
 
 	virtual Position GetNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
 	virtual Rotation GetNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
 	virtual float GetNodeTransformScale(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
-	virtual UInt32 GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
+	virtual skee_u32 GetNodeTransformScaleMode(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
 
 	virtual bool RemoveNodeTransformPosition(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
 	virtual bool RemoveNodeTransformRotation(TESObjectREFR* ref, bool firstPerson, bool isFemale, const char* node, const char* name);
@@ -82,7 +74,7 @@ public:
 	virtual bool RemoveNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name);
 	virtual void RemoveAllReferenceTransforms(TESObjectREFR* refr);
 
-	virtual bool GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, UInt16 key, NiTransform* result);
+	virtual bool GetOverrideNodeTransform(TESObjectREFR* refr, bool firstPerson, bool isFemale, const char* node, const char* name, skee_u16 key, NiTransform* result);
 
 	virtual void UpdateNodeAllTransforms(TESObjectREFR* ref);
 

@@ -36,7 +36,7 @@ CDXNifPixelShaderCache		g_pixelShaders(&g_shaderFactory);
 extern TintMaskInterface	g_tintMaskInterface;
 extern UInt32	g_tintHairSlot;
 
-UInt32 TintMaskInterface::GetVersion()
+skee_u32 TintMaskInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }

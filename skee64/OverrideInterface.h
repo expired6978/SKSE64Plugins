@@ -225,118 +225,149 @@ public:
 };
 
 class OverrideInterface
-	: public IPluginInterface
+	: public IOverrideInterface
 	, public IAddonAttachmentInterface
 {
 public:
-	enum
-	{
-		kCurrentPluginVersion = 1,
-		kSerializationVersion1 = 1,
-		kSerializationVersion2 = 2,
-		kSerializationVersion3 = 2,
-		kSerializationVersion = kSerializationVersion3
-	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
-	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion) { return false; };
-	virtual void Revert();
+	virtual bool HasArmorAddonNode(TESObjectREFR* refr, bool firstPerson, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, bool debug) override;
 
-	virtual bool LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
-	virtual bool LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
-	virtual bool LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	virtual bool HasArmorOverride(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index) override;
+	virtual void AddArmorOverride(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index, SetVariant& value) override;
+	virtual bool GetArmorOverride(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index, GetVariant& visitor) override;
+	virtual void RemoveArmorOverride(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index) override;
+	virtual void SetArmorProperties(TESObjectREFR* refr, bool immediate) override;
+	virtual void SetArmorProperty(TESObjectREFR* refr, bool firstPerson, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index, SetVariant& value, bool immediate) override;
+	virtual bool GetArmorProperty(TESObjectREFR* refr, bool firstPerson, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName, skee_u16 key, skee_u8 index, GetVariant& value) override;
+	virtual void ApplyArmorOverrides(TESObjectREFR* refr, TESObjectARMO* armor, TESObjectARMA* addon, NiAVObject* object, bool immediate) override;
+	virtual void RemoveAllArmorOverrides() override;
+	virtual void RemoveAllArmorOverridesByReference(TESObjectREFR* reference) override;
+	virtual void RemoveAllArmorOverridesByArmor(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor) override;
+	virtual void RemoveAllArmorOverridesByAddon(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon) override;
+	virtual void RemoveAllArmorOverridesByNode(TESObjectREFR* refr, bool isFemale, TESObjectARMO* armor, TESObjectARMA* addon, const char* nodeName) override;
+
+	virtual bool HasNodeOverride(TESObjectREFR* refr, bool isFemale, const char* nodeName, skee_u16 key, skee_u8 index) override;
+	virtual void AddNodeOverride(TESObjectREFR* refr, bool isFemale, const char* nodeName, skee_u16 key, skee_u8 index, SetVariant& value) override;
+	virtual bool GetNodeOverride(TESObjectREFR* refr, bool isFemale, const char* nodeName, skee_u16 key, skee_u8 index, GetVariant& visitor) override;
+	virtual void RemoveNodeOverride(TESObjectREFR* refr, bool isFemale, const char* nodeName, skee_u16 key, skee_u8 index) override;
+	virtual void SetNodeProperties(TESObjectREFR* refr, bool immediate) override;
+	virtual void SetNodeProperty(TESObjectREFR* refr, bool firstPerson, const char* nodeName, skee_u16 key, skee_u8 index, SetVariant& value, bool immediate) override;
+	virtual bool GetNodeProperty(TESObjectREFR* refr, bool firstPerson, const char* nodeName, skee_u16 key, skee_u8 index, GetVariant& value) override;
+	virtual void ApplyNodeOverrides(TESObjectREFR* refr, NiAVObject* object, bool immediate) override;
+	virtual void RemoveAllNodeOverrides() override;
+	virtual void RemoveAllNodeOverridesByReference(TESObjectREFR* reference) override;
+	virtual void RemoveAllNodeOverridesByNode(TESObjectREFR* refr, bool isFemale, const char* nodeName) override;
+
+	virtual bool HasSkinOverride(TESObjectREFR* refr, bool isFemale, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index) override;
+	virtual void AddSkinOverride(TESObjectREFR* refr, bool isFemale, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index, SetVariant& value) override;
+	virtual bool GetSkinOverride(TESObjectREFR* refr, bool isFemale, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index, GetVariant& visitor) override;
+	virtual void RemoveSkinOverride(TESObjectREFR* refr, bool isFemale, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index) override;
+	virtual void SetSkinProperties(TESObjectREFR* refr, bool immediate) override;
+	virtual void SetSkinProperty(TESObjectREFR* refr, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index, SetVariant& value, bool immediate) override;
+	virtual bool GetSkinProperty(TESObjectREFR* refr, bool firstPerson, skee_u32 slotMask, skee_u16 key, skee_u8 index, GetVariant& value) override;
+	virtual void ApplySkinOverrides(TESObjectREFR* refr, bool firstPerson, TESObjectARMO* armor, TESObjectARMA* addon, skee_u32 slotMask, NiAVObject* object, bool immediate) override;
+	virtual void RemoveAllSkinOverridesBySlot(TESObjectREFR* refr, bool isFemale, bool firstPerson, skee_u32 slotMask) override;
+	virtual void RemoveAllSkinOverrides() override;
+	virtual void RemoveAllSkinOverridesByReference(TESObjectREFR* reference) override;
+
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion) { return false; };
+	void Revert();
+
+	bool LoadOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	bool LoadNodeOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	bool LoadWeaponOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
 	// Specific overrides
-	virtual void AddRawOverride(OverrideHandle formId, bool isFemale, OverrideHandle armorHandle, OverrideHandle addonHandle, BSFixedString nodeName, OverrideVariant & value);
-	virtual void AddOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant & value);
+	void Impl_AddRawOverride(OverrideHandle formId, bool isFemale, OverrideHandle armorHandle, OverrideHandle addonHandle, BSFixedString nodeName, OverrideVariant & value);
+	void Impl_AddOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant & value);
 
 	// Non-specific overrides
-	virtual void AddRawNodeOverride(OverrideHandle handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
-	virtual void AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
+	void Impl_AddRawNodeOverride(OverrideHandle handle, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
+	void Impl_AddNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, OverrideVariant & value);
 
 	// Applies all properties for a handle
-	void SetProperties(OverrideHandle handle, bool immediate);
-
-	// Applies all properties for an armor
-	//void SetHandleArmorAddonProperties(UInt64 handle, UInt64 armorHandle, UInt64 addonHandle, bool immediate);
+	void Impl_SetProperties(OverrideHandle handle, bool immediate);
 
 	// Applies node properties for a handle
-	void SetNodeProperties(OverrideHandle handle, bool immediate);
+	void Impl_SetNodeProperties(OverrideHandle handle, bool immediate);
 
 	// Set/Get a single property
-	virtual void SetArmorAddonProperty(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
-	virtual void GetArmorAddonProperty(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant * value);
+	void Impl_SetArmorAddonProperty(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
+	void Impl_GetArmorAddonProperty(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, OverrideVariant * value);
 
 	// Applies a single node property
-	virtual void SetNodeProperty(TESObjectREFR * refr, BSFixedString nodeName, OverrideVariant * value, bool immediate);
-	virtual void GetNodeProperty(TESObjectREFR * refr, bool firstPerson, BSFixedString nodeName, OverrideVariant * value);
+	void Impl_SetNodeProperty(TESObjectREFR * refr, bool firstPerson, BSFixedString nodeName, OverrideVariant * value, bool immediate);
+	void Impl_GetNodeProperty(TESObjectREFR * refr, bool firstPerson, BSFixedString nodeName, OverrideVariant * value);
 
 	// Determines whether the node could be found
-	virtual bool HasArmorAddonNode(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, bool debug);
+	bool Impl_HasArmorAddonNode(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, bool debug);
 
 	// Applies all node overrides to a particular node
-	virtual void ApplyNodeOverrides(TESObjectREFR * refr, NiAVObject * object, bool immediate);
+	void Impl_ApplyNodeOverrides(TESObjectREFR * refr, NiAVObject * object, bool immediate);
 
 	// Applies all armor overrides to a particular armor
-	virtual void ApplyOverrides(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool immediate);
+	void Impl_ApplyOverrides(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool immediate);
 
-	virtual void RemoveAllOverrides();
-	virtual void RemoveAllReferenceOverrides(TESObjectREFR * reference);
+	void Impl_RemoveAllOverrides();
+	void Impl_RemoveAllReferenceOverrides(TESObjectREFR * reference);
 
-	virtual void RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor);
-	virtual void RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon);
-	virtual void RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName);
-	virtual void RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index);
+	void Impl_RemoveAllArmorOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor);
+	void Impl_RemoveAllArmorAddonOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon);
+	void Impl_RemoveAllArmorAddonNodeOverrides(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName);
+	void Impl_RemoveArmorAddonOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index);
 
-	virtual void RemoveAllNodeOverrides();
-	virtual void RemoveAllReferenceNodeOverrides(TESObjectREFR * reference);
+	void Impl_RemoveAllNodeOverrides();
+	void Impl_RemoveAllReferenceNodeOverrides(TESObjectREFR * reference);
 
-	virtual void RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName);
-	virtual void RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
+	void Impl_RemoveAllNodeNameOverrides(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName);
+	void Impl_RemoveNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
 
-	virtual OverrideVariant * GetOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index);
-	virtual OverrideVariant * GetNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
+	OverrideVariant * Impl_GetOverride(TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt16 key, UInt8 index);
+	OverrideVariant * Impl_GetNodeOverride(TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt16 key, UInt8 index);
 
-	virtual void AddRawWeaponOverride(OverrideHandle handle, bool isFemale, bool firstPerson, OverrideHandle weaponHandle, BSFixedString nodeName, OverrideVariant & value);
-	virtual void AddWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant & value);
-	virtual OverrideVariant * GetWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
-	virtual void ApplyWeaponOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, NiAVObject * object, bool immediate);
+	void Impl_AddRawWeaponOverride(OverrideHandle handle, bool isFemale, bool firstPerson, OverrideHandle weaponHandle, BSFixedString nodeName, OverrideVariant & value);
+	void Impl_AddWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant & value);
+	OverrideVariant * Impl_GetWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
+	void Impl_ApplyWeaponOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, NiAVObject * object, bool immediate);
 
-	virtual void RemoveAllWeaponBasedOverrides();
-	virtual void RemoveAllReferenceWeaponOverrides(TESObjectREFR * reference);
+	void Impl_RemoveAllWeaponBasedOverrides();
+	void Impl_RemoveAllReferenceWeaponOverrides(TESObjectREFR * reference);
 
-	virtual void RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon);
-	virtual void RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName);
-	virtual void RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
+	void Impl_RemoveAllWeaponOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon);
+	void Impl_RemoveAllWeaponNodeOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName);
+	void Impl_RemoveWeaponOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt16 key, UInt8 index);
 
-	virtual bool HasWeaponNode(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, bool debug);
-	virtual void SetWeaponProperties(OverrideHandle handle, bool immediate);
+	bool Impl_HasWeaponNode(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, bool debug);
+	void Impl_SetWeaponProperties(OverrideHandle handle, bool immediate);
 
-	virtual void SetWeaponProperty(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
-	virtual void GetWeaponProperty(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value);
+	void Impl_SetWeaponProperty(TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value, bool immediate);
+	void Impl_GetWeaponProperty(TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, OverrideVariant * value);
 
 	// Skin API
-	virtual bool LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
-	virtual void AddRawSkinOverride(OverrideHandle handle, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
-	virtual void AddSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
-	virtual OverrideVariant * GetSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
-	virtual void ApplySkinOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, UInt32 slotMask, NiAVObject * object, bool immediate);
-	virtual void RemoveAllSkinOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask);
-	virtual void RemoveSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
-	virtual void SetSkinProperties(OverrideHandle handle, bool immediate);
-	virtual void RemoveAllSkinBasedOverrides();
-	virtual void RemoveAllReferenceSkinOverrides(TESObjectREFR * reference);
-	void RemoveAllReferenceSkinOverrides(OverrideHandle handle);
-	virtual void SetSkinProperty(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant * value, bool immediate);
-	virtual void GetSkinProperty(TESObjectREFR * refr, bool firstPerson, UInt32 slotMask, OverrideVariant * value);
+	bool LoadSkinOverrides(SKSESerializationInterface* intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	void Impl_AddRawSkinOverride(OverrideHandle handle, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
+	void Impl_AddSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, OverrideVariant & value);
+	OverrideVariant * Impl_GetSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
+	void Impl_ApplySkinOverrides(TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, UInt32 slotMask, NiAVObject * object, bool immediate);
+	void Impl_RemoveAllSkinOverrides(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask);
+	void Impl_RemoveSkinOverride(TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt16 key, UInt8 index);
+	void Impl_SetSkinProperties(OverrideHandle handle, bool immediate);
+	void Impl_RemoveAllSkinBasedOverrides();
+	void Impl_RemoveAllReferenceSkinOverrides(TESObjectREFR * reference);
+	void Impl_SetSkinProperty(TESObjectREFR * refr, bool firstPerson, UInt32 slotMask, OverrideVariant * value, bool immediate);
+	void Impl_GetSkinProperty(TESObjectREFR * refr, bool firstPerson, UInt32 slotMask, OverrideVariant * value);
 
+	void VisitNodes(TESObjectREFR * refr, std::function<void(SKEEFixedString, OverrideVariant&)> functor);
+	void VisitSkin(TESObjectREFR * refr, bool isFemale, bool firstPerson, std::function<void(UInt32, OverrideVariant&)> functor);
+	void VisitStrings(std::function<void(SKEEFixedString)> functor);
 
-	virtual void VisitNodes(TESObjectREFR * refr, std::function<void(SKEEFixedString, OverrideVariant&)> functor);
-	virtual void VisitSkin(TESObjectREFR * refr, bool isFemale, bool firstPerson, std::function<void(UInt32, OverrideVariant&)> functor);
-	virtual void VisitStrings(std::function<void(SKEEFixedString)> functor);
+	void SetValueVariant(OverrideVariant& variant, UInt16 key, UInt8 index, SetVariant& value);
+	bool GetValueVariant(OverrideVariant& variant, UInt16 key, UInt8 index, GetVariant& value);
 
 	void Dump();
+	void PrintDiagnostics();
 
 private:
 	ActorRegistrationMapHolder armorData;

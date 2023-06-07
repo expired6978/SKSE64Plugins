@@ -70,10 +70,10 @@ public:
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 
-	using TextureMap = std::map<SInt32, StringTableItem>;
-	using ColorMap = std::map<SInt32, UInt32>;
-	using BlendMap = std::map<SInt32, StringTableItem>;
-	using TypeMap = std::map<SInt32, UInt8>;
+	using TextureMap = std::map<skee_i32, StringTableItem>;
+	using ColorMap = std::map<skee_i32, UInt32>;
+	using BlendMap = std::map<skee_i32, StringTableItem>;
+	using TypeMap = std::map<skee_i32, UInt8>;
 
 	class TintData
 	{
@@ -138,55 +138,47 @@ struct ItemAttribute
 	std::shared_ptr<ItemAttributeData> data;
 };
 
-class ItemDataInterface 
-	: public SafeDataHolder<std::vector<ItemAttribute>>
-	, public IItemDataInterface
+class ItemDataInterface
+	: public IItemDataInterface
+	, public SafeDataHolder<std::vector<ItemAttribute>>
 	, public BSTEventSink <TESUniqueIDChangeEvent>
 	, public IAddonAttachmentInterface
 {
 public:
 	typedef std::vector<ItemAttribute> Data;
 
-	enum
-	{
-		kCurrentPluginVersion = 2,
-		kSerializationVersion1 = 1,
-		kSerializationVersion2 = 2,
-		kSerializationVersion = kSerializationVersion2
-	};
-	virtual UInt32 GetVersion();
-
+	virtual skee_u32 GetVersion();
 
 	virtual	EventResult ReceiveEvent(TESUniqueIDChangeEvent * evn, EventDispatcher<TESUniqueIDChangeEvent> * dispatcher) override;
 
-	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion, const StringIdMap & stringTable);
 	virtual void Revert();
 
-	virtual UInt32 GetItemUniqueID(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, bool makeUnique) override;
-	virtual void SetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color) override;
-	virtual void SetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 type) override;
-	virtual void SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, const char* blendMode) override { Impl_SetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex, blendMode); };
-	virtual void SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, const char* texture) override { Impl_SetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex, texture); };
+	virtual skee_u32 GetItemUniqueID(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, bool makeUnique) override;
+	virtual void SetItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, skee_u32 color) override;
+	virtual void SetItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, skee_u32 type) override;
+	virtual void SetItemTextureLayerBlendMode(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, const char* blendMode) override { Impl_SetItemTextureLayerBlendMode(uniqueID, textureIndex, layerIndex, blendMode); };
+	virtual void SetItemTextureLayerTexture(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, const char* texture) override { Impl_SetItemTextureLayerTexture(uniqueID, textureIndex, layerIndex, texture); };
 
-	virtual UInt32 GetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual UInt32 GetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual bool GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor) override;
-	virtual bool GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor) override;
+	virtual skee_u32 GetItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual skee_u32 GetItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual bool GetItemTextureLayerBlendMode(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, IItemDataInterface::StringVisitor& visitor) override;
+	virtual bool GetItemTextureLayerTexture(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, IItemDataInterface::StringVisitor& visitor) override;
 
-	virtual void ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual void ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual void ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual void ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex) override;
-	virtual void ClearItemTextureLayer(UInt32 uniqueID, SInt32 textureIndex) override;
+	virtual void ClearItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual void ClearItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual void ClearItemTextureLayerBlendMode(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual void ClearItemTextureLayerTexture(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex) override;
+	virtual void ClearItemTextureLayer(skee_u32 uniqueID, skee_i32 textureIndex) override;
 
-	virtual TESForm * GetFormFromUniqueID(UInt32 uniqueID) override;
-	virtual TESForm * GetOwnerOfUniqueID(UInt32 uniqueID) override;
+	virtual TESForm * GetFormFromUniqueID(skee_u32 uniqueID) override;
+	virtual TESForm * GetOwnerOfUniqueID(skee_u32 uniqueID) override;
 
-	virtual bool HasItemData(UInt32 uniqueID, const char* key) override;
-	virtual bool GetItemData(UInt32 uniqueID, const char* key, IItemDataInterface::StringVisitor& visitor) override;
-	virtual void SetItemData(UInt32 uniqueID, const char* key, const char* value) override { Impl_SetItemData(uniqueID, key, value); }
-	virtual void ClearItemData(UInt32 uniqueID, const char* key) override { Impl_ClearItemData(uniqueID, key); }
+	virtual bool HasItemData(skee_u32 uniqueID, const char* key) override;
+	virtual bool GetItemData(skee_u32 uniqueID, const char* key, IItemDataInterface::StringVisitor& visitor) override;
+	virtual void SetItemData(skee_u32 uniqueID, const char* key, const char* value) override { Impl_SetItemData(uniqueID, key, value); }
+	virtual void ClearItemData(skee_u32 uniqueID, const char* key) override { Impl_ClearItemData(uniqueID, key); }
 
 	std::shared_ptr<ItemAttributeData> GetExistingData(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier);
 	std::shared_ptr<ItemAttributeData> CreateData(UInt32 rankId, UInt16 uid, UInt32 ownerId, UInt32 formId);

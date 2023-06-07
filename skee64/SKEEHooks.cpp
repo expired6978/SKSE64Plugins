@@ -1,3 +1,5 @@
+#include "ILogger.h"
+
 #include "common/IFileStream.h"
 #include "skse64/PluginAPI.h"
 #include "skse64/PapyrusVM.h"
@@ -25,6 +27,7 @@
 #include "NiTransformInterface.h"
 #include "AttachmentInterface.h"
 #include "CommandInterface.h"
+#include "PresetInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -57,6 +60,7 @@ extern OverrideInterface	g_overrideInterface;
 extern ActorUpdateManager	g_actorUpdateManager;
 extern NiTransformInterface	g_transformInterface;
 extern CommandInterface		g_commandInterface;
+extern PresetInterface		g_presetInterface;
 
 extern bool					g_enableFaceOverlays;
 extern bool					g_enableTintSync;
@@ -223,9 +227,9 @@ void __stdcall InstallWeaponHook(Actor * actor, TESObjectWEAP * weapon, NiAVObje
 	for (std::vector<TESObjectWEAP*>::reverse_iterator it = flattenedWeapons.rbegin(); it != flattenedWeapons.rend(); ++it)
 	{
 		if (resultNode1)
-			g_overrideInterface.ApplyWeaponOverrides(actor, firstPerson == 1 ? true : false, weapon, resultNode1, true);
+			g_overrideInterface.Impl_ApplyWeaponOverrides(actor, firstPerson == 1 ? true : false, weapon, resultNode1, true);
 		if (resultNode2)
-			g_overrideInterface.ApplyWeaponOverrides(actor, firstPerson == 1 ? true : false, weapon, resultNode2, true);
+			g_overrideInterface.Impl_ApplyWeaponOverrides(actor, firstPerson == 1 ? true : false, weapon, resultNode2, true);
 	}
 }
 
@@ -421,13 +425,12 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 
 	if ((refr == (*g_thePlayer) && g_playerOnly) || !g_playerOnly || g_overlayInterface.HasOverlays(refr))
 	{
-		char buff[MAX_PATH];
 		// Face
 		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
 		{
-			sprintf_s(buff, MAX_PATH, FACE_NODE, i);
+			auto nodeName = std::format(FACE_NODE, i);
 			if (attemptUninstall) {
-				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, buff);
+				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, nodeName.c_str());
 				if (immediate) {
 					task->Run();
 					task->Dispose();
@@ -436,7 +439,7 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 					g_task->AddTask(task);
 				}
 			}
-			SKSETaskInstallFaceOverlay * task = new SKSETaskInstallFaceOverlay(refr, buff, FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen);
+			SKSETaskInstallFaceOverlay * task = new SKSETaskInstallFaceOverlay(refr, nodeName.c_str(), FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen);
 			if (immediate) {
 				task->Run();
 				task->Dispose();
@@ -447,9 +450,9 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 		}
 		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
 		{
-			sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
+			auto nodeName = std::format(FACE_NODE_SPELL, i);
 			if (attemptUninstall) {
-				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, buff);
+				SKSETaskUninstallOverlay * task = new SKSETaskUninstallOverlay(refr, nodeName.c_str());
 				if (immediate) {
 					task->Run();
 					task->Dispose();
@@ -458,7 +461,7 @@ void __stdcall InstallFaceOverlayHook(TESObjectREFR* refr, bool attemptUninstall
 					g_task->AddTask(task);
 				}
 			}
-			SKSETaskInstallFaceOverlay * task = new SKSETaskInstallFaceOverlay(refr, buff, FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen);
+			SKSETaskInstallFaceOverlay * task = new SKSETaskInstallFaceOverlay(refr, nodeName.c_str(), FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen);
 			if (immediate) {
 				task->Run();
 				task->Dispose();
@@ -514,13 +517,13 @@ void RaceSexMenu_Render_Hooked(RaceSexMenu * rsm)
 void RegenerateHead_Hooked(FaceGen * faceGen, BSFaceGenNiNode * headNode, BGSHeadPart * headPart, TESNPC * npc)
 {
 	RegenerateHead_Original(faceGen, headNode, headPart, npc);
-	g_morphInterface.ApplyPreset(npc, headNode, headPart);
+	g_presetInterface.ApplyMappedPreset(npc, headNode, headPart);
 }
 
 bool UsePreprocessedHead(TESNPC * npc)
 {
 	// For some reason the NPC vanilla preset data is reset when the actor is disable/enabled
-	auto presetData = g_morphInterface.GetPreset(npc);
+	auto presetData = g_presetInterface.GetMappedPreset(npc);
 	if (presetData) {
 		if (!npc->faceMorph)
 			npc->faceMorph = (TESNPC::FaceMorphs*)Heap_Allocate(sizeof(TESNPC::FaceMorphs));

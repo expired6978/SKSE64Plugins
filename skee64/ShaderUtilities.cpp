@@ -300,44 +300,14 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 					SKEEFixedString texture;
 					UnpackValue(&texture, value);
 
-					if(immediate)
-					{
-						if(value->index >= 0 && value->index < BSTextureSet::kNumTextures) {
-
-#if 0
-							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
-							for(UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
-							{
-								const char * texturePath = material->textureSet->GetTexturePath(i);
-								newTextureSet->SetTexturePath(i, texturePath);
-							}
-							newTextureSet->SetTexturePath(value->index, texture.AsBSFixedString().c_str());
-							material->ReleaseTextures();
-							material->SetTextureSet(newTextureSet);
-							CALL_MEMBER_FN(lightingShader, InvalidateTextures)(0);
-							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
-#endif
-							// Need to update the texture path of the BSTextureSet
-							BSShaderTextureSet * newTextureSet = BSShaderTextureSet::Create();
-							for (UInt32 i = 0; i < BSTextureSet::kNumTextures; i++)
-							{
-								newTextureSet->SetTexturePath(i, material->textureSet->GetTexturePath(i));
-							}
-							newTextureSet->SetTexturePath(value->index, texture.AsBSFixedString().c_str());
-							material->SetTextureSet(newTextureSet);
-
-							NiPointer<NiTexture> newTexture;
-							LoadTexture(texture.c_str(), 1, newTexture, false);
-
-							NiTexturePtr * targetTexture = GetTextureFromIndex(material, value->index);
-							if (targetTexture) {
-								*targetTexture = newTexture;
-							}
-
-							CALL_MEMBER_FN(lightingShader, InitializeShader)(geometry);
+					if(value->index >= 0 && value->index < BSTextureSet::kNumTextures) {
+						if (immediate) {
+							NIOVTaskUpdateTexture(geometry, value->index, g_stringTable.GetString(texture)).Run();
 						}
-					} else {
-						g_task->AddTask(new NIOVTaskUpdateTexture(geometry, value->index, g_stringTable.GetString(texture)));
+						else {
+							g_task->AddTask(new NIOVTaskUpdateTexture(geometry, value->index, g_stringTable.GetString(texture)));
+						}
+
 					}
 					return;
 				}
@@ -511,11 +481,11 @@ NiTexturePtr * GetTextureFromIndex(BSLightingShaderMaterial * material, UInt32 i
 
 void DumpNodeChildren(NiAVObject * node)
 {
-	_MESSAGE("{%s} {%s} {%X}", node->GetRTTI()->name, node->m_name, node);
+	_MESSAGE("{%s} {%s} {%p}", node->GetRTTI()->name, node->m_name, (void*)node);
 	if (node->m_extraDataLen > 0) {
 		gLog.Indent();
 		for (UInt16 i = 0; i < node->m_extraDataLen; i++) {
-			_MESSAGE("{%s} {%s} {%X}", node->m_extraData[i]->GetRTTI()->name, node->m_extraData[i]->m_pcName, node);
+			_MESSAGE("{%s} {%s} {%p}", node->m_extraData[i]->GetRTTI()->name, node->m_extraData[i]->m_pcName, (void*)node);
 		}
 		gLog.Outdent();
 	}
@@ -531,7 +501,7 @@ void DumpNodeChildren(NiAVObject * node)
 				NiNode * childNode = object->GetAsNiNode();
 				BSGeometry * geometry = object->GetAsBSGeometry();
 				if (geometry) {
-					_MESSAGE("{%s} {%s} {%X} - Geometry", object->GetRTTI()->name, object->m_name, object);
+					_MESSAGE("{%s} {%s} {%p} - Geometry", object->GetRTTI()->name, object->m_name, (void*)object);
 					NiPointer<BSShaderProperty> shaderProperty = niptr_cast<BSShaderProperty>(geometry->m_spEffectState);
 					if (shaderProperty) {
 						BSLightingShaderProperty * lightingShader = ni_cast(shaderProperty, BSLightingShaderProperty);
@@ -563,7 +533,7 @@ void DumpNodeChildren(NiAVObject * node)
 					DumpNodeChildren(childNode);
 				}
 				else {
-					_MESSAGE("{%s} {%s} {%X}", object->GetRTTI()->name, object->m_name, object);
+					_MESSAGE("{%s} {%s} {%p}", object->GetRTTI()->name, object->m_name, (void*)object);
 				}
 			}
 		}

@@ -83,7 +83,7 @@ public:
 		kSerializationVersion = kSerializationVersion1
 	};
 
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
 	// Serialization
 	void Save(SKSESerializationInterface* intfc, UInt32 kVersion);

@@ -47,7 +47,7 @@ extern bool								g_enableBodyNormalRecalculate;
 extern bool								g_bodyMorphGPUCopy;
 extern bool								g_bodyMorphRebind;
 
-UInt32 BodyMorphInterface::GetVersion()
+skee_u32 BodyMorphInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }
@@ -1920,7 +1920,7 @@ bool BodyMorph::Load(SKSESerializationInterface * intfc, UInt32 kVersion, const 
 			break;
 		default:
 			{
-				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
+				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, reinterpret_cast<char*>(&type));
 				error = true;
 				return error;
 			}
@@ -1975,7 +1975,7 @@ bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion, con
 							continue;
 
 #ifdef _DEBUG
-						_DMESSAGE("%s - Loaded morph %s %f", __FUNCTION__, value.m_name, value.m_value);
+						_DMESSAGE("%s - Loaded morph %s %f", __FUNCTION__, value.m_name.get()->c_str(), value.m_value);
 #endif
 
 						this->insert(value);
@@ -1992,7 +1992,7 @@ bool BodyMorphSet::Load(SKSESerializationInterface * intfc, UInt32 kVersion, con
 			}
 		default:
 			{
-				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
+				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, reinterpret_cast<char*>(&type));
 				error = true;
 				return error;
 			}
@@ -2112,7 +2112,7 @@ bool BodyMorphData::Load(SKSESerializationInterface * intfc, UInt32 kVersion, co
 			}
 			default:
 			{
-				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
+				_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, reinterpret_cast<char*>(&type));
 				error = true;
 				return error;
 			}

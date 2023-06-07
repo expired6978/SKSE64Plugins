@@ -47,15 +47,17 @@ extern UInt32	g_numSpellHandOverlays;
 extern UInt32	g_numSpellFeetOverlays;
 extern UInt32	g_numSpellFaceOverlays;
 
-extern bool		g_alphaOverride;
-extern UInt16	g_alphaFlags;
-extern UInt16	g_alphaThreshold;
+extern bool		g_overlayAlphaOverride;
+extern UInt16	g_overlayAlphaFlags;
+extern UInt16	g_overlayAlphaThreshold;
+extern bool		g_overlayForceDecal;
+
 extern bool		g_immediateArmor;
 
 
 extern std::unordered_set<void*> g_adjustedBlocks;
 
-UInt32 OverlayInterface::GetVersion()
+skee_u32 OverlayInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }
@@ -199,6 +201,10 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			else
 				shaderProperty->shaderFlags1 &= ~BSLightingShaderProperty::kSLSF1_Model_Space_Normals;
 
+			if (g_overlayForceDecal && (shaderProperty->shaderFlags1 & BSLightingShaderProperty::kSLSF1_Decal) == 0) {
+				shaderProperty->shaderFlags1 |= BSLightingShaderProperty::kSLSF1_Decal;
+			}
+
 			if(ni_is_type(sourceShader->GetRTTI(), BSLightingShaderProperty) && ni_is_type(shaderProperty->GetRTTI(), BSLightingShaderProperty))
 			{
 				BSLightingShaderMaterial * sourceMaterial = (BSLightingShaderMaterial *)sourceShader->material;
@@ -231,15 +237,21 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			}
 		}
 
-		if(g_alphaOverride) {
+		if(g_overlayAlphaOverride) {
 			NiAlphaProperty * alphaProperty = niptr_cast<NiAlphaProperty>(targetShape->m_spPropertyState);
 			if(alphaProperty) {
-				alphaProperty->alphaFlags = g_alphaFlags;
-				alphaProperty->alphaThreshold = g_alphaThreshold;
+				alphaProperty->alphaFlags = g_overlayAlphaFlags;
+				alphaProperty->alphaThreshold = g_overlayAlphaThreshold;
 			}
 		}
 
-		g_overrideInterface.ApplyNodeOverrides(refr, newShape, true);
+		g_overrideInterface.Impl_ApplyNodeOverrides(refr, newShape, true);
+
+		m_callbacks.Lock();
+		for (auto cb : m_callbacks.m_data) {
+			cb.second(refr, newShape);
+		}
+		m_callbacks.Release();
 
 		if(attachNew) {
 			destination->AttachChild(newShape, false);
@@ -494,7 +506,7 @@ void SKSETaskInstallOverlay::Run()
 							NiAVObject* root = skeleton->GetObjectByName(&rootName.data);
 							if (NiNode* rootNode = root->GetAsNiNode()) {
 #ifdef _DEBUG
-								_DMESSAGE("%s - Installing Overlay %s to %08X on skeleton %08X", __FUNCTION__, m_nodeName.data, actor->formID, skeleton);
+								_DMESSAGE("%s - Installing Overlay %s to %08X on skeleton [%p]", __FUNCTION__, m_nodeName.data, actor->formID, (void*)skeleton);
 #endif
 								g_overlayInterface.InstallOverlay(m_nodeName.data, m_overlayPath.data, actor, firstSkin, rootNode);
 							}
@@ -546,7 +558,7 @@ void SKSETaskInstallFaceOverlay::Run()
 				textureSet = actorBase->headData->headTexture;
 
 #ifdef _DEBUG
-			_DMESSAGE("%s - Installing Face Overlay %s from %s to actor: %08X - Face %08X Skeleton %08X HeadPart %08X", __FUNCTION__, m_nodeName.data, m_overlayPath.data, actor->formID, faceNode, skeletonRoot, headPart);
+			_DMESSAGE("%s - Installing Face Overlay %s from %s to actor: %08X - Face [%p] Skeleton [%p] HeadPart [%p]", __FUNCTION__, m_nodeName.data, m_overlayPath.data, actor->formID, (void*)faceNode, (void*)skeletonRoot, (void*)headPart);
 #endif
 			if(skeletonRoot && faceNode && headPart)
 			{
@@ -644,16 +656,15 @@ void OverlayInterface::SetupOverlay(UInt32 primaryCount, const char * primaryPat
 #ifdef _DEBUG
 		_MESSAGE("%s - Installing body overlay for %s on %08X", __FUNCTION__, skin->m_name, refr->formID);
 #endif
-		char buff[MAX_PATH];
 		for(UInt32 i = 0; i < primaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, primaryNode, i);
-			InstallOverlay(buff, primaryPath, refr, skin, boneTree);
+			auto nodeName = std::vformat(primaryNode, std::make_format_args(i));
+			InstallOverlay(nodeName.c_str(), primaryPath, refr, skin, boneTree);
 		}
 		for(UInt32 i = 0; i < secondaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, secondaryNode, i);
-			InstallOverlay(buff, secondaryPath, refr, skin, boneTree);
+			auto nodeName = std::vformat(secondaryNode, std::make_format_args(i));
+			InstallOverlay(nodeName.c_str(), secondaryPath, refr, skin, boneTree);
 		}
 	}
 	else
@@ -661,17 +672,16 @@ void OverlayInterface::SetupOverlay(UInt32 primaryCount, const char * primaryPat
 #ifdef _DEBUG
 		_MESSAGE("%s - Uninstalling body overlay on %08X", __FUNCTION__, refr->formID);
 #endif
-		char buff[MAX_PATH];
 		for(UInt32 i = 0; i < primaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, primaryNode, i);
-			UninstallOverlay(buff, refr, boneTree);
+			auto nodeName = std::vformat(primaryNode, std::make_format_args(i));
+			UninstallOverlay(nodeName.c_str(), refr, boneTree);
 		}
 
 		for(UInt32 i = 0; i < secondaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, secondaryNode, i);
-			UninstallOverlay(buff, refr, boneTree);
+			auto nodeName = std::vformat(secondaryNode, std::make_format_args(i));
+			UninstallOverlay(nodeName.c_str(), refr, boneTree);
 		}
 	}
 }
@@ -681,16 +691,15 @@ void OverlayInterface::RelinkOverlays(UInt32 primaryCount, const char * primaryN
 	BSGeometry* skin = GetFirstShaderType(resultNode, BSShaderMaterial::kShaderType_FaceGenRGBTint);
 	if (skin)
 	{
-		char buff[MAX_PATH];
 		for (UInt32 i = 0; i < primaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, primaryNode, i);
-			RelinkOverlay(buff, refr, skin, boneTree);
+			auto nodeName = std::vformat(primaryNode, std::make_format_args(i));
+			RelinkOverlay(nodeName.c_str(), refr, skin, boneTree);
 		}
 		for (UInt32 i = 0; i < secondaryCount; i++)
 		{
-			sprintf_s(buff, MAX_PATH, secondaryNode, i);
-			RelinkOverlay(buff, refr, skin, boneTree);
+			auto nodeName = std::vformat(secondaryNode, std::make_format_args(i));
+			RelinkOverlay(nodeName.c_str(), refr, skin, boneTree);
 		}
 	}
 }
@@ -727,101 +736,84 @@ void OverlayInterface::RebuildOverlays(UInt32 armorMask, UInt32 addonMask, TESOb
 	}
 }
 
-void OverlayInterface::RevertOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 armorMask, UInt32 addonMask, bool resetDiffuse)
+void OverlayInterface::RevertOverlay(TESObjectREFR * reference, const char* nodeName, skee_u32 armorMask, skee_u32 addonMask, bool resetDiffuse, bool immediate)
 {
 	if(!reference)
 		return;
 
-	g_task->AddTask(new SKSETaskRevertOverlay(reference, nodeName, armorMask, addonMask, resetDiffuse));
+	if (!immediate) {
+		g_task->AddTask(new SKSETaskRevertOverlay(reference, nodeName, armorMask, addonMask, resetDiffuse));
+	}
+	else {
+		SKSETaskRevertOverlay(reference, nodeName, armorMask, addonMask, resetDiffuse).Run();
+	}
+	
 }
 
-void OverlayInterface::EraseOverlays(TESObjectREFR * reference)
+void OverlayInterface::EraseOverlays(TESObjectREFR * reference, bool immediate)
 {
-	RevertOverlays(reference, true);
-	overlays.erase(reference->formID);
+	RevertOverlays(reference, true, immediate);
+
+	SimpleLocker locker(&overlays.m_lock);
+	overlays.m_data.erase(reference->formID);
 }
 
-void OverlayInterface::RevertOverlays(TESObjectREFR * reference, bool resetDiffuse)
-{
-	if(!reference)
-		return;
-
-	// Body
-	char buff[MAX_PATH];
-	for(UInt32 i = 0; i < g_numBodyOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, BODY_NODE, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body, resetDiffuse));
-	}
-	for(UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, BODY_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body, resetDiffuse));
-	}
-
-	// Hand
-	for(UInt32 i = 0; i < g_numHandOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, HAND_NODE, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands, resetDiffuse));
-	}
-	for(UInt32 i = 0; i < g_numSpellHandOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, HAND_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands, resetDiffuse));
-	}
-
-	// Feet
-	for(UInt32 i = 0; i < g_numFeetOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FEET_NODE, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet, resetDiffuse));
-	}
-	for(UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskRevertOverlay(reference, buff, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet, resetDiffuse));
-	}
-
-	// Face
-	for(UInt32 i = 0; i < g_numFaceOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE, i);
-		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
-	}
-	for(UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
-	}
-}
-
-
-void OverlayInterface::RevertHeadOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 partType, UInt32 shaderType, bool resetDiffuse)
+void OverlayInterface::RevertOverlays(TESObjectREFR * reference, bool resetDiffuse, bool immediate)
 {
 	if(!reference)
 		return;
 
-	g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, nodeName, partType, shaderType, resetDiffuse));
+	if (!immediate) {
+		g_task->AddTask(new SKSETaskRevertOverlays(reference, resetDiffuse));
+	}
+	else {
+		SKSETaskRevertOverlays(reference, resetDiffuse).Run();
+	}
 }
 
-void OverlayInterface::RevertHeadOverlays(TESObjectREFR * reference, bool resetDiffuse)
+
+void OverlayInterface::RevertHeadOverlay(TESObjectREFR * reference, const char* nodeName, skee_u32 partType, skee_u32 shaderType, bool resetDiffuse, bool immediate)
+{
+	if(!reference)
+		return;
+
+	if (!immediate) {
+		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, nodeName, partType, shaderType, resetDiffuse));
+	}
+	else {
+		SKSETaskRevertFaceOverlay(reference, nodeName, partType, shaderType, resetDiffuse).Run();
+	}
+}
+
+void OverlayInterface::RevertHeadOverlays(TESObjectREFR * reference, bool resetDiffuse, bool immediate)
 {
 	if(!reference)
 		return;
 
 	// Face
-	char buff[MAX_PATH];
-	for(UInt32 i = 0; i < g_numFaceOverlays; i++)
+	if (!immediate)
 	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE, i);
-		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
+		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
+		{
+			g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, std::format(FACE_NODE, i).c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
+		}
+		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+		{
+			g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, std::format(FACE_NODE_SPELL, i).c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
+		}
 	}
-	for(UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+	else
 	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskRevertFaceOverlay(reference, buff, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse));
+		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
+		{
+			SKSETaskRevertFaceOverlay(reference, std::format(FACE_NODE, i).c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+		{
+			SKSETaskRevertFaceOverlay(reference, std::format(FACE_NODE_SPELL, i).c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, resetDiffuse).Run();
+		}
 	}
+	
 }
 
 bool OverlayInterface::HasOverlays(TESObjectREFR * reference)
@@ -829,98 +821,65 @@ bool OverlayInterface::HasOverlays(TESObjectREFR * reference)
 	if(reference == (*g_thePlayer)) // Always true for the player
 		return true;
 
-	auto it = overlays.find(reference->formID);
-	if(it != overlays.end())
+	SimpleLocker locker(&overlays.m_lock);
+	auto it = overlays.m_data.find(reference->formID);
+	if(it != overlays.m_data.end())
 		return true;
 
 	return false;
 }
 
-void OverlayInterface::RemoveOverlays(TESObjectREFR * reference)
+void OverlayInterface::RemoveOverlays(TESObjectREFR * reference, bool immediate)
 {
 	if(!reference || reference == (*g_thePlayer)) // Cannot remove from player
 		return;
 
-	// Body
-	char buff[MAX_PATH];
-	for(UInt32 i = 0; i < g_numBodyOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, BODY_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+	if (!immediate) {
+		g_task->AddTask(new SKSETaskRemoveOverlays(reference));
 	}
-	for(UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, BODY_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
+	else {
+		SKSETaskRemoveOverlays(reference).Run();
 	}
 
-	// Hand
-	for(UInt32 i = 0; i < g_numHandOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, HAND_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-	for(UInt32 i = 0; i < g_numSpellHandOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, HAND_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-
-	// Feet
-	for(UInt32 i = 0; i < g_numFeetOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FEET_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-	for(UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-
-	// Face
-	for(UInt32 i = 0; i < g_numFaceOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-	for(UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
-	{
-		sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
-		g_task->AddTask(new SKSETaskUninstallOverlay(reference, buff));
-	}
-
-	overlays.erase(reference->formID);
+	SimpleLocker locker(&overlays.m_lock);
+	overlays.m_data.erase(reference->formID);
 }
 
-void OverlayInterface::AddOverlays(TESObjectREFR * reference)
+void OverlayInterface::AddOverlays(TESObjectREFR * reference, bool immediate)
 {
 	if (!reference || reference == (*g_thePlayer)) // Cannot add to player, already exists
 		return;
 
-	overlays.insert(reference->formID);
+	SimpleLocker locker(&overlays.m_lock);
+	overlays.m_data.insert(reference->formID);
 
-	QueueOverlayBuild(reference);
+	QueueOverlayBuild(reference, immediate);
 }
 
-void OverlayInterface::QueueOverlayBuild(TESObjectREFR* reference)
+void OverlayInterface::QueueOverlayBuild(TESObjectREFR* reference, bool immediate)
 {
 	if (!reference) // Cannot add to player, already exists
 		return;
 
-	g_task->AddTask(new SKSETaskUpdateOverlays(reference));
+	if (!immediate) {
+		g_task->AddTask(new SKSETaskUpdateOverlays(reference));
+	}
+	else {
+		SKSETaskUpdateOverlays(reference).Run();
+	}
 }
 
 void OverlayInterface::Revert()
 {
-	for (auto & formId : overlays) {
+	SimpleLocker locker(&overlays.m_lock);
+	for (auto & formId : overlays.m_data) {
 		TESForm* form = LookupFormByID(formId);
 		if (form && form->formType == Character::kTypeID)
 		{
 			RevertOverlays(static_cast<TESObjectREFR*>(form), true);
 		}
 	}
-	overlays.clear();
+	overlays.m_data.clear();
 }
 
 std::string & OverlayInterface::GetDefaultTexture()
@@ -933,9 +892,66 @@ void OverlayInterface::SetDefaultTexture(const std::string & newTexture)
 	defaultTexture = newTexture;
 }
 
+skee_u32 OverlayInterface::GetOverlayCount(OverlayType type, OverlayLocation location)
+{
+	if (type == OverlayType::Normal) {
+		switch (location) {
+		case OverlayLocation::Body:	return g_numBodyOverlays;
+		case OverlayLocation::Hand: return g_numHandOverlays;
+		case OverlayLocation::Feet: return g_numFeetOverlays;
+		case OverlayLocation::Face: return g_numFaceOverlays;
+		}
+	} else if (type == OverlayType::Spell) {
+		switch (location) {
+		case OverlayLocation::Body:	return g_numSpellBodyOverlays;
+		case OverlayLocation::Hand: return g_numSpellHandOverlays;
+		case OverlayLocation::Feet: return g_numSpellFeetOverlays;
+		case OverlayLocation::Face: return g_numSpellFaceOverlays;
+		}
+	}
+	return 0;
+}
+
+const char* OverlayInterface::GetOverlayFormat(OverlayType type, OverlayLocation location)
+{
+	if (type == OverlayType::Normal) {
+		switch (location) {
+		case OverlayLocation::Body:	return BODY_NODE;
+		case OverlayLocation::Hand: return HAND_NODE;
+		case OverlayLocation::Feet: return FEET_NODE;
+		case OverlayLocation::Face: return FACE_NODE;
+		}
+	}
+	else if (type == OverlayType::Spell) {
+		switch (location) {
+		case OverlayLocation::Body:	return BODY_NODE_SPELL;
+		case OverlayLocation::Hand: return HAND_NODE_SPELL;
+		case OverlayLocation::Feet: return FEET_NODE_SPELL;
+		case OverlayLocation::Face: return FACE_NODE_SPELL;
+		}
+	}
+	return nullptr;
+}
+
+bool OverlayInterface::RegisterInstallCallback(const char* key, OverlayInstallCallback cb)
+{
+	SimpleLocker locker(&m_callbacks.m_lock);
+	auto it = m_callbacks.m_data.emplace(key, cb);
+	return it.second;
+}
+
+bool OverlayInterface::UnregisterInstallCallback(const char* key)
+{
+	SimpleLocker locker(&m_callbacks.m_lock);
+	size_t before = m_callbacks.m_data.size();
+	m_callbacks.m_data.erase(key);
+	return before != m_callbacks.m_data.size();
+}
+
 void OverlayHolder::Save(SKSESerializationInterface * intfc, UInt32 kVersion)
 {
-	for(OverlayHolder::iterator it = begin(); it != end(); ++it)
+	SimpleLocker locker(&m_lock);
+	for(auto it = m_data.begin(); it != m_data.end(); ++it)
 	{
 		intfc->OpenRecord('AOVL', kVersion);
 
@@ -968,6 +984,9 @@ bool OverlayHolder::Load(SKSESerializationInterface * intfc, UInt32 kVersion)
 #ifdef _DEBUG
 	_DMESSAGE("%s - Loading overlay for %016llX", __FUNCTION__, newHandle);
 #endif
+
+	SimpleLocker locker(&m_lock);
+	m_data.insert(formId);
 
 	g_actorUpdateManager.AddOverlayUpdate(formId);
 
@@ -1004,16 +1023,21 @@ void OverlayInterface::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TES
 	}
 }
 
-#ifdef _DEBUG
-void OverlayInterface::DumpMap()
+void OverlayInterface::Visit(std::function<void(UInt32)> visitor)
 {
-	_DMESSAGE("Dumping Overlays");
-	for(OverlayHolder::iterator it = overlays.begin(); it != overlays.end(); ++it)
+	SimpleLocker locker(&overlays.m_lock);
+	for(auto overlay : overlays.m_data)
 	{
-		_DMESSAGE("Overlay for handle: %016llX", (*it));
+		visitor(overlay);
 	}
 }
-#endif
+
+void OverlayInterface::PrintDiagnostics()
+{
+	Console_Print("OverlayInterface Diagnostics:");
+	SimpleLocker locker(&overlays.m_lock);
+	Console_Print("\t%llu actors with overlays", overlays.m_data.size());
+}
 
 void SKSETaskUpdateOverlays::Run()
 {
@@ -1023,47 +1047,46 @@ void SKSETaskUpdateOverlays::Run()
 		TESObjectREFR* reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
 		if (reference && g_overlayInterface.HasOverlays(reference))
 		{
-			char buff[MAX_PATH];
 			// Body
 			for (UInt32 i = 0; i < g_numBodyOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, BODY_NODE, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, BODY_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body).Run();
+				auto nodeName = std::format(BODY_NODE, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), BODY_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body).Run();
 			}
 			for (UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, BODY_NODE_SPELL, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, BODY_MAGIC_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body).Run();
+				auto nodeName = std::format(BODY_NODE_SPELL, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), BODY_MAGIC_MESH, BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body).Run();
 			}
 
 			// Hand
 			for (UInt32 i = 0; i < g_numHandOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, HAND_NODE, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, HAND_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands).Run();
+				auto nodeName = std::format(HAND_NODE, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), HAND_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands).Run();
 			}
 			for (UInt32 i = 0; i < g_numSpellHandOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, HAND_NODE_SPELL, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, HAND_MAGIC_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands).Run();
+				auto nodeName = std::format(HAND_NODE_SPELL, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), HAND_MAGIC_MESH, BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands).Run();
 			}
 
 			// Feet
 			for (UInt32 i = 0; i < g_numFeetOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, FEET_NODE, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, FEET_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet).Run();
+				auto nodeName = std::format(FEET_NODE, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), FEET_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet).Run();
 			}
 			for (UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
 			{
-				sprintf_s(buff, MAX_PATH, FEET_NODE_SPELL, i);
-				SKSETaskUninstallOverlay(reference, buff).Run();
-				SKSETaskInstallOverlay(reference, buff, FEET_MAGIC_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet).Run();
+				auto nodeName = std::format(FEET_NODE_SPELL, i);
+				SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+				SKSETaskInstallOverlay(reference, nodeName.c_str(), FEET_MAGIC_MESH, BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet).Run();
 			}
 
 			// Face
@@ -1071,15 +1094,15 @@ void SKSETaskUpdateOverlays::Run()
 			{
 				for (UInt32 i = 0; i < g_numFaceOverlays; i++)
 				{
-					sprintf_s(buff, MAX_PATH, FACE_NODE, i);
-					SKSETaskUninstallOverlay(reference, buff).Run();
-					SKSETaskInstallFaceOverlay(reference, buff, FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen).Run();
+					auto nodeName = std::format(FACE_NODE, i);
+					SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+					SKSETaskInstallFaceOverlay(reference, nodeName.c_str(), FACE_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen).Run();
 				}
 				for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
 				{
-					sprintf_s(buff, MAX_PATH, FACE_NODE_SPELL, i);
-					SKSETaskUninstallOverlay(reference, buff).Run();
-					SKSETaskInstallFaceOverlay(reference, buff, FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen).Run();
+					auto nodeName = std::format(FACE_NODE_SPELL, i);
+					SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+					SKSETaskInstallFaceOverlay(reference, nodeName.c_str(), FACE_MAGIC_MESH, BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen).Run();
 				}
 			}
 		}
@@ -1094,4 +1117,136 @@ void SKSETaskUpdateOverlays::Dispose()
 SKSETaskUpdateOverlays::SKSETaskUpdateOverlays(TESObjectREFR* refr)
 {
 	m_formId = refr->formID;
+}
+
+void SKSETaskRemoveOverlays::Run()
+{
+	TESForm* form = LookupFormByID(m_formId);
+	TESObjectREFR* reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
+	if (reference)
+	{
+		// Body
+		for (UInt32 i = 0; i < g_numBodyOverlays; i++)
+		{
+			auto nodeName = std::format(BODY_NODE, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
+		{
+			auto nodeName = std::format(BODY_NODE_SPELL, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+
+		// Hand
+		for (UInt32 i = 0; i < g_numHandOverlays; i++)
+		{
+			auto nodeName = std::format(HAND_NODE, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellHandOverlays; i++)
+		{
+			auto nodeName = std::format(HAND_NODE_SPELL, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+
+		// Feet
+		for (UInt32 i = 0; i < g_numFeetOverlays; i++)
+		{
+			auto nodeName = std::format(FEET_NODE, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
+		{
+			auto nodeName = std::format(FEET_NODE_SPELL, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+
+		// Face
+		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
+		{
+			auto nodeName = std::format(FACE_NODE, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+		{
+			auto nodeName = std::format(FACE_NODE_SPELL, i);
+			SKSETaskUninstallOverlay(reference, nodeName.c_str()).Run();
+		}
+	}
+}
+
+void SKSETaskRemoveOverlays::Dispose()
+{
+	delete this;
+}
+
+SKSETaskRemoveOverlays::SKSETaskRemoveOverlays(TESObjectREFR* refr)
+{
+	m_formId = refr->formID;
+}
+
+void SKSETaskRevertOverlays::Run()
+{
+	TESForm* form = LookupFormByID(m_formId);
+	TESObjectREFR* reference = DYNAMIC_CAST(form, TESForm, TESObjectREFR);
+	if (reference)
+	{
+		for (UInt32 i = 0; i < g_numBodyOverlays; i++)
+		{
+			auto nodeName = std::format(BODY_NODE, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body, m_resetDiffuse).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellBodyOverlays; i++)
+		{
+			auto nodeName = std::format(BODY_NODE_SPELL, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Body, BGSBipedObjectForm::kPart_Body, m_resetDiffuse).Run();
+		}
+
+		// Hand
+		for (UInt32 i = 0; i < g_numHandOverlays; i++)
+		{
+			auto nodeName = std::format(HAND_NODE, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands, m_resetDiffuse).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellHandOverlays; i++)
+		{
+			auto nodeName = std::format(HAND_NODE_SPELL, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Hands, BGSBipedObjectForm::kPart_Hands, m_resetDiffuse).Run();
+		}
+
+		// Feet
+		for (UInt32 i = 0; i < g_numFeetOverlays; i++)
+		{
+			auto nodeName = std::format(FEET_NODE, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet, m_resetDiffuse).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellFeetOverlays; i++)
+		{
+			auto nodeName = std::format(FEET_NODE_SPELL, i);
+			SKSETaskRevertOverlay(reference, nodeName.c_str(), BGSBipedObjectForm::kPart_Feet, BGSBipedObjectForm::kPart_Feet, m_resetDiffuse).Run();
+		}
+
+		// Face
+		for (UInt32 i = 0; i < g_numFaceOverlays; i++)
+		{
+			auto nodeName = std::format(FACE_NODE, i);
+			SKSETaskRevertFaceOverlay(reference, nodeName.c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, m_resetDiffuse).Run();
+		}
+		for (UInt32 i = 0; i < g_numSpellFaceOverlays; i++)
+		{
+			auto nodeName = std::format(FACE_NODE_SPELL, i);
+			SKSETaskRevertFaceOverlay(reference, nodeName.c_str(), BGSHeadPart::kTypeFace, BSShaderMaterial::kShaderType_FaceGen, m_resetDiffuse).Run();
+		}
+	}
+}
+
+void SKSETaskRevertOverlays::Dispose()
+{
+	delete this;
+}
+
+SKSETaskRevertOverlays::SKSETaskRevertOverlays(TESObjectREFR* refr, bool resetDiffuse)
+{
+	m_formId = refr->formID;
+	m_resetDiffuse = resetDiffuse;
 }

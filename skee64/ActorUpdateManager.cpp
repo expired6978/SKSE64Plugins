@@ -1,3 +1,5 @@
+#include "ITypes.h"
+
 #include "ActorUpdateManager.h"
 
 #include "skse64/GameReferences.h"
@@ -134,43 +136,43 @@ void ActorUpdateManager::OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, T
 	}
 }
 
-void ActorUpdateManager::AddBodyUpdate(UInt32 formId)
+void ActorUpdateManager::AddBodyUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_bodyUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddTransformUpdate(UInt32 formId)
+void ActorUpdateManager::AddTransformUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_transformUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddOverlayUpdate(UInt32 formId)
+void ActorUpdateManager::AddOverlayUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overlayUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddNodeOverrideUpdate(UInt32 formId)
+void ActorUpdateManager::AddNodeOverrideUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideNodeUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddWeaponOverrideUpdate(UInt32 formId)
+void ActorUpdateManager::AddWeaponOverrideUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideWeapUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddAddonOverrideUpdate(UInt32 formId)
+void ActorUpdateManager::AddAddonOverrideUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideAddonUpdates.emplace(formId);
 }
 
-void ActorUpdateManager::AddSkinOverrideUpdate(UInt32 formId)
+void ActorUpdateManager::AddSkinOverrideUpdate(skee_u32 formId)
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	m_overrideSkinUpdates.emplace(formId);
@@ -182,10 +184,37 @@ void ActorUpdateManager::AddDyeUpdate_Internal(NIOVTaskUpdateItemDye* itemUpdate
 	m_dyeUpdates.emplace(itemUpdateTask);
 }
 
+bool ActorUpdateManager::RegisterFlushCallback(const char* key, FlushCallback cb)
+{
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
+	auto it = m_flushObservers.find(key);
+	if (it == m_flushObservers.end())
+	{
+		m_flushObservers.emplace(key, cb);
+		return true;
+	}
+	return false;
+}
+
+bool ActorUpdateManager::UnregisterFlushCallback(const char* key)
+{
+	std::lock_guard<std::recursive_mutex> scs(m_lock);
+	auto it = m_flushObservers.find(key);
+	if (it != m_flushObservers.end())
+	{
+		m_flushObservers.erase(it);
+		return true;
+	}
+	return false;
+}
+
 void ActorUpdateManager::Flush()
 {
 	std::lock_guard<std::recursive_mutex> scs(m_lock);
 	g_task->AddTask(new SKSETaskApplyMorphs(*g_thePlayer));
+
+	std::unordered_set<UInt32> flushedSet;
+	std::vector<UInt32> flushedForms;
 
 	for (UInt32 formId : m_bodyUpdates)
 	{
@@ -193,12 +222,22 @@ void ActorUpdateManager::Flush()
 		if (refr && refr->formType == Character::kTypeID)
 		{
 			g_bodyMorphInterface.UpdateModelWeight(static_cast<TESObjectREFR*>(refr), false);
+			if (flushedSet.count(formId) == 0)
+			{
+				flushedSet.emplace(formId);
+				flushedForms.emplace_back(formId);
+			}
 		}
 	}
 
 	for (UInt32 formId : m_transformUpdates)
 	{
 		g_transformInterface.SetTransforms(formId, false);
+		if (flushedSet.count(formId) == 0)
+		{
+			flushedSet.emplace(formId);
+			flushedForms.emplace_back(formId);
+		}
 	}
 
 	for (UInt32 formId : m_overlayUpdates)
@@ -207,32 +246,67 @@ void ActorUpdateManager::Flush()
 		if (refr && refr->formType == Character::kTypeID)
 		{
 			g_overlayInterface.QueueOverlayBuild(static_cast<TESObjectREFR*>(refr));
+			if (flushedSet.count(formId) == 0)
+			{
+				flushedSet.emplace(formId);
+				flushedForms.emplace_back(formId);
+			}
 		}
 	}
 
 	for (UInt32 formId : m_overrideNodeUpdates)
 	{
-		g_overrideInterface.SetNodeProperties(formId, false);
+		g_overrideInterface.Impl_SetNodeProperties(formId, false);
+		if (flushedSet.count(formId) == 0)
+		{
+			flushedSet.emplace(formId);
+			flushedForms.emplace_back(formId);
+		}
 	}
 
 	for (UInt32 formId : m_overrideWeapUpdates)
 	{
-		g_overrideInterface.SetWeaponProperties(formId, false);
+		g_overrideInterface.Impl_SetWeaponProperties(formId, false);
+		if (flushedSet.count(formId) == 0)
+		{
+			flushedSet.emplace(formId);
+			flushedForms.emplace_back(formId);
+		}
 	}
 
 	for (UInt32 formId : m_overrideAddonUpdates)
 	{
-		g_overrideInterface.SetProperties(formId, false);
+		g_overrideInterface.Impl_SetProperties(formId, false);
+		if (flushedSet.count(formId) == 0)
+		{
+			flushedSet.emplace(formId);
+			flushedForms.emplace_back(formId);
+		}
 	}
 
 	for (UInt32 formId : m_overrideSkinUpdates)
 	{
-		g_overrideInterface.SetSkinProperties(formId, false);
+		g_overrideInterface.Impl_SetSkinProperties(formId, false);
+		if (flushedSet.count(formId) == 0)
+		{
+			flushedSet.emplace(formId);
+			flushedForms.emplace_back(formId);
+		}
 	}
 
 	for (NIOVTaskUpdateItemDye* task : m_dyeUpdates)
 	{
 		g_task->AddTask(task);
+		if (flushedSet.count(task->GetActor()) == 0)
+		{
+			flushedSet.emplace(task->GetActor());
+			flushedForms.emplace_back(task->GetActor());
+		}
+	}
+
+	for (auto cb : m_flushObservers)
+	{
+		cb.second(reinterpret_cast<skee_u32*>(&flushedForms.at(0)), static_cast<skee_u32>(flushedForms.size()));
 	}
 
 	m_bodyUpdates.clear();

@@ -140,7 +140,7 @@ public:
 		kSerializationVersion1 = 1,
 		kSerializationVersion = kSerializationVersion1
 	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
 	enum ColorPreset
 	{

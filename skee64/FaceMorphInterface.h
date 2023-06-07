@@ -224,14 +224,14 @@ public:
 };
 typedef std::shared_ptr<MappedSculptData> MappedSculptDataPtr;
 
-class SculptData : public std::unordered_map<StringTableItem, MappedSculptDataPtr >
+class SculptData : public std::unordered_map<StringTableItem, MappedSculptDataPtr>
 {
 public:
 	MappedSculptDataPtr GetSculptHost(SKEEFixedString, bool create = true);
 
 	static SKEEFixedString GetHostByPart(BGSHeadPart * headPart);
 };
-typedef std::shared_ptr<SculptData> SculptDataPtr;
+using SculptDataPtr = std::shared_ptr<SculptData>;
 
 class SculptStorage : public std::unordered_map < TESNPC*, SculptDataPtr >
 {
@@ -240,54 +240,6 @@ public:
 	SculptDataPtr GetSculptTarget(TESNPC* npc, bool create = true);
 	void EraseNPC(TESNPC * npc);
 };
-
-
-class PresetData
-{
-public:
-	PresetData();
-
-	struct Tint
-	{
-		UInt32 index;
-		UInt32 color;
-		SKEEFixedString name;
-	};
-
-	struct Morph
-	{
-		float value;
-		SKEEFixedString name;
-	};
-
-	struct Texture
-	{
-		UInt8 index;
-		SKEEFixedString name;
-	};
-
-	float weight;
-	UInt32 hairColor;
-	std::vector<std::string> modList;
-	std::vector<BGSHeadPart*> headParts;
-	std::vector<SInt32> presets;
-	std::vector<float> morphs;
-	std::vector<Tint> tints;
-	std::vector<Morph> customMorphs;
-	std::vector<Texture> faceTextures;
-	BGSTextureSet* headTexture;
-	BSFixedString tintTexture;
-	typedef std::map<SKEEFixedString, std::vector<OverrideVariant>> OverrideData;
-	OverrideData overrideData;
-	typedef std::map<UInt32, std::vector<OverrideVariant>> SkinData;
-	SkinData skinData[2];
-	typedef std::map<SKEEFixedString, std::map<SKEEFixedString, std::vector<OverrideVariant>>> TransformData;
-	TransformData transformData[2];
-	SculptDataPtr sculptData;
-	typedef std::unordered_map<SKEEFixedString, std::unordered_map<SKEEFixedString, float>> BodyMorphData;
-	BodyMorphData bodyMorphData;
-};
-typedef std::shared_ptr<PresetData> PresetDataPtr;
 
 class TRIFile
 {
@@ -331,7 +283,6 @@ public:
 };
 
 typedef std::unordered_map<SKEEFixedString, TRIModelData> ModelMap;
-typedef std::unordered_map<TESNPC*, PresetDataPtr> PresetMap;
 
 class FaceMorphInterface : public IPluginInterface
 {
@@ -343,10 +294,10 @@ public:
 		kSerializationVersion2 = 2,
 		kSerializationVersion = kSerializationVersion2
 	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 version) { return false; } // Unused due to separate dblock name for morph and sculpt
-	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 version) { return false; } // Unused due to separate dblock name for morph and sculpt
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
 	virtual void Revert();
 	void RevertInternals();
 
@@ -398,30 +349,7 @@ public:
 		m_valueMap.EraseNPC(npc);
 	}
 
-	PresetDataPtr GetPreset(TESNPC* npc);
-	void AssignPreset(TESNPC * npc, PresetDataPtr presetData);
-	void ApplyPreset(TESNPC * npc, BSFaceGenNiNode * faceNode, BGSHeadPart * headPart);
-	bool ErasePreset(TESNPC * npc);
-	void ClearPresets();
-
-	bool SaveBinaryPreset(const char * filePath);
-	//bool LoadPreset(const char * filePath, GFxMovieView * movieView, GFxValue * rootObject);
-	bool LoadBinaryPreset(const char * filePath, PresetDataPtr presetData);
-
-	enum ApplyTypes
-	{
-		kPresetApplyFace = (0 << 0),
-		kPresetApplyOverrides = (1 << 0),
-		kPresetApplyBodyMorphs = (1 << 1),
-		kPresetApplyTransforms = (1 << 2),
-		kPresetApplySkinOverrides = (1 << 3),
-		kPresetApplyAll = kPresetApplyFace | kPresetApplyOverrides | kPresetApplyBodyMorphs | kPresetApplyTransforms | kPresetApplySkinOverrides
-	};
-
-	void ApplyPresetData(Actor * actor, PresetDataPtr presetData, bool setSkinColor = false, ApplyTypes applyType = kPresetApplyAll);
-
-	bool SaveJsonPreset(const char * filePath);
-	bool LoadJsonPreset(const char * filePath, PresetDataPtr presetData);
+	inline ValueMap& GetValueMap() { return m_valueMap; }
 
 protected:
 	SliderList * currentList;
@@ -430,7 +358,6 @@ protected:
 	MorphMap m_morphMap;
 	ValueMap m_valueMap;
 	ModelMap m_modelMap;
-	PresetMap m_mappedPreset;
 
 	SculptStorage m_sculptStorage;
 

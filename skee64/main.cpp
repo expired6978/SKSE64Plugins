@@ -28,6 +28,7 @@
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
 #include "SkinLayerInterface.h"
+#include "PresetInterface.h"
 #include "SkeletonExtender.h"
 #include "AttachmentInterface.h"
 #include "ActorUpdateManager.h"
@@ -52,7 +53,7 @@
 #include "PapyrusCharGen.h"
 #include "SKEEHooks.h"
 
-IDebugLog	gLog;
+DebugLog	gLog;
 
 PluginHandle					g_pluginHandle = kPluginHandle_Invalid;
 
@@ -80,6 +81,7 @@ ActorUpdateManager			g_actorUpdateManager;
 ActorArmorTangentUpdater	g_actorArmorTangentUpdater;
 AttachmentInterface			g_attachmentInterface;
 CommandInterface			g_commandInterface;
+PresetInterface				g_presetInterface;
 PartSet	g_partSet;
 
 StringTable g_stringTable;
@@ -122,9 +124,10 @@ UInt32	g_numSpellFeetOverlays = 1;
 UInt32	g_numSpellFaceOverlays = 1;
 UInt32	g_tintHairSlot = 1;
 
-bool	g_alphaOverride = true;
-UInt16	g_alphaFlags = 4845;
-UInt16	g_alphaThreshold = 0;
+bool	g_overlayAlphaOverride = true;
+UInt16	g_overlayAlphaFlags = 4845;
+UInt16	g_overlayAlphaThreshold = 0;
+bool	g_overlayForceDecal = true;
 
 
 bool	g_enableBodyInit = true;
@@ -422,7 +425,7 @@ void SKEE64Serialization_Load(SKSESerializationInterface * intfc)
 			case 'ITEE':	g_itemDataInterface.Load(intfc, version, stringTable);					break;
 			case 'ACTM':	g_transformInterface.Load(intfc, version, stringTable);					break;
 			default:
-				_MESSAGE("unhandled type %08X (%.4s)", type, &type);
+				_MESSAGE("unhandled type %08X (%.4s)", type, reinterpret_cast<char*>(&type));
 				error = true;
 				break;
 		}
@@ -613,9 +616,8 @@ void SKSEMessageHandler(SKSEMessagingInterface::Message * message)
 
 bool SKSEPlugin_Query(const SKSEInterface* skse)
 {
-	SInt32	logLevel = IDebugLog::kLevel_DebugMessage;
-	if (SKEE64GetConfigValue("Debug", "iLogLevel", &logLevel))
-		gLog.SetLogLevel((IDebugLog::LogLevel)logLevel);
+	SInt32	logLevel = DebugLog::kLevel_DebugMessage;
+	SKEE64GetConfigValue("Debug", "iLogLevel", &logLevel);
 
 #if STORE_VERSION == RUNTIME_TYPE_BETHESDA
 	if (logLevel >= 0)
@@ -624,6 +626,7 @@ bool SKSEPlugin_Query(const SKSEInterface* skse)
 	if (logLevel >= 0)
 		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition GOG\\SKSE\\skee64.log");
 #endif
+	gLog.SetLogLevel((DebugLog::LogLevel)logLevel);
 
 	// store plugin handle so we can identify ourselves later
 	g_pluginHandle = skse->GetPluginHandle();
@@ -772,9 +775,11 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	SKEE64GetConfigValue("Overlays/Face", "iNumOverlays", &g_numFaceOverlays);
 	SKEE64GetConfigValue("Overlays/Face", "iSpellOverlays", &g_numSpellFaceOverlays);
 
-	SKEE64GetConfigValue("Overlays/Data", "bAlphaOverride", &g_alphaOverride);
-	SKEE64GetConfigValue("Overlays/Data", "iAlphaFlags", &g_alphaFlags);
-	SKEE64GetConfigValue("Overlays/Data", "iAlphaThreshold", &g_alphaThreshold);
+	SKEE64GetConfigValue("Overlays/Data", "bAlphaOverride", &g_overlayAlphaOverride);
+	SKEE64GetConfigValue("Overlays/Data", "iAlphaFlags", &g_overlayAlphaFlags);
+	SKEE64GetConfigValue("Overlays/Data", "iAlphaThreshold", &g_overlayAlphaThreshold);
+	SKEE64GetConfigValue("Overlays/Data", "bForceDecal", &g_overlayForceDecal);
+
 
 	std::string defaultTexture = GetConfigOption("Overlays/Data", "sDefaultTexture");
 	if (defaultTexture.empty()) {
@@ -817,8 +822,8 @@ bool SKSEPlugin_Load(const SKSEInterface * skse)
 	if (g_numSpellFaceOverlays > 0x7F)
 		g_numSpellFaceOverlays = 0x7F;
 
-	if (g_alphaThreshold > 0xFF)
-		g_alphaThreshold = 0xFF;
+	if (g_overlayAlphaThreshold > 0xFF)
+		g_overlayAlphaThreshold = 0xFF;
 
 	if(!g_enableFaceOverlays) {
 		g_numFaceOverlays = 0;

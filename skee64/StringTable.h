@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ILogger.h"
+
 #include "skse64/GameTypes.h"
 #include "skse64/PluginAPI.h"
 #include "common/ICriticalSection.h"

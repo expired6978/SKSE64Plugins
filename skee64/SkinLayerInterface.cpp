@@ -6,7 +6,7 @@
 
 extern StringTable						g_stringTable;
 
-UInt32 SkinLayerInterface::GetVersion()
+skee_u32 SkinLayerInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }

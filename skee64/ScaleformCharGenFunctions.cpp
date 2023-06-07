@@ -32,15 +32,12 @@
 #include "OverlayInterface.h"
 #include "NiTransformInterface.h"
 #include "BodyMorphInterface.h"
+#include "PresetInterface.h"
 
 #include "ScaleformUtils.h"
 
-extern OverrideInterface	* g_overrideInterface;
-extern NiTransformInterface	* g_transformInterface;
-extern OverlayInterface		* g_overlayInterface;
-extern BodyMorphInterface	* g_bodyMorphInterface;
-
-extern FaceMorphInterface g_morphInterface;
+extern FaceMorphInterface	g_morphInterface;
+extern PresetInterface		g_presetInterface;
 extern PartSet	g_partSet;
 
 extern SKSETaskInterface * g_task;
@@ -97,9 +94,9 @@ void SKSEScaleform_SavePreset::Invoke(Args * args)
 	const char	* strData = args->args[0].GetString();
 
 	if (saveJson)
-		args->result->SetBool(g_morphInterface.SaveJsonPreset(strData));
+		args->result->SetBool(g_presetInterface.SaveJsonPreset(strData));
 	else
-		args->result->SetBool(g_morphInterface.SaveBinaryPreset(strData));
+		args->result->SetBool(g_presetInterface.SaveBinaryPreset(strData));
 }
 
 void SKSEScaleform_LoadPreset::Invoke(Args * args)
@@ -120,9 +117,9 @@ void SKSEScaleform_LoadPreset::Invoke(Args * args)
 		object = &args->args[1];
 
 	auto presetData = std::make_shared<PresetData>();
-	bool loadError = loadJson ? g_morphInterface.LoadJsonPreset(strData, presetData) : g_morphInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
+	bool loadError = loadJson ? g_presetInterface.LoadJsonPreset(strData, presetData) : g_presetInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
 	if (!loadError) {
-		g_morphInterface.ApplyPresetData(*g_thePlayer, presetData);
+		g_presetInterface.ApplyPresetData(*g_thePlayer, presetData);
 
 		RegisterNumber(object, "hairColor", presetData->hairColor);
 
@@ -172,7 +169,7 @@ void SKSEScaleform_ReadPreset::Invoke(Args * args)
 
 	DataHandler * dataHandler = DataHandler::GetSingleton();
 	auto presetData = std::make_shared<PresetData>();
-	bool loadError = loadJson ? g_morphInterface.LoadJsonPreset(strData, presetData) : g_morphInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
+	bool loadError = loadJson ? g_presetInterface.LoadJsonPreset(strData, presetData) : g_presetInterface.LoadBinaryPreset(strData, presetData);//g_morphHandler.LoadPreset(strData, args->movie, object);
 	if(!loadError) {
 		PlayerCharacter * player = (*g_thePlayer);
 		TESNPC * npc = DYNAMIC_CAST(player->baseForm, TESForm, TESNPC);

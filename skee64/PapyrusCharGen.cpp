@@ -28,6 +28,7 @@
 #include "NiTransformInterface.h"
 #include "BodyMorphInterface.h"
 #include "OverlayInterface.h"
+#include "PresetInterface.h"
 
 #include "FileUtils.h"
 
@@ -40,133 +41,7 @@ extern OverrideInterface				g_overrideInterface;
 extern NiTransformInterface				g_transformInterface;
 extern BodyMorphInterface				g_bodyMorphInterface;
 extern OverlayInterface					g_overlayInterface;
-
-void ApplyPreset(Actor * actor, TESRace * race, TESNPC * npc, PresetDataPtr presetData, FaceMorphInterface::ApplyTypes applyType)
-{
-	CALL_MEMBER_FN(actor, SetRace)(race, actor == (*g_thePlayer));
-
-	npc->overlayRace = NULL;
-	npc->weight = presetData->weight;
-
-	if (!npc->faceMorph)
-		npc->faceMorph = (TESNPC::FaceMorphs*)Heap_Allocate(sizeof(TESNPC::FaceMorphs));
-
-	UInt32 i = 0;
-	for (auto & preset : presetData->presets) {
-		npc->faceMorph->presets[i] = preset;
-		i++;
-	}
-
-	i = 0;
-	for (auto & morph : presetData->morphs) {
-		npc->faceMorph->option[i] = morph;
-		i++;
-	}
-
-	// Sculpt data loaded here
-	g_morphInterface.EraseSculptData(npc);
-	if (presetData->sculptData) {
-		if (presetData->sculptData->size() > 0)
-			g_morphInterface.SetSculptTarget(npc, presetData->sculptData);
-	}
-
-	// Assign custom morphs here (values only)
-	g_morphInterface.EraseMorphData(npc);
-	for (auto & it : presetData->customMorphs)
-		g_morphInterface.SetMorphValue(npc, it.name, it.value);
-
-	// Wipe the HeadPart list and replace it with the default race list
-	UInt8 gender = CALL_MEMBER_FN(npc, GetSex)();
-	TESRace::CharGenData * chargenData = race->chargenData[gender];
-	if (chargenData) {
-		BGSHeadPart ** headParts = npc->headparts;
-		tArray<BGSHeadPart*> * headPartList = race->chargenData[gender]->headParts;
-		if (headParts && headPartList) {
-			Heap_Free(headParts);
-			npc->numHeadParts = headPartList->count;
-			headParts = (BGSHeadPart **)Heap_Allocate(npc->numHeadParts * sizeof(BGSHeadPart*));
-			for (UInt32 i = 0; i < headPartList->count; i++)
-				headPartList->GetNthItem(i, headParts[i]);
-			npc->headparts = headParts;
-		}
-	}
-
-	// Force the remaining parts to change to that of the preset
-	for (auto part : presetData->headParts)
-		CALL_MEMBER_FN(npc, ChangeHeadPart)(part);
-
-	//npc->MarkChanged(0x2000800); // Save FaceData and Race
-	npc->MarkChanged(0x800); // Save FaceData
-
-	// Grab the skin tint and convert it from RGBA to RGB on NPC
-	if (presetData->tints.size() > 0) {
-		PresetData::Tint & tint = presetData->tints.at(0);
-		float alpha = (tint.color >> 24) / 255.0;
-		TintMask tintMask;
-		tintMask.color.red = (tint.color >> 16) & 0xFF;
-		tintMask.color.green = (tint.color >> 8) & 0xFF;
-		tintMask.color.blue = tint.color & 0xFF;
-		tintMask.alpha = alpha;
-		tintMask.tintType = TintMask::kMaskType_SkinTone;
-
-		NiColorA colorResult;
-		CALL_MEMBER_FN(npc, SetSkinFromTint)(&colorResult, &tintMask, true);
-	}
-
-	// Queue a node update
-	CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
-
-	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyOverrides) == FaceMorphInterface::ApplyTypes::kPresetApplyOverrides) {
-		g_overrideInterface.RemoveAllReferenceNodeOverrides(actor);
-
-		g_overlayInterface.RevertOverlays(actor, true);
-
-		if (!g_overlayInterface.HasOverlays(actor) && presetData->overrideData.size() > 0)
-			g_overlayInterface.AddOverlays(actor);
-
-		for (auto & nodes : presetData->overrideData) {
-			for (auto & value : nodes.second) {
-				g_overrideInterface.AddNodeOverride(actor, gender == 1 ? true : false, nodes.first, value);
-			}
-		}
-	}
-
-	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplySkinOverrides) == FaceMorphInterface::ApplyTypes::kPresetApplySkinOverrides)
-	{
-		for (UInt32 i = 0; i <= 1; i++) {
-			for (auto & slot : presetData->skinData[i]) {
-				for (auto & value : slot.second) {
-					g_overrideInterface.AddSkinOverride(actor, gender == 1 ? true : false, i == 1 ? true : false, slot.first, value);
-				}
-			}
-		}
-	}
-
-	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) == FaceMorphInterface::ApplyTypes::kPresetApplyTransforms) {
-		g_transformInterface.Impl_RemoveAllReferenceTransforms(actor);
-		for (UInt32 i = 0; i <= 1; i++) {
-			for (auto & xForms : presetData->transformData[i]) {
-				for (auto & key : xForms.second) {
-					for (auto & value : key.second) {
-						g_transformInterface.Impl_AddNodeTransform(actor, i == 1 ? true : false, gender == 1 ? true : false, xForms.first, key.first, value);
-					}
-				}
-			}
-		}
-		g_transformInterface.Impl_UpdateNodeAllTransforms(actor);
-	}
-
-	if ((applyType & FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) == FaceMorphInterface::ApplyTypes::kPresetApplyBodyMorphs) {
-		g_bodyMorphInterface.ClearMorphs(actor);
-
-		for (auto & morph : presetData->bodyMorphData) {
-			for (auto & keys : morph.second)
-				g_bodyMorphInterface.SetMorph(actor, morph.first, keys.first, keys.second);
-		}
-
-		g_bodyMorphInterface.UpdateModelWeight(actor);
-	}
-}
+extern PresetInterface					g_presetInterface;
 
 namespace papyrusCharGen
 {
@@ -177,7 +52,7 @@ namespace papyrusCharGen
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
 
-		g_morphInterface.SaveJsonPreset(slotPath);
+		g_presetInterface.SaveJsonPreset(slotPath);
 
 		if(g_enableHeadExport)
 			g_task->AddTask(new SKSETaskExportTintMask(tintPath, fileName.data));
@@ -304,10 +179,10 @@ namespace papyrusCharGen
 		sprintf_s(tintPath, "Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_presetInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.slot", fileName.data);
-			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_presetInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -316,9 +191,9 @@ namespace papyrusCharGen
 		}
 
 		presetData->tintTexture = tintPath;
-		g_morphInterface.AssignPreset(npc, presetData);
+		g_presetInterface.AssignMappedPreset(npc, presetData);
 
-		ApplyPreset(actor, race, npc, presetData, (FaceMorphInterface::ApplyTypes)flags);
+		g_presetInterface.ApplyPreset(actor, race, npc, presetData, (PresetInterface::ApplyTypes)flags);
 		return true;
 	}
 
@@ -331,7 +206,7 @@ namespace papyrusCharGen
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\%s.dds", fileName.data);
 
-		g_morphInterface.SaveJsonPreset(slotPath);
+		g_presetInterface.SaveJsonPreset(slotPath);
 
 		if(g_enableHeadExport)
 			g_task->AddTask(new SKSETaskExportHead((*g_thePlayer), nifPath, tintPath));
@@ -353,16 +228,16 @@ namespace papyrusCharGen
 			return false;
 		}
 
-		g_morphInterface.ErasePreset(npc);
+		g_presetInterface.EraseMappedPreset(npc);
 
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_presetInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Exported\\%s.slot", fileName.data);
-			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_presetInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -385,7 +260,7 @@ namespace papyrusCharGen
 		sprintf_s(destPath, "Data\\Textures\\Actors\\Character\\FaceGenData\\FaceTint\\%s\\%08X.dds", modInfo->name, modInfo->IsLight() ? (npc->formID & 0xFFF) : (npc->formID & 0xFFFFFF));
 		CopyFile(sourcePath, destPath, false);
 
-		ApplyPreset(actor, race, npc, presetData, (FaceMorphInterface::ApplyTypes)flags);
+		g_presetInterface.ApplyPreset(actor, race, npc, presetData, (PresetInterface::ApplyTypes)flags);
 		g_task->AddTask(new SKSETaskRefreshTintMask(actor, sourcePath));
 		return true;
 	}
@@ -406,10 +281,10 @@ namespace papyrusCharGen
 		sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Presets\\%s.jslot", fileName.data);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_presetInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			sprintf_s(slotPath, "SKSE\\Plugins\\CharGen\\Presets\\%s.slot", fileName.data);
-			loadError = g_morphInterface.LoadBinaryPreset(slotPath, presetData);
+			loadError = g_presetInterface.LoadBinaryPreset(slotPath, presetData);
 		}
 
 		if (loadError) {
@@ -426,7 +301,7 @@ namespace papyrusCharGen
 			npc->SetHairColor(hairColor);
 		}
 
-		g_morphInterface.ApplyPresetData(actor, presetData, true, (FaceMorphInterface::ApplyTypes)flags);
+		g_presetInterface.ApplyPresetData(actor, presetData, true, (PresetInterface::ApplyTypes)flags);
 
 		// Queue a node update
 		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
@@ -437,7 +312,7 @@ namespace papyrusCharGen
 	{
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Presets\\%s.jslot", fileName.data);
-		g_morphInterface.SaveJsonPreset(slotPath);
+		g_presetInterface.SaveJsonPreset(slotPath);
 	}
 
 	bool IsExternalEnabled(StaticFunctionTag*)
@@ -452,12 +327,12 @@ namespace papyrusCharGen
 			return false;
 		}
 
-		return g_morphInterface.ErasePreset(npc);
+		return g_presetInterface.EraseMappedPreset(npc);
 	}
 
 	void ClearPresets(StaticFunctionTag*)
 	{
-		g_morphInterface.ClearPresets();
+		g_presetInterface.ClearMappedPresets();
 	}
 
 	void ExportHead(StaticFunctionTag*, BSFixedString fileName)
@@ -477,7 +352,7 @@ namespace papyrusCharGen
 	{
 		char slotPath[MAX_PATH];
 		sprintf_s(slotPath, "Data\\SKSE\\Plugins\\CharGen\\Exported\\%s.jslot", fileName.data);
-		g_morphInterface.SaveJsonPreset(slotPath);
+		g_presetInterface.SaveJsonPreset(slotPath);
 	}
 };
 

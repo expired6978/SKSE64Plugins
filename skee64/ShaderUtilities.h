@@ -8,9 +8,9 @@
 #include "skse64/NiTypes.h"
 
 #include "StringTable.h"
+#include "OverrideVariant.h"
 
 class BSGeometry;
-class OverrideVariant;
 class BSLightingShaderMaterial;
 
 class NIOVTaskUpdateTexture : public TaskDelegate
@@ -52,6 +52,23 @@ public:
 
 void GetShaderProperty(NiAVObject * node, OverrideVariant * value);
 void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediate);
+
+class NIOVTaskSetShaderProperty : public TaskDelegate
+{
+public:
+	NIOVTaskSetShaderProperty(NiAVObject* node, const OverrideVariant& variant) : m_object(node), m_variant(variant) { }
+
+	virtual void Run()
+	{
+		SetShaderProperty(m_object, &m_variant, true);
+	}
+
+	virtual void Dispose() { delete this; }
+
+protected:
+	NiPointer<NiAVObject> m_object;
+	OverrideVariant m_variant;
+};
 
 
 SKEEFixedString GetSanitizedPath(const SKEEFixedString & path);

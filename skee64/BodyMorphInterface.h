@@ -324,16 +324,7 @@ class BodyMorphInterface
 	, public IAddonAttachmentInterface
 {
 public:
-	enum
-	{
-		kCurrentPluginVersion = 4,
-		kSerializationVersion1 = 1,
-		kSerializationVersion2 = 2,
-		kSerializationVersion3 = 3,
-		kSerializationVersion4 = 3,
-		kSerializationVersion = kSerializationVersion4
-	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion();
 
 	// Serialization
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
@@ -370,7 +361,7 @@ public:
 
 	virtual void SetCacheLimit(size_t limit) override { Impl_SetCacheLimit(limit); }
 	virtual bool HasMorphs(TESObjectREFR * actor) override { return Impl_HasMorphs(actor); }
-	virtual UInt32 EvaluateBodyMorphs(TESObjectREFR * actor) override { return Impl_EvaluateBodyMorphs(actor); }
+	virtual skee_u32 EvaluateBodyMorphs(TESObjectREFR * actor) override { return Impl_EvaluateBodyMorphs(actor); }
 
 	virtual bool HasBodyMorph(TESObjectREFR * actor, const char * morphName, const char * morphKey) override { return Impl_HasBodyMorph(actor, morphName, morphKey); }
 	virtual bool HasBodyMorphName(TESObjectREFR * actor, const char * morphName) override { return Impl_HasBodyMorphName(actor, morphName); }
@@ -428,7 +419,7 @@ private:
 
 	friend class NIOVTaskUpdateMorph;
 	friend class NIOVTaskUpdateModelWeight;
-	friend class FaceMorphInterface;
+	friend class PresetInterface;
 
 	// Inherited via IAddonAttachmentInterface
 	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;

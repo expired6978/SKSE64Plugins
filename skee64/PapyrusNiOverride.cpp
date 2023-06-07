@@ -138,7 +138,7 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		return g_overrideInterface.GetOverride(refr, isFemale, armor, addon, nodeName, key, index) != NULL;
+		return g_overrideInterface.Impl_GetOverride(refr, isFemale, armor, addon, nodeName, key, index) != NULL;
 	}
 
 	bool HasArmorAddonNode(StaticFunctionTag* base, TESObjectREFR * refr, bool firstPerson, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, bool debug)
@@ -154,7 +154,7 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 
-		g_overrideInterface.SetProperties(refr->formID, false);
+		g_overrideInterface.Impl_SetProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -188,7 +188,7 @@ namespace papyrusNiOverride
 
 		// Adds the property to the map
 		if(persist)
-			g_overrideInterface.AddOverride(refr, isFemale, armor, addon, nodeName, value);
+			g_overrideInterface.Impl_AddOverride(refr, isFemale, armor, addon, nodeName, value);
 
 		UInt8 gender = 0;
 		TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -196,8 +196,12 @@ namespace papyrusNiOverride
 			gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 		// Applies the properties visually, only if the current gender matches
-		if(isFemale == (gender == 1))
-			g_overrideInterface.SetArmorAddonProperty(refr, gender == 1, armor, addon, nodeName, &value, false);
+		if (isFemale == (gender == 1)) {
+			g_overrideInterface.Impl_SetArmorAddonProperty(refr, false, armor, addon, nodeName, &value, false);
+			if (refr->GetNiRootNode(0) != refr->GetNiRootNode(1)) {
+				g_overrideInterface.Impl_SetArmorAddonProperty(refr, true, armor, addon, nodeName, &value, false);
+			}
+		}
 	}
 
 	template<typename T>
@@ -214,7 +218,7 @@ namespace papyrusNiOverride
 		
 
 		T dest = 0;
-		OverrideVariant * value = g_overrideInterface.GetOverride(refr, isFemale, armor, addon, nodeName, key, index);
+		OverrideVariant * value = g_overrideInterface.Impl_GetOverride(refr, isFemale, armor, addon, nodeName, key, index);
 		if(value) {
 			UnpackValue<T>(&dest, value);
 		}
@@ -237,7 +241,7 @@ namespace papyrusNiOverride
 		value.key = key;
 		value.index = index;
 
-		g_overrideInterface.GetArmorAddonProperty(refr, firstPerson, armor, addon, nodeName, &value);
+		g_overrideInterface.Impl_GetArmorAddonProperty(refr, firstPerson, armor, addon, nodeName, &value);
 
 		T dest;
 		UnpackValue<T>(&dest, &value);
@@ -249,7 +253,7 @@ namespace papyrusNiOverride
 		if (!refr)
 			return;
 
-		return g_overrideInterface.SetNodeProperties(refr->formID, false);
+		return g_overrideInterface.Impl_SetNodeProperties(refr->formID, false);
 	}
 
 	bool HasNodeOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt32 key, UInt32 index)
@@ -262,7 +266,7 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		return g_overrideInterface.GetNodeOverride(refr, isFemale, nodeName, key, index) != NULL;
+		return g_overrideInterface.Impl_GetNodeOverride(refr, isFemale, nodeName, key, index) != NULL;
 	}
 
 	template<typename T>
@@ -286,7 +290,7 @@ namespace papyrusNiOverride
 
 		// Adds the property to the map
 		if(persist)
-			g_overrideInterface.AddNodeOverride(refr, isFemale, nodeName, value);
+			g_overrideInterface.Impl_AddNodeOverride(refr, isFemale, nodeName, value);
 
 		UInt8 gender = 0;
 		TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -294,8 +298,11 @@ namespace papyrusNiOverride
 			gender = CALL_MEMBER_FN(actorBase, GetSex)();
 
 		// Applies the properties visually, only if the current gender matches
-		if(isFemale == (gender == 1))
-			g_overrideInterface.SetNodeProperty(refr, nodeName, &value, false);
+		if (isFemale == (gender == 1)) {
+			g_overrideInterface.Impl_SetNodeProperty(refr, false, nodeName, &value, false);
+			if(refr->GetNiRootNode(0) != refr->GetNiRootNode(1))
+				g_overrideInterface.Impl_SetNodeProperty(refr, true, nodeName, &value, false);
+		}
 	}
 
 	template<typename T>
@@ -310,7 +317,7 @@ namespace papyrusNiOverride
 			index = OverrideVariant::kIndexMax;
 
 		T dest = 0;
-		OverrideVariant * value = g_overrideInterface.GetNodeOverride(refr, isFemale, nodeName, key, index);
+		OverrideVariant * value = g_overrideInterface.Impl_GetNodeOverride(refr, isFemale, nodeName, key, index);
 		if(value) {
 			UnpackValue<T>(&dest, value);
 		}
@@ -333,7 +340,7 @@ namespace papyrusNiOverride
 		value.key = key;
 		value.index = index;
 
-		g_overrideInterface.GetNodeProperty(refr, firstPerson, nodeName, &value);
+		g_overrideInterface.Impl_GetNodeProperty(refr, firstPerson, nodeName, &value);
 
 		T dest;
 		UnpackValue<T>(&dest, &value);
@@ -350,7 +357,7 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		return g_overrideInterface.GetWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index) != NULL;
+		return g_overrideInterface.Impl_GetWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index) != NULL;
 	}
 
 	bool HasWeaponNode(StaticFunctionTag* base, TESObjectREFR * refr, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, bool debug)
@@ -358,14 +365,14 @@ namespace papyrusNiOverride
 		if (!refr)
 			return false;
 
-		return g_overrideInterface.HasWeaponNode(refr, firstPerson, weapon, nodeName, debug);
+		return g_overrideInterface.Impl_HasWeaponNode(refr, firstPerson, weapon, nodeName, debug);
 	}
 
 	void ApplyWeaponOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
 		if(!refr)
 			return;
-		g_overrideInterface.SetWeaponProperties(refr->formID, false);
+		g_overrideInterface.Impl_SetWeaponProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -394,7 +401,7 @@ namespace papyrusNiOverride
 
 		// Adds the property to the map
 		if(persist)
-			g_overrideInterface.AddWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, value);
+			g_overrideInterface.Impl_AddWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, value);
 
 		UInt8 gender = 0;
 		TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -403,7 +410,7 @@ namespace papyrusNiOverride
 
 		// Applies the properties visually, only if the current gender matches
 		if(isFemale == (gender == 1))
-			g_overrideInterface.SetWeaponProperty(refr, gender == 1, firstPerson, weapon, nodeName, &value, false);
+			g_overrideInterface.Impl_SetWeaponProperty(refr, gender == 1, firstPerson, weapon, nodeName, &value, false);
 	}
 
 	template<typename T>
@@ -418,7 +425,7 @@ namespace papyrusNiOverride
 			index = OverrideVariant::kIndexMax;
 
 		T dest = 0;
-		OverrideVariant * value = g_overrideInterface.GetWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index);
+		OverrideVariant * value = g_overrideInterface.Impl_GetWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index);
 		if(value) {
 			UnpackValue<T>(&dest, value);
 		}
@@ -441,7 +448,7 @@ namespace papyrusNiOverride
 		value.key = key;
 		value.index = index;
 
-		g_overrideInterface.GetWeaponProperty(refr, firstPerson, weapon, nodeName, &value);
+		g_overrideInterface.Impl_GetWeaponProperty(refr, firstPerson, weapon, nodeName, &value);
 
 		T dest;
 		UnpackValue<T>(&dest, &value);
@@ -460,14 +467,14 @@ namespace papyrusNiOverride
 		if (index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		return g_overrideInterface.GetSkinOverride(refr, isFemale, firstPerson, slotMask, key, index) != NULL;
+		return g_overrideInterface.Impl_GetSkinOverride(refr, isFemale, firstPerson, slotMask, key, index) != NULL;
 	}
 
 	void ApplySkinOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
 		if (!refr)
 			return;
-		g_overrideInterface.SetSkinProperties(refr->formID, false);
+		g_overrideInterface.Impl_SetSkinProperties(refr->formID, false);
 	}
 
 	template<typename T>
@@ -496,7 +503,7 @@ namespace papyrusNiOverride
 
 		// Adds the property to the map
 		if (persist)
-			g_overrideInterface.AddSkinOverride(refr, isFemale, firstPerson, slotMask, value);
+			g_overrideInterface.Impl_AddSkinOverride(refr, isFemale, firstPerson, slotMask, value);
 
 		UInt8 gender = 0;
 		TESNPC * actorBase = DYNAMIC_CAST(refr->baseForm, TESForm, TESNPC);
@@ -505,7 +512,7 @@ namespace papyrusNiOverride
 
 		// Applies the properties visually, only if the current gender matches
 		if (isFemale == (gender == 1))
-			g_overrideInterface.SetSkinProperty(refr, gender == 1, firstPerson, slotMask, &value, false);
+			g_overrideInterface.Impl_SetSkinProperty(refr, firstPerson, slotMask, &value, false);
 	}
 
 	template<typename T>
@@ -520,7 +527,7 @@ namespace papyrusNiOverride
 			index = OverrideVariant::kIndexMax;
 
 		T dest = 0;
-		OverrideVariant * value = g_overrideInterface.GetSkinOverride(refr, isFemale, firstPerson, slotMask, key, index);
+		OverrideVariant * value = g_overrideInterface.Impl_GetSkinOverride(refr, isFemale, firstPerson, slotMask, key, index);
 		if (value) {
 			UnpackValue<T>(&dest, value);
 		}
@@ -543,7 +550,7 @@ namespace papyrusNiOverride
 		value.key = key;
 		value.index = index;
 
-		g_overrideInterface.GetSkinProperty(refr, firstPerson, slotMask, &value);
+		g_overrideInterface.Impl_GetSkinProperty(refr, firstPerson, slotMask, &value);
 
 		T dest;
 		UnpackValue<T>(&dest, &value);
@@ -552,7 +559,7 @@ namespace papyrusNiOverride
 
 	void RemoveAllOverrides(StaticFunctionTag* base)
 	{
-		g_overrideInterface.RemoveAllOverrides();
+		g_overrideInterface.Impl_RemoveAllOverrides();
 	}
 
 	void RemoveAllReferenceOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
@@ -560,22 +567,22 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 		
-		g_overrideInterface.RemoveAllReferenceOverrides(refr);
+		g_overrideInterface.Impl_RemoveAllReferenceOverrides(refr);
 	}
 
 	void RemoveAllArmorOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor)
 	{
-		g_overrideInterface.RemoveAllArmorOverrides(refr, isFemale, armor);
+		g_overrideInterface.Impl_RemoveAllArmorOverrides(refr, isFemale, armor);
 	}
 
 	void RemoveAllArmorAddonOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon)
 	{
-		g_overrideInterface.RemoveAllArmorAddonOverrides(refr, isFemale, armor, addon);
+		g_overrideInterface.Impl_RemoveAllArmorAddonOverrides(refr, isFemale, armor, addon);
 	}
 
 	void RemoveAllArmorAddonNodeOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName)
 	{
-		g_overrideInterface.RemoveAllArmorAddonNodeOverrides(refr, isFemale, armor, addon, nodeName);
+		g_overrideInterface.Impl_RemoveAllArmorAddonNodeOverrides(refr, isFemale, armor, addon, nodeName);
 	}
 
 	void RemoveArmorAddonOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, TESObjectARMO * armor, TESObjectARMA * addon, BSFixedString nodeName, UInt32 key, UInt32 index)
@@ -588,22 +595,22 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		g_overrideInterface.RemoveArmorAddonOverride(refr, isFemale, armor, addon, nodeName, key, index);
+		g_overrideInterface.Impl_RemoveArmorAddonOverride(refr, isFemale, armor, addon, nodeName, key, index);
 	}
 
 	void RemoveAllNodeOverrides(StaticFunctionTag* base)
 	{
-		g_overrideInterface.RemoveAllNodeOverrides();
+		g_overrideInterface.Impl_RemoveAllNodeOverrides();
 	}
 
 	void RemoveAllReferenceNodeOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
 	{
-		g_overrideInterface.RemoveAllReferenceNodeOverrides(refr);
+		g_overrideInterface.Impl_RemoveAllReferenceNodeOverrides(refr);
 	}
 
 	void RemoveAllNodeNameOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, BSFixedString nodeName)
 	{
-		g_overrideInterface.RemoveAllNodeNameOverrides(refr, isFemale, nodeName);
+		g_overrideInterface.Impl_RemoveAllNodeNameOverrides(refr, isFemale, nodeName);
 	}
 
 	void RemoveNodeOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, BSFixedString nodeName, UInt32 key, UInt32 index)
@@ -616,12 +623,12 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		g_overrideInterface.RemoveNodeOverride(refr, isFemale, nodeName, key, index);
+		g_overrideInterface.Impl_RemoveNodeOverride(refr, isFemale, nodeName, key, index);
 	}
 
 	void RemoveAllWeaponBasedOverrides(StaticFunctionTag* base)
 	{
-		g_overrideInterface.RemoveAllWeaponBasedOverrides();
+		g_overrideInterface.Impl_RemoveAllWeaponBasedOverrides();
 	}
 
 	void RemoveAllReferenceWeaponOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
@@ -629,17 +636,17 @@ namespace papyrusNiOverride
 		if(!refr)
 			return;
 
-		g_overrideInterface.RemoveAllReferenceWeaponOverrides(refr);
+		g_overrideInterface.Impl_RemoveAllReferenceWeaponOverrides(refr);
 	}
 
 	void RemoveAllWeaponOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon)
 	{
-		g_overrideInterface.RemoveAllWeaponOverrides(refr, isFemale, firstPerson, weapon);
+		g_overrideInterface.Impl_RemoveAllWeaponOverrides(refr, isFemale, firstPerson, weapon);
 	}
 
 	void RemoveAllWeaponNodeOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName)
 	{
-		g_overrideInterface.RemoveAllWeaponNodeOverrides(refr, isFemale, firstPerson, weapon, nodeName);
+		g_overrideInterface.Impl_RemoveAllWeaponNodeOverrides(refr, isFemale, firstPerson, weapon, nodeName);
 	}
 
 	void RemoveWeaponOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, bool firstPerson, TESObjectWEAP * weapon, BSFixedString nodeName, UInt32 key, UInt32 index)
@@ -652,12 +659,12 @@ namespace papyrusNiOverride
 		if(index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		g_overrideInterface.RemoveWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index);
+		g_overrideInterface.Impl_RemoveWeaponOverride(refr, isFemale, firstPerson, weapon, nodeName, key, index);
 	}
 
 	void RemoveAllSkinBasedOverrides(StaticFunctionTag* base)
 	{
-		g_overrideInterface.RemoveAllSkinBasedOverrides();
+		g_overrideInterface.Impl_RemoveAllSkinBasedOverrides();
 	}
 
 	void RemoveAllReferenceSkinOverrides(StaticFunctionTag* base, TESObjectREFR * refr)
@@ -665,12 +672,12 @@ namespace papyrusNiOverride
 		if (!refr)
 			return;
 
-		g_overrideInterface.RemoveAllReferenceSkinOverrides(refr);
+		g_overrideInterface.Impl_RemoveAllReferenceSkinOverrides(refr);
 	}
 
 	void RemoveAllSkinOverrides(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask)
 	{
-		g_overrideInterface.RemoveAllSkinOverrides(refr, isFemale, firstPerson, slotMask);
+		g_overrideInterface.Impl_RemoveAllSkinOverrides(refr, isFemale, firstPerson, slotMask);
 	}
 
 	void RemoveSkinOverride(StaticFunctionTag* base, TESObjectREFR * refr, bool isFemale, bool firstPerson, UInt32 slotMask, UInt32 key, UInt32 index)
@@ -683,7 +690,7 @@ namespace papyrusNiOverride
 		if (index > OverrideVariant::kIndexMax)
 			index = OverrideVariant::kIndexMax;
 
-		g_overrideInterface.RemoveSkinOverride(refr, isFemale, firstPerson, slotMask, key, index);
+		g_overrideInterface.Impl_RemoveSkinOverride(refr, isFemale, firstPerson, slotMask, key, index);
 	}
 
 	UInt32 GetNumBodyOverlays(StaticFunctionTag* base)
@@ -1687,7 +1694,7 @@ namespace papyrusNiOverride
 			if (g_attachmentInterface.AttachMesh(m_ref, m_filePath.c_str(), m_name.c_str(), m_isFirstPerson, m_replace, filter.get(), m_filter.size(), outRoot, errBuf, 512))
 			{
 				g_bodyMorphInterface.ApplyVertexDiff(m_ref, outRoot);
-				g_overrideInterface.ApplyNodeOverrides(m_ref, outRoot, true);
+				g_overrideInterface.Impl_ApplyNodeOverrides(m_ref, outRoot, true);
 				resultValue.SetBool(true);
 			}
 			else

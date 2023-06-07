@@ -12,7 +12,7 @@ public:
 	PluginInterface() { };
 	virtual ~PluginInterface() { };
 
-	virtual UInt32 GetVersion() override { return 0; };
+	virtual skee_u32 GetVersion() override { return 0; };
 	virtual void Revert() override { };
 };
 

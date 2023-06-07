@@ -64,10 +64,10 @@ public:
 		kCurrentPluginVersion = 1,
 		kSerializationVersion = 0
 	};
-	virtual UInt32 GetVersion() override { return kCurrentPluginVersion; };
+	virtual skee_u32 GetVersion() override { return kCurrentPluginVersion; };
 	virtual void Revert() override;
 
-	virtual bool AttachMesh(TESObjectREFR* ref, const char* nifPath, const char* name, bool firstPerson, bool replace, const char** filter, UInt32 filterSize, NiAVObject*& out, char* err, size_t errBufLen) override;
+	virtual bool AttachMesh(TESObjectREFR* ref, const char* nifPath, const char* name, bool firstPerson, bool replace, const char** filter, skee_u32 filterSize, NiAVObject*& out, char* err, skee_u64 errBufLen) override;
 	virtual bool DetachMesh(TESObjectREFR* ref, const char* name, bool firstPerson) override;
 
 protected:

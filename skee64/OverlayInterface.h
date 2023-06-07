@@ -18,29 +18,30 @@ class BSGeometry;
 #include "skse64/GameTypes.h"
 
 #include <unordered_set>
+#include <functional>
 
-#define FACE_NODE "Face [Ovl%d]"
-#define FACE_NODE_SPELL "Face [SOvl%d]"
+#define FACE_NODE "Face [Ovl{}]"
+#define FACE_NODE_SPELL "Face [SOvl{}]"
 #define FACE_MESH "meshes\\actors\\character\\character assets\\face_overlay.nif"
 #define FACE_MAGIC_MESH "meshes\\actors\\character\\character assets\\face_magicoverlay.nif"
 
-#define HAIR_NODE "Hair [Ovl%d]"
-#define HAIR_NODE_SPELL "Hair [SOvl%d]"
+#define HAIR_NODE "Hair [Ovl{}]"
+#define HAIR_NODE_SPELL "Hair [SOvl{}]"
 #define HAIR_MESH "meshes\\actors\\character\\character assets\\hair_overlay.nif"
 #define HAIR_MAGIC_MESH "meshes\\actors\\character\\character assets\\hair_magicoverlay.nif"
 
-#define BODY_NODE "Body [Ovl%d]"
-#define BODY_NODE_SPELL "Body [SOvl%d]"
+#define BODY_NODE "Body [Ovl{}]"
+#define BODY_NODE_SPELL "Body [SOvl{}]"
 #define BODY_MESH "meshes\\actors\\character\\character assets\\body_overlay.nif"
 #define BODY_MAGIC_MESH "meshes\\actors\\character\\character assets\\body_magicoverlay.nif"
 
-#define HAND_NODE "Hands [Ovl%d]"
-#define HAND_NODE_SPELL "Hands [SOvl%d]"
+#define HAND_NODE "Hands [Ovl{}]"
+#define HAND_NODE_SPELL "Hands [SOvl{}]"
 #define HAND_MESH "meshes\\actors\\character\\character assets\\hands_overlay.nif"
 #define HAND_MAGIC_MESH "meshes\\actors\\character\\character assets\\hands_magicoverlay.nif"
 
-#define FEET_NODE "Feet [Ovl%d]"
-#define FEET_NODE_SPELL "Feet [SOvl%d]"
+#define FEET_NODE "Feet [Ovl{}]"
+#define FEET_NODE_SPELL "Feet [SOvl{}]"
 #define FEET_MESH "meshes\\actors\\character\\character assets\\feet_overlay.nif"
 #define FEET_MAGIC_MESH "meshes\\actors\\character\\character assets\\feet_magicoverlay.nif"
 
@@ -137,40 +138,70 @@ private:
 	UInt32	m_formId;
 };
 
-class OverlayHolder : public std::unordered_set<UInt32>
+class SKSETaskRemoveOverlays : public TaskDelegate
+{
+public:
+	virtual void Run();
+	virtual void Dispose();
+
+	SKSETaskRemoveOverlays(TESObjectREFR* refr);
+
+private:
+	UInt32	m_formId;
+};
+
+class SKSETaskRevertOverlays : public TaskDelegate
+{
+public:
+	virtual void Run();
+	virtual void Dispose();
+
+	SKSETaskRevertOverlays(TESObjectREFR* refr, bool resetDiffuse);
+
+private:
+	UInt32	m_formId;
+	bool	m_resetDiffuse;
+};
+
+class OverlayHolder : public SafeDataHolder<std::unordered_set<UInt32>>
 {
 public:
 	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
 	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+
+	friend class OverlayInterface;
+};
+
+class OverlayCallbackHolder : public SafeDataHolder<std::map<std::string, IOverlayInterface::OverlayInstallCallback>>
+{
+public:
+	friend class OverlayInterface;
 };
 
 class OverlayInterface
-	: public IPluginInterface
+	: public IOverlayInterface
 	, public IAddonAttachmentInterface
 {
 public:
-	enum
-	{
-		kCurrentPluginVersion = 1,
-		kSerializationVersion1 = 1,
-		kSerializationVersion = kSerializationVersion1
-	};
-	virtual UInt32 GetVersion();
+	virtual skee_u32 GetVersion() override;
 
-	virtual void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
-	virtual void Revert();
+	void Save(SKSESerializationInterface * intfc, UInt32 kVersion);
+	bool Load(SKSESerializationInterface * intfc, UInt32 kVersion);
+	virtual void Revert() override;
 
-	virtual bool HasOverlays(TESObjectREFR * reference);
-	virtual void AddOverlays(TESObjectREFR * reference);
-	virtual void RemoveOverlays(TESObjectREFR * reference);
-	virtual void RevertOverlays(TESObjectREFR * reference, bool resetDiffuse);
-	virtual void RevertOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 armorMask, UInt32 addonMask, bool resetDiffuse);
+	virtual bool HasOverlays(TESObjectREFR * reference) override;
+	virtual void AddOverlays(TESObjectREFR * reference, bool immediate = false) override;
+	virtual void RemoveOverlays(TESObjectREFR * reference, bool immediate = false) override;
+	virtual void RevertOverlays(TESObjectREFR * reference, bool resetDiffuse, bool immediate = false) override;
+	virtual void RevertOverlay(TESObjectREFR * reference, const char* nodeName, skee_u32 armorMask, skee_u32 addonMask, bool resetDiffuse, bool immediate = false) override;
+	virtual void EraseOverlays(TESObjectREFR * reference, bool immediate = false) override;
+	virtual void RevertHeadOverlays(TESObjectREFR * reference, bool resetDiffuse, bool immediate = false) override;
+	virtual void RevertHeadOverlay(TESObjectREFR * reference, const char* nodeName, skee_u32 partType, skee_u32 shaderType, bool resetDiffuse, bool immediate = false) override;
+	virtual skee_u32 GetOverlayCount(OverlayType type, OverlayLocation location) override;
+	virtual const char* GetOverlayFormat(OverlayType type, OverlayLocation location) override;
 
-	virtual void EraseOverlays(TESObjectREFR * reference);
-
-	virtual void RevertHeadOverlays(TESObjectREFR * reference, bool resetDiffuse);
-	virtual void RevertHeadOverlay(TESObjectREFR * reference, BSFixedString nodeName, UInt32 partType, UInt32 shaderType, bool resetDiffuse);
+	virtual bool RegisterInstallCallback(const char* key, OverlayInstallCallback cb) override;
+	virtual bool UnregisterInstallCallback(const char* key) override;
 
 	virtual void SetupOverlay(UInt32 primaryCount, const char * primaryPath, const char * primaryNode, UInt32 secondaryCount, const char * secondaryPath, const char * secondaryNode, TESObjectREFR * refr, NiNode * boneTree, NiAVObject * resultNode);
 
@@ -193,15 +224,15 @@ public:
 	// Relinks default overlays
 	virtual void RebuildOverlays(UInt32 armorMask, UInt32 addonMask, TESObjectREFR * refr, NiNode * boneTree, NiAVObject * resultNode);
 
-	void QueueOverlayBuild(TESObjectREFR* reference);
+	void QueueOverlayBuild(TESObjectREFR* reference, bool immediate = false);
 
-#ifdef _DEBUG
-	void DumpMap();
-#endif
+	void Visit(std::function<void(UInt32)> visitor);
+	void PrintDiagnostics();
 
 private:
 	std::string defaultTexture;
 	OverlayHolder overlays;
+	OverlayCallbackHolder m_callbacks;
 
 	// Inherited via IAddonAttachmentInterface
 	virtual void OnAttach(TESObjectREFR * refr, TESObjectARMO * armor, TESObjectARMA * addon, NiAVObject * object, bool isFirstPerson, NiNode * skeleton, NiNode * root) override;

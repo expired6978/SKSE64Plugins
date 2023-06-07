@@ -33,6 +33,7 @@ bool CommandInterface::ExecuteCommand(const char* command, TESObjectREFR* ref, c
 #include "ActorUpdateManager.h"
 #include "NiTransformInterface.h"
 #include "FaceMorphInterface.h"
+#include "PresetInterface.h"
 
 #include "AttachmentInterface.h"
 #include "NifUtils.h"
@@ -49,6 +50,7 @@ extern ActorUpdateManager	g_actorUpdateManager;
 extern NiTransformInterface	g_transformInterface;
 extern TintMaskInterface	g_tintMaskInterface;
 extern FaceMorphInterface	g_morphInterface;
+extern PresetInterface		g_presetInterface;
 
 void CommandInterface::RegisterCommands()
 {
@@ -149,7 +151,7 @@ void CommandInterface::RegisterCommands()
 		char tintPath[MAX_PATH];
 		sprintf_s(tintPath, "Data\\Textures\\CharGen\\Exported\\");
 
-		g_morphInterface.SaveJsonPreset(slotPath);
+		g_presetInterface.SaveJsonPreset(slotPath);
 
 		g_task->AddTask(new SKSETaskExportTintMask(tintPath, argument));
 		Console_Print("Preset saved");
@@ -178,15 +180,15 @@ void CommandInterface::RegisterCommands()
 		sprintf_s(tintPath, "Textures\\CharGen\\Exported\\%s.dds", argument);
 
 		auto presetData = std::make_shared<PresetData>();
-		bool loadError = g_morphInterface.LoadJsonPreset(slotPath, presetData);
+		bool loadError = g_presetInterface.LoadJsonPreset(slotPath, presetData);
 		if (loadError) {
 			Console_Print("Failed to load preset at %s", slotPath);
 			return true;
 		}
 
 		presetData->tintTexture = tintPath;
-		g_morphInterface.AssignPreset(npc, presetData);
-		g_morphInterface.ApplyPresetData(actor, presetData, true, FaceMorphInterface::ApplyTypes::kPresetApplyAll);
+		g_presetInterface.AssignMappedPreset(npc, presetData);
+		g_presetInterface.ApplyPresetData(actor, presetData, true, PresetInterface::ApplyTypes::kPresetApplyAll);
 
 		// Queue a node update
 		CALL_MEMBER_FN(actor, QueueNiNodeUpdate)(true);
@@ -205,7 +207,7 @@ void CommandInterface::RegisterCommands()
 		return true;
 	});
 #endif
-	RegisterCommand("diagnostics", "<bodymorph|transforms|strings|updates>", [](TESObjectREFR* thisObj, const char* argument) -> bool
+	RegisterCommand("diagnostics", "<bodymorph|transforms|strings|updates|overlays>", [](TESObjectREFR* thisObj, const char* argument) -> bool
 	{
 		if (_strnicmp(argument, "bodymorph", MAX_PATH) == 0)
 		{
@@ -222,6 +224,11 @@ void CommandInterface::RegisterCommands()
 			g_stringTable.PrintDiagnostics();
 			return true;
 		}
+		else if (_strnicmp(argument, "overlays", MAX_PATH) == 0)
+		{
+			g_overlayInterface.PrintDiagnostics();
+			return true;
+		}
 		else if (_strnicmp(argument, "updates", MAX_PATH) == 0)
 		{
 			g_actorUpdateManager.PrintDiagnostics();
@@ -229,7 +236,7 @@ void CommandInterface::RegisterCommands()
 		}
 		return false;
 	});
-	RegisterCommand("dump", "<bodymorph|morphnames|transforms|tints|overrides|itemdata|itembinding|skeleton_3p|skeleton_1p|equipped>", [](TESObjectREFR* thisObj, const char* argument) -> bool
+	RegisterCommand("dump", "<bodymorph|morphnames|transforms|tints|overrides|overlays|itemdata|itembinding|skeleton_3p|skeleton_1p|equipped>", [](TESObjectREFR* thisObj, const char* argument) -> bool
 	{
 		if (_strnicmp(argument, "bodymorph", MAX_PATH) == 0)
 		{
@@ -343,6 +350,17 @@ void CommandInterface::RegisterCommands()
 		{
 			Console_Print("Dumping node overrides...");
 			g_overrideInterface.Dump();
+			Console_Print("Dump complete. See log file for details.");
+			return true;
+		}
+		else if (_strnicmp(argument, "overlays", MAX_PATH) == 0)
+		{
+			Console_Print("Dumping overlays...");
+			g_overlayInterface.Visit([](UInt32 formId) {
+				TESForm* form = LookupFormByID(formId);
+				TESObjectREFR* refr = form ? DYNAMIC_CAST(form, TESForm, TESObjectREFR) : nullptr;
+				_MESSAGE("Reference: %08X (%s) with Overlays", formId, refr ? CALL_MEMBER_FN(refr, GetReferenceName)() : "");
+			});
 			Console_Print("Dump complete. See log file for details.");
 			return true;
 		}
@@ -504,7 +522,7 @@ void CommandInterface::RegisterCommands()
 						NiAVObject* node = weightModel->bipedData->unk10[i].object;
 						if (armor && armor->formType == TESObjectARMO::kTypeID)
 						{
-							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
+							_MESSAGE("Armor: %s Shape: %s [%p]", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", (void*)node);
 						}
 					}
 					for (int i = 0; i < 42; ++i)
@@ -514,7 +532,7 @@ void CommandInterface::RegisterCommands()
 						NiAVObject* node = weightModel->bipedData->unk13C0[i].object;
 						if (armor && armor->formType == TESObjectARMO::kTypeID)
 						{
-							_MESSAGE("Armor: %s Shape: %s {%X}", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", node);
+							_MESSAGE("Armor: %s Shape: %s [%p]", static_cast<TESObjectARMO*>(armor)->fullName.GetName(), node ? node->m_name : "", (void*)node);
 						}
 					}
 				}

@@ -28,7 +28,7 @@ extern TintMaskInterface	g_tintMaskInterface;
 extern ItemDataInterface	g_itemDataInterface;
 extern StringTable			g_stringTable;
 
-UInt32 ItemDataInterface::GetVersion()
+skee_u32 ItemDataInterface::GetVersion()
 {
 	return kCurrentPluginVersion;
 }
@@ -238,7 +238,7 @@ void NIOVTaskUpdateItemDye::Run()
 	}
 }
 
-UInt32 ItemDataInterface::GetItemUniqueID(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, bool makeUnique)
+skee_u32 ItemDataInterface::GetItemUniqueID(TESObjectREFR * reference, IItemDataInterface::Identifier & identifier, bool makeUnique)
 {
 	ModifiedItem foundData;
 	if (ResolveModifiedIdentifier(reference, identifier, foundData)) {
@@ -252,7 +252,7 @@ UInt32 ItemDataInterface::GetItemUniqueID(TESObjectREFR * reference, IItemDataIn
 	return 0;
 }
 
-void ItemDataInterface::SetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 color)
+void ItemDataInterface::SetItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, skee_u32 color)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -268,7 +268,7 @@ void ItemDataInterface::Impl_SetItemTextureLayerBlendMode(UInt32 uniqueID, SInt3
 	}
 }
 
-void ItemDataInterface::SetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, UInt32 type)
+void ItemDataInterface::SetItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, skee_u32 type)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -284,7 +284,7 @@ void ItemDataInterface::Impl_SetItemTextureLayerTexture(UInt32 uniqueID, SInt32 
 	}
 }
 
-UInt32 ItemDataInterface::GetItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+skee_u32 ItemDataInterface::GetItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -306,7 +306,7 @@ SKEEFixedString ItemDataInterface::Impl_GetItemTextureLayerBlendMode(UInt32 uniq
 	return "";
 }
 
-UInt32 ItemDataInterface::GetItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+skee_u32 ItemDataInterface::GetItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -317,7 +317,7 @@ UInt32 ItemDataInterface::GetItemTextureLayerType(UInt32 uniqueID, SInt32 textur
 	return -1;
 }
 
-bool ItemDataInterface::GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor)
+bool ItemDataInterface::GetItemTextureLayerBlendMode(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, IItemDataInterface::StringVisitor& visitor)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -328,7 +328,7 @@ bool ItemDataInterface::GetItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 tex
 	return false;
 }
 
-bool ItemDataInterface::GetItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex, IItemDataInterface::StringVisitor& visitor)
+bool ItemDataInterface::GetItemTextureLayerTexture(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex, IItemDataInterface::StringVisitor& visitor)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -350,7 +350,7 @@ SKEEFixedString ItemDataInterface::Impl_GetItemTextureLayerTexture(UInt32 unique
 	return "";
 }
 
-void ItemDataInterface::ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+void ItemDataInterface::ClearItemTextureLayerColor(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -358,7 +358,7 @@ void ItemDataInterface::ClearItemTextureLayerColor(UInt32 uniqueID, SInt32 textu
 	}
 }
 
-void ItemDataInterface::ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+void ItemDataInterface::ClearItemTextureLayerBlendMode(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -366,7 +366,7 @@ void ItemDataInterface::ClearItemTextureLayerBlendMode(UInt32 uniqueID, SInt32 t
 	}
 }
 
-void ItemDataInterface::ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+void ItemDataInterface::ClearItemTextureLayerType(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -374,7 +374,7 @@ void ItemDataInterface::ClearItemTextureLayerType(UInt32 uniqueID, SInt32 textur
 	}
 }
 
-void ItemDataInterface::ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 textureIndex, SInt32 layerIndex)
+void ItemDataInterface::ClearItemTextureLayerTexture(skee_u32 uniqueID, skee_i32 textureIndex, skee_i32 layerIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -382,7 +382,7 @@ void ItemDataInterface::ClearItemTextureLayerTexture(UInt32 uniqueID, SInt32 tex
 	}
 }
 
-void ItemDataInterface::ClearItemTextureLayer(UInt32 uniqueID, SInt32 textureIndex)
+void ItemDataInterface::ClearItemTextureLayer(skee_u32 uniqueID, skee_i32 textureIndex)
 {
 	auto data = GetData(uniqueID);
 	if (data) {
@@ -410,7 +410,7 @@ std::shared_ptr<ItemAttributeData> ItemDataInterface::GetData(UInt32 rankId)
 	return nullptr;
 }
 
-TESForm * ItemDataInterface::GetFormFromUniqueID(UInt32 uniqueID)
+TESForm * ItemDataInterface::GetFormFromUniqueID(skee_u32 uniqueID)
 {
 	SimpleLocker lock(&m_lock);
 	if (uniqueID == kInvalidRank)
@@ -430,7 +430,7 @@ TESForm * ItemDataInterface::GetFormFromUniqueID(UInt32 uniqueID)
 	return nullptr;
 }
 
-TESForm * ItemDataInterface::GetOwnerOfUniqueID(UInt32 uniqueID)
+TESForm * ItemDataInterface::GetOwnerOfUniqueID(skee_u32 uniqueID)
 {
 	SimpleLocker lock(&m_lock);
 	if (uniqueID == kInvalidRank)
@@ -450,7 +450,7 @@ TESForm * ItemDataInterface::GetOwnerOfUniqueID(UInt32 uniqueID)
 	return nullptr;
 }
 
-bool ItemDataInterface::HasItemData(UInt32 uniqueID, const char* key)
+bool ItemDataInterface::HasItemData(skee_u32 uniqueID, const char* key)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -460,7 +460,7 @@ bool ItemDataInterface::HasItemData(UInt32 uniqueID, const char* key)
 	return false;
 }
 
-bool ItemDataInterface::GetItemData(UInt32 uniqueID, const char* key, IItemDataInterface::StringVisitor& visitor)
+bool ItemDataInterface::GetItemData(skee_u32 uniqueID, const char* key, IItemDataInterface::StringVisitor& visitor)
 {
 	auto data = GetData(uniqueID);
 	if (data)
@@ -908,7 +908,7 @@ bool ItemAttributeData::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 					break;
 				}
 				default:
-					_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, &type);
+					_ERROR("%s - Error loading unexpected chunk type %08X (%.4s)", __FUNCTION__, type, reinterpret_cast<char*>(&type));
 					error = true;
 					break;
 			}
@@ -1111,7 +1111,7 @@ bool ItemDataInterface::Load(SKSESerializationInterface * intfc, UInt32 kVersion
 				}
 				break;
 				default:
-					_ERROR("Error loading unexpected chunk type %08X (%.4s)", type, &type);
+					_ERROR("Error loading unexpected chunk type %08X (%.4s)", type, reinterpret_cast<char*>(&type));
 					error = true;
 					break;
 			}

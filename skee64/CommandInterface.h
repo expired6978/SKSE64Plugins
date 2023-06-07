@@ -31,7 +31,7 @@ private:
     };
 
 public:
-    virtual UInt32 GetVersion() override { return 0; }
+    virtual skee_u32 GetVersion() override { return 0; }
     virtual void Revert() override { }
     virtual bool RegisterCommand(const char* command, const char* desc, CommandCallback cb) override;
 
