@@ -416,8 +416,9 @@ bool BodyMorphMap::HasMorphs(TESObjectREFR * refr) const
 #include <d3d11.h>
 #include <d3d11_4.h>
 
-void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mutex, bool deferred)
+NIOVTaskUpdateSkinPartition * MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph)
 {
+	NIOVTaskUpdateSkinPartition * updateTask = nullptr;
 	BSFixedString nodeName = bodyMorph.first.c_str();
 	BSGeometry * geometry = rootNode->GetAsBSGeometry();
 	NiGeometry * legacyGeometry = rootNode->GetAsNiGeometry();
@@ -578,21 +579,8 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 										memcpy(pPartition.shapeData->m_RawVertexData, partition.shapeData->m_RawVertexData, newSkinPartition->vertexCount * vertexSize);
 									}
 
-									if (mutex) mutex->lock();
-
-									auto updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
+									updateTask = new NIOVTaskUpdateSkinPartition(skinInstance, newSkinPartition);
 									newSkinPartition->DecRef(); // DeepCopy started refcount at 1, passed ownership to the task
-
-									if (deferred)
-									{
-										g_task->AddTask(updateTask);
-									}
-									else
-									{
-										updateTask->Run();
-										updateTask->Dispose();
-									}
-									if (mutex) mutex->unlock();
 								}
 							}
 						}
@@ -601,20 +589,29 @@ void MorphFileCache::ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, boo
 			}
 		}
 	}
+
+	return updateTask;
 }
 
 void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool isAttaching, bool defer)
 {
+	std::vector<NIOVTaskUpdateSkinPartition *> updateTasks;
+	updateTasks.reserve(vertexMap.size());
 	if (g_parallelMorphing)
 	{
-		std::mutex mtx;
 		concurrency::structured_task_group task_group;
 		std::vector<concurrency::task_handle<std::function<void()>>> task_list;
+		std::vector<NIOVTaskUpdateSkinPartition *> parallelUpdates(vertexMap.size(), nullptr);
+		task_list.reserve(vertexMap.size());
+
+		std::size_t resultIndex = 0;
 		for (const auto & it : vertexMap)
 		{
-			task_list.push_back(concurrency::make_task<std::function<void()>>([&]()
+			auto item = &it;
+			auto index = resultIndex++;
+			task_list.push_back(concurrency::make_task<std::function<void()>>([this, refr, rootNode, isAttaching, item, index, &parallelUpdates]()
 			{
-				ApplyMorph(refr, rootNode, isAttaching, it, &mtx, defer);
+				parallelUpdates[index] = ApplyMorph(refr, rootNode, isAttaching, *item);
 			}));
 		}
 		for (auto & task : task_list)
@@ -623,12 +620,40 @@ void MorphFileCache::ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bo
 		}
 
 		task_group.wait();
+
+		// Do not enqueue renderer-facing tasks from a ConcRT worker. ApplyMorphs
+		// can itself run inside SKSE's task dispatcher while its queue lock is
+		// held. A worker calling AddTask while the dispatcher waits here creates
+		// a queue-lock / task-group lock inversion. Collect results in stable
+		// slots, join every CPU morph, and publish only on the calling thread.
+		for (auto update : parallelUpdates)
+		{
+			if (update)
+				updateTasks.push_back(update);
+		}
 	}
 	else
 	{
 		for (const auto & it : vertexMap)
 		{
-			ApplyMorph(refr, rootNode, isAttaching, it, nullptr, defer);
+			auto update = ApplyMorph(refr, rootNode, isAttaching, it);
+			if (update)
+				updateTasks.push_back(update);
+		}
+	}
+
+	// Finish all CPU morph work before exposing any updated armor shape to
+	// the renderer. This keeps a single attachment internally consistent.
+	for (auto update : updateTasks)
+	{
+		if (defer)
+		{
+			g_task->AddTask(update);
+		}
+		else
+		{
+			update->Run();
+			update->Dispose();
 		}
 	}
 }
@@ -1152,12 +1177,46 @@ void NIOVTaskUpdateSkinPartition::Run()
 		UInt32 vertexCount = m_partition->vertexCount;
 
 		auto deviceContext = g_renderManager->context;
-		deviceContext->UpdateSubresource(partition.shapeData->m_VertexBuffer, 0, nullptr, partition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
-
-		for (UInt32 p = 1; p < m_partition->m_uiPartitions; ++p)
+		for (UInt32 p = 0; p < m_partition->m_uiPartitions; ++p)
 		{
 			auto & pPartition = m_partition->m_pkPartitions[p];
-			deviceContext->UpdateSubresource(pPartition.shapeData->m_VertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+			auto vertexBuffer = pPartition.shapeData->m_VertexBuffer;
+			if (!vertexBuffer)
+				continue;
+
+			// Deep-copied partitions can share the same GPU resource. Submit each
+			// resource only once rather than racing duplicate updates.
+			bool alreadyUpdated = false;
+			for (UInt32 previous = 0; previous < p; ++previous)
+			{
+				if (m_partition->m_pkPartitions[previous].shapeData->m_VertexBuffer == vertexBuffer)
+				{
+					alreadyUpdated = true;
+					break;
+				}
+			}
+			if (alreadyUpdated)
+				continue;
+
+			D3D11_BUFFER_DESC desc{};
+			vertexBuffer->GetDesc(&desc);
+			if (desc.Usage == D3D11_USAGE_DYNAMIC && (desc.CPUAccessFlags & D3D11_CPU_ACCESS_WRITE))
+			{
+				D3D11_MAPPED_SUBRESOURCE mapped{};
+				if (SUCCEEDED(deviceContext->Map(vertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+				{
+					memcpy(mapped.pData, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize);
+					deviceContext->Unmap(vertexBuffer, 0);
+				}
+			}
+			else if (desc.Usage == D3D11_USAGE_DEFAULT)
+			{
+				deviceContext->UpdateSubresource(vertexBuffer, 0, nullptr, pPartition.shapeData->m_RawVertexData, vertexCount * vertexSize, 0);
+			}
+			else
+			{
+				_ERROR("%s - Unsupported body morph vertex buffer usage %u", __FUNCTION__, desc.Usage);
+			}
 		}
 
 		m_skinInstance->m_spSkinPartition = m_partition;

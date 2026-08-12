@@ -156,7 +156,7 @@ NIOVTaskDeferredMask::NIOVTaskDeferredMask(TESObjectREFR * refr, bool isFirstPer
 
 void NIOVTaskDeferredMask::Dispose()
 {
-
+	delete this;
 }
 
 void NIOVTaskDeferredMask::Run()
