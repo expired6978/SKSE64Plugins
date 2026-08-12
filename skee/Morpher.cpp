@@ -7,6 +7,7 @@
 #undef max
 #endif
 #include "half.hpp"
+#include <DirectXMath.h>
 #include "skse64/NiGeometry.h"
 
 float round_v(float num)
@@ -14,7 +15,9 @@ float round_v(float num)
 	return (num > 0.0) ? floor(num + 0.5) : ceil(num - 0.5);
 }
 
-NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<NiSkinPartition> _skinPartition) : geometry(_geometry)
+NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<NiSkinPartition> _skinPartition)
+	: geometry(_geometry)
+	, skinPartition(_skinPartition)
 {
 	BSDynamicTriShape * dynamicTriShape = ni_cast(geometry, BSDynamicTriShape);
 	BSTriShape * triShape = ni_cast(geometry, BSTriShape);
@@ -23,17 +26,13 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 
 	UInt64 vertexDesc = geometry->vertexDesc;
 	UInt32 numVertices = triShape ? triShape->numVertices : 0;
-	UInt8* vertexBlock = nullptr;
-
+	bool hasVertices = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_VERTEX) == VertexFlags::VF_VERTEX;
 	bool hasNormals = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_NORMAL) == VertexFlags::VF_NORMAL;
 	bool hasTangents = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_TANGENT) == VertexFlags::VF_TANGENT;
 	bool hasUV = (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_UV) == VertexFlags::VF_UV;
 
-	const NiSkinInstance * skinInstance = geometry->m_spSkinInstance.m_pObject;
-	if (skinInstance && (hasNormals || hasTangents)) {
-		const NiSkinPartition * skinPartition = skinInstance->m_spSkinPartition.m_pObject;
-		if (skinPartition) {
-			numVertices = numVertices ? numVertices : skinPartition->vertexCount;
+	if (skinPartition && (hasNormals || hasTangents)) {
+		numVertices = numVertices ? numVertices : skinPartition->vertexCount;
 
 			// Pull the base data from the vertex block
 			rawVertices.resize(numVertices);
@@ -49,19 +48,34 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 				}
 			}
 
-			UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexDesc);
+		UInt32 vertexSize = NiSkinPartition::GetVertexSize(vertexDesc);
 
-			vertexBlock = dynamicTriShape ? reinterpret_cast<UInt8*>(dynamicTriShape->pDynamicData) : reinterpret_cast<UInt8*>(skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData);
+		// Recalculate the cloned partition that will be installed by the update
+		// task. The VR branch previously ignored _skinPartition and modified
+		// the currently rendered partition instead.
+		UInt8* vertexBlock = reinterpret_cast<UInt8*>(skinPartition->m_pkPartitions[0].shapeData->m_RawVertexData);
+
+		if (dynamicTriShape && !hasVertices)
+		{
+			for (UInt32 i = 0; i < numVertices; ++i)
+			{
+				DirectX::XMVECTOR* vertices = static_cast<DirectX::XMVECTOR*>(dynamicTriShape->pDynamicData);
+				DirectX::XMStoreFloat3(reinterpret_cast<DirectX::XMFLOAT3*>(&rawVertices[i]), vertices[i]);
+			}
+		}
 
 			for (UInt32 i = 0; i < numVertices; i++)
 			{
 				UInt8 * vBegin = &vertexBlock[i * vertexSize];
 
-				rawVertices[i].x = (*(float *)vBegin); vBegin += sizeof(float);
-				rawVertices[i].y = (*(float *)vBegin); vBegin += sizeof(float);
-				rawVertices[i].z = (*(float *)vBegin); vBegin += sizeof(float);
+				if (hasVertices)
+				{
+					rawVertices[i].x = (*(float *)vBegin); vBegin += sizeof(float);
+					rawVertices[i].y = (*(float *)vBegin); vBegin += sizeof(float);
+					rawVertices[i].z = (*(float *)vBegin); vBegin += sizeof(float);
 
-				vBegin += 4; // Skip BitangetX
+					vBegin += 4; // Skip BitangentX
+				}
 
 				if (NiSkinPartition::GetVertexFlags(vertexDesc) & VertexFlags::VF_UV)
 				{
@@ -86,13 +100,16 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 			{
 				UInt8 * vBegin = &vertexBlock[i * vertexSize];
 
-				// X,Y,Z,BX
-				vBegin += sizeof(float);
-				vBegin += sizeof(float);
-				vBegin += sizeof(float);
+				if (hasVertices)
+				{
+					// X,Y,Z,BX
+					vBegin += sizeof(float);
+					vBegin += sizeof(float);
+					vBegin += sizeof(float);
 
-				// No need to write bitangentX
-				*(float *)vBegin = rawBitangents[i].x; vBegin += sizeof(float);
+					// No need to write bitangentX
+					*(float *)vBegin = rawBitangents[i].x; vBegin += sizeof(float);
+				}
 
 				// Skip UV write
 				if (hasUV)
@@ -118,7 +135,6 @@ NormalApplicator::NormalApplicator(NiPointer<BSGeometry> _geometry, NiPointer<Ni
 					}
 				}
 			}
-		}
 	}
 
 	if (dynamicTriShape) dynamicTriShape->lock.Release();

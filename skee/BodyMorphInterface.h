@@ -26,7 +26,6 @@
 #include <functional>
 #include <memory>
 #include <ctime>
-#include <mutex>
 
 #include <DirectXMath.h>
 #include <DirectXPackedVector.h>
@@ -197,13 +196,15 @@ public:
 	UInt32 memoryUsage;
 };
 
+class NIOVTaskUpdateSkinPartition;
+
 class MorphFileCache
 {
 	friend class MorphCache;
 	friend class BodyMorphInterface;
 public:
 	void ApplyMorphs(TESObjectREFR * refr, NiAVObject * rootNode, bool erase = false, bool defer = false);
-	void ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph, std::mutex * mtx = nullptr, bool deferred = true);
+	NIOVTaskUpdateSkinPartition * ApplyMorph(TESObjectREFR * refr, NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph);
 
 private:
 	TriShapeMap vertexMap;
