@@ -18,6 +18,51 @@ extern SKSETaskInterface				* g_task;
 void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 {
 	bool shaderError = false;
+	if (value->key >= OverrideVariant::kParam_ControllersStart && value->key <= OverrideVariant::kParam_ControllersEnd)
+	{
+		SInt8 currentIndex = 0;
+		SInt8 controllerIndex = value->index;
+		if (controllerIndex != -1)
+		{
+			NiTimeController* foundController = NULL;
+			NiTimeController* controller = ni_cast(node->m_controller, NiTimeController);
+			while (controller)
+			{
+				if (currentIndex == controllerIndex) {
+					foundController = controller;
+					break;
+				}
+
+				controller = ni_cast(controller->next, NiTimeController);
+				currentIndex++;
+			}
+
+			if (foundController)
+			{
+				switch (value->key)
+				{
+				case OverrideVariant::kParam_ControllerFrequency:	PackValue<float>(value, value->key, value->index, &foundController->m_fFrequency);	break;
+				case OverrideVariant::kParam_ControllerPhase:		PackValue<float>(value, value->key, value->index, &foundController->m_fPhase);		break;
+				case OverrideVariant::kParam_ControllerStartTime:	PackValue<float>(value, value->key, value->index, &foundController->m_fLoKeyTime);	break;
+				case OverrideVariant::kParam_ControllerStopTime:	PackValue<float>(value, value->key, value->index, &foundController->m_fHiKeyTime);	break;
+
+					// Special cases
+				case OverrideVariant::kParam_ControllerStartStop:
+				{
+					float val = 0.0;
+					PackValue<float>(value, value->key, value->index, &val);	break;
+				}
+				break;
+				default:
+					_MESSAGE("Unknown controller key %d %s", value->key, node->m_name);
+					shaderError = true;
+					break;
+				}
+			}
+		}
+		return;
+	}
+	
 	BSGeometry * geometry = node->GetAsBSGeometry();
 	if(geometry)
 	{
@@ -26,51 +71,6 @@ void GetShaderProperty(NiAVObject * node, OverrideVariant * value)
 			_MESSAGE("Shader does not exist for %s", node->m_name);
 			shaderError = true;
 			return;
-		}
-		if(value->key >= OverrideVariant::kParam_ControllersStart && value->key <= OverrideVariant::kParam_ControllersEnd)
-		{
-			SInt8 currentIndex = 0;
-			SInt8 controllerIndex = value->index;
-			if(controllerIndex != -1)
-			{
-				NiTimeController * foundController = NULL;
-				NiTimeController * controller = ni_cast(shaderProperty->m_controller, NiTimeController);
-				while(controller)
-				{
-					if(currentIndex == controllerIndex) {
-						foundController = controller;
-						break;
-					}
-
-					controller = ni_cast(controller->next, NiTimeController);
-					currentIndex++;
-				}
-
-				if(foundController)
-				{
-					switch(value->key)
-					{
-					case OverrideVariant::kParam_ControllerFrequency:	PackValue<float>(value, value->key, value->index, &foundController->m_fFrequency);	break;
-					case OverrideVariant::kParam_ControllerPhase:		PackValue<float>(value, value->key, value->index, &foundController->m_fPhase);		break;
-					case OverrideVariant::kParam_ControllerStartTime:	PackValue<float>(value, value->key, value->index, &foundController->m_fLoKeyTime);	break;
-					case OverrideVariant::kParam_ControllerStopTime:	PackValue<float>(value, value->key, value->index, &foundController->m_fHiKeyTime);	break;
-
-						// Special cases
-					case OverrideVariant::kParam_ControllerStartStop:
-						{
-							float val = 0.0;
-							PackValue<float>(value, value->key, value->index, &val);	break;
-						}
-						break;
-					default:
-						_MESSAGE("Unknown controller key %d %s", value->key, node->m_name);
-						shaderError = true;
-						break;
-					}
-				}
-			}
-
-			return; // Only working on controller properties
 		}
 		if(ni_is_type(shaderProperty->GetRTTI(), BSEffectShaderProperty))
 		{
@@ -198,6 +198,62 @@ void NIOVTaskUpdateTexture::Run()
 
 void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediate)
 {
+
+	if (value->key >= OverrideVariant::kParam_ControllersStart && value->key <= OverrideVariant::kParam_ControllersEnd)
+	{
+		SInt8 currentIndex = 0;
+		SInt8 controllerIndex = value->index;
+		if (controllerIndex != -1)
+		{
+			NiTimeController* foundController = NULL;
+			NiTimeController* controller = ni_cast(node->m_controller, NiTimeController);
+			while (controller)
+			{
+				if (currentIndex == controllerIndex) {
+					foundController = controller;
+					break;
+				}
+
+				controller = ni_cast(controller->next, NiTimeController);
+				currentIndex++;
+			}
+
+			if (foundController)
+			{
+				switch (value->key)
+				{
+				case OverrideVariant::kParam_ControllerFrequency:	UnpackValue(&foundController->m_fFrequency, value);	return;	break;
+				case OverrideVariant::kParam_ControllerPhase:		UnpackValue(&foundController->m_fPhase, value);		return;	break;
+				case OverrideVariant::kParam_ControllerStartTime:	UnpackValue(&foundController->m_fLoKeyTime, value);	return;	break;
+				case OverrideVariant::kParam_ControllerStopTime:	UnpackValue(&foundController->m_fHiKeyTime, value);	return;	break;
+
+					// Special cases
+				case OverrideVariant::kParam_ControllerStartStop:
+				{
+					float fValue;
+					UnpackValue(&fValue, value);
+					if (fValue < 0.0)
+					{
+						foundController->Start(0);
+						foundController->Stop();
+					}
+					else {
+						foundController->Start(fValue);
+					}
+					return;
+				}
+				break;
+				default:
+					_MESSAGE("Unknown controller key %d %s", value->key, node->m_name);
+					return;
+					break;
+				}
+			}
+		}
+
+		return; // Only working on controller properties
+	}
+
 	BSGeometry * geometry = node->GetAsBSGeometry();
 	if(geometry)
 	{
@@ -205,61 +261,6 @@ void SetShaderProperty(NiAVObject * node, OverrideVariant * value, bool immediat
 		if(!shaderProperty) {
 			_MESSAGE("Shader does not exist for %s", geometry->m_name);
 			return;
-		}
-
-		if(value->key >= OverrideVariant::kParam_ControllersStart && value->key <= OverrideVariant::kParam_ControllersEnd)
-		{
-			SInt8 currentIndex = 0;
-			SInt8 controllerIndex = value->index;
-			if(controllerIndex != -1)
-			{
-				NiTimeController * foundController = NULL;
-				NiTimeController * controller = ni_cast(shaderProperty->m_controller, NiTimeController);
-				while(controller)
-				{
-					if(currentIndex == controllerIndex) {
-						foundController = controller;
-						break;
-					}
-
-					controller = ni_cast(controller->next, NiTimeController);
-					currentIndex++;
-				}
-
-				if(foundController)
-				{
-					switch(value->key)
-					{
-					case OverrideVariant::kParam_ControllerFrequency:	UnpackValue(&foundController->m_fFrequency, value);	return;	break;
-					case OverrideVariant::kParam_ControllerPhase:		UnpackValue(&foundController->m_fPhase, value);		return;	break;
-					case OverrideVariant::kParam_ControllerStartTime:	UnpackValue(&foundController->m_fLoKeyTime, value);	return;	break;
-					case OverrideVariant::kParam_ControllerStopTime:	UnpackValue(&foundController->m_fHiKeyTime, value);	return;	break;
-
-						// Special cases
-					case OverrideVariant::kParam_ControllerStartStop:
-						{
-							float fValue;
-							UnpackValue(&fValue, value);
-							if(fValue < 0.0)
-							{
-								foundController->Start(0);
-								foundController->Stop();
-							}
-							else {
-								foundController->Start(fValue);
-							}
-							return;
-						}
-						break;
-					default:
-						_MESSAGE("Unknown controller key %d %s", value->key, node->m_name);
-						return;
-						break;
-					}
-				}
-			}
-
-			return; // Only working on controller properties
 		}
 
 		BSEffectShaderProperty * effectShader = ni_cast(shaderProperty, BSEffectShaderProperty);
@@ -530,6 +531,7 @@ void DumpNodeChildren(NiAVObject * node)
 					}
 				}
 				else if (childNode) {
+					_MESSAGE("{%s} {%s} {%p} - Node", object->GetRTTI()->name, object->m_name, (void*)object);
 					DumpNodeChildren(childNode);
 				}
 				else {
