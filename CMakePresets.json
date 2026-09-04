@@ -20,6 +20,16 @@
       }
     },
     {
+      "name": "msvc-vcpkg-static-base",
+      "hidden": true,
+      "inherits": "msvc-vcpkg-flatrim-base",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+      }
+    },
+    {
       "name": "debug-msvc-vcpkg-flatrim",
       "inherits": "msvc-vcpkg-flatrim-base",
       "cacheVariables": {
@@ -29,6 +39,20 @@
     {
       "name": "release-msvc-vcpkg-flatrim",
       "inherits": "msvc-vcpkg-flatrim-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "debug-msvc-vcpkg-static",
+      "inherits": "msvc-vcpkg-static-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release-msvc-vcpkg-static",
+      "inherits": "msvc-vcpkg-static-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -42,6 +66,14 @@
     {
       "name": "release-msvc-vcpkg-flatrim",
       "configurePreset": "release-msvc-vcpkg-flatrim"
+    },
+    {
+      "name": "debug-msvc-vcpkg-static",
+      "configurePreset": "debug-msvc-vcpkg-static"
+    },
+    {
+      "name": "release-msvc-vcpkg-static",
+      "configurePreset": "release-msvc-vcpkg-static"
     }
   ]
 }

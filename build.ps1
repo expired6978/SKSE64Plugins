@@ -3,7 +3,7 @@
 # PowerShell edition (native Windows; no WSL/Git Bash required)
 #
 # Usage:
-#   .\build.ps1 [release|debug] [--full] [--install] [--portable-msvc]
+#   .\build.ps1 [release|debug] [--static | --dynamic] [--full] [--install] [--portable-msvc]
 #
 # From WSL, invoke the Windows PowerShell explicitly (not pwsh - a Linux pwsh
 # in the same shell would run this on Linux, where cmd.exe does not exist):
@@ -41,11 +41,14 @@
 #      If none is found it downloads a portable MSVC + Windows SDK into
 #      ./toolchain/msvc via tools/portable-msvc.py - nothing is installed
 #      system-wide. Pass --portable-msvc to force that path.
-#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-flatrim.
+#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-<flatrim|static>
+#      (dynamic CRT by default; --static / SKEE_RUNTIME=static selects the fully
+#       static-CRT variant, which statically links the MSVC runtimes).
 #
 # Environment overrides:
 #   $env:SKEE_VCVARS = 'C:\path\to\vcvars64.bat'  use this compiler environment
 #   $env:SKEE_JOBS   = 'N'                        ninja parallelism (default 8)
+#   $env:SKEE_RUNTIME= 'static'|'dynamic'         statically (/MT) vs dynamically (/MD) link the MSVC CRT (default dynamic)
 #   $env:Skyrim64Path= 'C:\path\to\Skyrim'        game root used by --install
 #
 # Requires: Windows PowerShell 5.1+ or pwsh on Windows, git.
@@ -298,24 +301,32 @@ No usable Python found to download the portable MSVC toolchain.
 
 # ----------------------------------------------------------------------------
 $BuildType     = 'release'
+$Runtime       = if ($env:SKEE_RUNTIME) { $env:SKEE_RUNTIME } else { 'dynamic' } # static|dynamic -> MSVC CRT linkage (default dynamic)
 $ForceFull     = $false
 $DoInstall     = $false
 $ForcePortable = $false
 foreach ($arg in $args) {
     switch -Regex ($arg) {
         '^(release|debug)$' { $BuildType = $arg }
+        '^--static$'        { $Runtime = 'static' }
+        '^--dynamic$'       { $Runtime = 'dynamic' }
         '^--full$'          { $ForceFull = $true }
         '^--install$'       { $DoInstall = $true }
         '^--portable-msvc$' { $ForcePortable = $true }
         '^(?:-h|--help)$'   { Show-Help; exit 0 }
         default {
-            Write-Host "Unknown argument: $arg (expected [release|debug] [--full] [--install] [--portable-msvc])" -ForegroundColor Red
+            Write-Host "Unknown argument: $arg (expected [release|debug] [--static|--dynamic] [--full] [--install] [--portable-msvc])" -ForegroundColor Red
             exit 2
         }
     }
 }
 
-$Preset   = "$BuildType-msvc-vcpkg-flatrim"
+switch ($Runtime) {
+    'static'  { $RuntimeTag = 'static' }
+    'dynamic' { $RuntimeTag = 'flatrim' }
+    default   { Write-Host "Unknown runtime: $Runtime (expected static|dynamic)" -ForegroundColor Red; exit 2 }
+}
+$Preset   = "$BuildType-msvc-vcpkg-$RuntimeTag"
 $BuildDir = Join-Path $ScriptDir "build/$Preset"
 $CfgName  = $BuildType.Substring(0, 1).ToUpper() + $BuildType.Substring(1)
 

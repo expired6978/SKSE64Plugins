@@ -212,10 +212,10 @@ void PresetInterface::ApplyPresetData(RE::Actor* actor, PresetDataPtr presetData
 
 	for (auto& tint : presetData->tints) {
 		float alpha = (tint.color >> 24) / 255.0;
-		auto* tintArr = player->GetTintList();
+		auto& tintArr = player->GetPlayerRuntimeData().tintMasks;
 		RE::TintMask* tintMask = nullptr;
-		if (player == actor && tintArr && tint.index < tintArr->size()) {
-			tintMask = (*tintArr)[tint.index];
+		if (player == actor && tint.index < tintArr.size()) {
+			tintMask = tintArr[tint.index];
 			tintMask->color.red = (tint.color >> 16) & 0xFF;
 			tintMask->color.green = (tint.color >> 8) & 0xFF;
 			tintMask->color.blue = tint.color & 0xFF;
@@ -405,10 +405,10 @@ bool PresetInterface::SaveJsonPreset(const char* filePath, RE::Actor* actor)
 	RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
 	if (actor == player)
 	{
-		auto* tintArr = player->GetTintList();
-		for (std::uint32_t i = 0; tintArr && i < tintArr->size(); i++)
+        auto& tintArr = player->GetPlayerRuntimeData().tintMasks;
+		for (std::uint32_t i = 0; i < tintArr.size(); i++)
 		{
-			RE::TintMask* tintMask = (*tintArr)[i];
+			RE::TintMask* tintMask = tintArr[i];
 			if (tintMask)
 			{
 				std::uint32_t tintColor = ((std::uint32_t)(tintMask->alpha * 255.0) << 24) | tintMask->color.red << 16 | tintMask->color.green << 8 | tintMask->color.blue;
@@ -787,10 +787,10 @@ bool PresetInterface::SaveBinaryPreset(const char* filePath)
 		}
 
 		TintMap tintList;
-		auto* tintArr = player->GetTintList();
-		for (std::uint32_t i = 0; tintArr && i < tintArr->size(); i++)
+		auto& tintArr = player->GetPlayerRuntimeData().tintMasks;
+		for (std::uint32_t i = 0; i < tintArr.size(); i++)
 		{
-			RE::TintMask* tintMask = (*tintArr)[i];
+			RE::TintMask* tintMask = tintArr[i];
 			if (tintMask)
 			{
 				std::uint32_t tintColor = ((std::uint32_t)(tintMask->alpha * 255.0) << 24) | tintMask->color.red << 16 | tintMask->color.green << 8 | tintMask->color.blue;

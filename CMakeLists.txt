@@ -9,8 +9,15 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# Match CommonLibSSE-NG and the x64-windows-static-md vcpkg triplet; do not use old /MT.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+# MSVC CRT linkage is chosen per build preset (see CMakePresets.json):
+#   *-msvc-vcpkg-flatrim : x64-windows-static-md triplet, dynamic CRT (/MD /MDd)
+#   *-msvc-vcpkg-static  : x64-windows-static    triplet, static CRT   (/MT /MTd)
+# Honor a preset-provided value (passed via -DCMAKE_MSVC_RUNTIME_LIBRARY) so the
+# static presets actually take effect; fall back to the dynamic default only when
+# configured without one. Do NOT hardcode the old unconditional /MT here.
+if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 # Emit a PDB for every configuration (Release included) so crash dumps can be
 # symbolized. MSVC Debug already does this by default; /Zi + /DEBUG extend it
@@ -18,31 +25,29 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase")
 add_link_options(/DEBUG)
 
+# Whole-program optimization via MSVC link-time code generation (/GL at compile,
+# /LTCG at link), Release only so Debug stays fast to build. Applies to every
+# target in the tree (skee64 + CommonLibSSE-NG). Prebuilt vcpkg static libs were
+# not compiled with /GL, so they aren't LTCG-folded across their boundary, but
+# they still link fine alongside the /GL objects.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
+# Emit a linker map file (<target>.map) for Release builds so code/data size can be
+# analyzed per symbol and section.
+add_link_options($<$<CONFIG:Release>:/MAP>)
+
 # Build the vendored CommonLib source, not its release/prebuilt bundle.
 set(COMMONLIB_PREBUILT OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-# AE only (user decision 2026-08-24): the legacy plugin targeted Steam/GOG
-# AE builds (1.7.99 / 1.6.1179), not original SE (1.5.97). RelocationID(se, ae)
-# uses the se slot as 0.
+
 set(ENABLE_SKYRIM_SE OFF CACHE BOOL "" FORCE)
 set(ENABLE_SKYRIM_AE ON CACHE BOOL "" FORCE)
 set(ENABLE_SKYRIM_VR OFF CACHE BOOL "" FORCE)
 set(SKSE_SUPPORT_XBYAK ON CACHE BOOL "" FORCE)
 set(SKSE_SUPPORT_PATCH_SAFETY ON CACHE BOOL "" FORCE)
 
-# Match CommonLibSSE-NG's own preset (PROJECT_PLATFORM_FLAGS). Without these,
-# xbyak.h (pulled in by SKSE/ContextHook.h) includes <windows.h> and defines
-# the min/max macros, breaking std::min in RE/Skyrim.h aggregate headers.
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 
-# Supplied by the root vcpkg manifest/preset.
-#
-# Find every interface dependency at the top level, before add_subdirectory:
-# CMake >= 3.30 scopes imported targets to the creating directory (and below)
-# unless created GLOBAL, so a find_package() inside CommonLibSSE-NG would leave
-# Microsoft::DirectXTK & co invisible here. Targets created at the top level are
-# visible in all subdirectories, and CommonLib's own find_package calls then hit
-# the package config files' already-defined-target guard and return early.
 find_package(xbyak CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
@@ -122,7 +127,6 @@ set(SKEE_SOURCES
     skee64/Resource.rc
 )
 
-# Generates SKSEPlugin_Version and SKSEPlugin_Query. 0.0.0.1 packs to the legacy raw value 1.
 add_commonlibsse_plugin(skee64
     NAME "skee"
     AUTHOR "Expired6978"
@@ -141,9 +145,6 @@ target_compile_options(skee64 PRIVATE /permissive- /bigobj)
 # API header appears mid-aggregate) and drops the MAX_PATH macro that
 # DirectXTK's SimpleMath.h leaves defined via its transitive <windows.h>.
 target_precompile_headers(skee64 PRIVATE skee64/pch.h)
-
-
-
 
 # Imported targets from this build's own vcpkg install (per-config Debug/Release libs).
 target_link_libraries(skee64 PRIVATE

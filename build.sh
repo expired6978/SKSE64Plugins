@@ -3,10 +3,23 @@
 # skee64 — machine-agnostic, repeatable Windows (MSVC) build driver
 #
 # Usage:
-#   ./build.sh [release|debug] [--portable-msvc]
+#   ./build.sh [release|debug] [--static | --dynamic] [--full] [--install] [--portable-msvc]
 #
-# What it does (every step is idempotent — already-downloaded pieces are
-# detected and skipped):
+# --install: after a successful build, run `cmake --install`, which places
+# skee64.dll and all plugin shaders (sources + compiled .cso) under
+# $Skyrim64Path/Data/SKSE/Plugins (the CMake install prefix follows
+# Skyrim64Path - see CMakeLists.txt). Skyrim64Path must point at the Skyrim
+# root directory (the folder containing Data/); it may be a native path or a
+# Windows-style C:\... path under WSL.
+#
+# Default mode is incremental: if the project is already configured
+# (build/<preset>/build.ninja exists), ninja runs directly against it — only
+# changed files are recompiled and relinked, so iteration is fast. HLSL
+# shaders in skee64/Shaders are recompiled by fxc when their sources change.
+#
+# Full mode (--full, or automatically on first run) does the complete setup.
+# Every step is idempotent — already-downloaded pieces are detected and
+# skipped:
 #   1. Initializes the CommonLibSSE-NG git submodule if missing.
 #   2. Downloads CMake + Ninja for Windows into ./toolchain (gitignored).
 #   3. Fetches vcpkg at the exact commit pinned in vcpkg.json
@@ -21,10 +34,15 @@
 #      If none is found it downloads a portable MSVC + Windows SDK into
 #      ./toolchain/msvc via tools/portable-msvc.py — nothing is installed
 #      system-wide. Pass --portable-msvc to force that path.
-#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-flatrim.
+#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-<flatrim|static>
+#      (dynamic CRT by default; --static / SKEE_RUNTIME=static selects the fully
+#       static-CRT variant, which statically links the MSVC runtimes).
 #
 # Environment overrides:
 #   SKEE_VCVARS=/path/to/vcvars64.bat   use this compiler environment
+#   SKEE_JOBS=N                         ninja parallelism (default 8)
+#   SKEE_RUNTIME=static|dynamic         statically (/MT) vs dynamically (/MD) link the MSVC CRT (default dynamic)
+#   Skyrim64Path=/path/to/Skyrim        game root used by --install
 #
 # Requires: cmd.exe (Windows/WSL/Git Bash), curl or wget, git.
 # The portable-MSVC fallback additionally needs a Python on the Windows PATH
@@ -42,22 +60,37 @@ NINJA_VERSION="1.12.1"
 VCPKG_COMMIT="ee12231b20c95013c6638d845d04c91559a1d1ff" # == vcpkg.json builtin-baseline
 
 BUILD_TYPE="release"
+RUNTIME="${SKEE_RUNTIME:-dynamic}" # static|dynamic -> MSVC CRT linkage (default dynamic)
+FORCE_FULL=0
+DO_INSTALL=0
 FORCE_PORTABLE=0
 for arg in "$@"; do
   case "$arg" in
   release | debug) BUILD_TYPE="$arg" ;;
+  --static) RUNTIME="static" ;;
+  --dynamic) RUNTIME="dynamic" ;;
+  --full) FORCE_FULL=1 ;;
+  --install) DO_INSTALL=1 ;;
   --portable-msvc) FORCE_PORTABLE=1 ;;
   -h | --help)
     grep '^#' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   *)
-    echo "Unknown argument: $arg (expected [release|debug] [--portable-msvc])" >&2
+    echo "Unknown argument: $arg (expected [release|debug] [--static|--dynamic] [--full] [--install] [--portable-msvc])" >&2
     exit 2
     ;;
   esac
 done
-PRESET="${BUILD_TYPE}-msvc-vcpkg-flatrim"
+case "$RUNTIME" in
+static) RUNTIME_TAG="static" ;;
+dynamic) RUNTIME_TAG="flatrim" ;;
+*)
+  echo "Unknown runtime: $RUNTIME (expected static|dynamic)" >&2
+  exit 2
+  ;;
+esac
+PRESET="${BUILD_TYPE}-msvc-vcpkg-${RUNTIME_TAG}"
 BUILD_DIR="$SCRIPT_DIR/build/$PRESET"
 CFG_NAME="$(tr '[:lower:]' '[:upper:]' <<<"${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
 
@@ -128,6 +161,51 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -Literal
 exit /b %errorlevel%" || die "Failed to extract $1"
 }
 
+# Download + extract CMake if missing or broken (shared by the full path and
+# --install, which needs it even when building incrementally).
+ensure_cmake() {
+  if ! run_batch "\"$(to_win "$CMAKE_BIN")\" --version >nul 2>&1" >/dev/null; then
+    download "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-windows-x86_64.zip" \
+      "$TOOLCHAIN/cmake.zip"
+    unzip_win "$(to_win "$TOOLCHAIN/cmake.zip")" "$(to_win "$TOOLCHAIN")"
+  fi
+  [[ -f "$CMAKE_BIN" ]] || die "CMake setup failed (expected $(to_win "$CMAKE_BIN"))"
+}
+
+# Download + extract ninja if missing (shared by incremental and full paths).
+ensure_ninja() {
+  if [[ ! -f "$NINJA_DIR/ninja.exe" ]]; then
+    download "https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-win.zip" \
+      "$TOOLCHAIN/ninja.zip"
+    mkdir -p "$NINJA_DIR" "$TOOLCHAIN/.ninja-extract"
+    unzip_win "$(to_win "$TOOLCHAIN/ninja.zip")" "$(to_win "$TOOLCHAIN/.ninja-extract")"
+    mv "$TOOLCHAIN/.ninja-extract/ninja.exe" "$NINJA_DIR/ninja.exe"
+    rm -rf "$TOOLCHAIN/.ninja-extract"
+  fi
+  info "Ninja: $NINJA_DIR/ninja.exe"
+}
+
+# Run `cmake --install` so artifacts land in the game directory. The CMake
+# install prefix follows Skyrim64Path (see CMakeLists.txt): skee64.dll +
+# shader sources + compiled .cso under <root>/Data/SKSE/Plugins.
+install_into_game() {
+  [[ $DO_INSTALL -eq 1 ]] || return 0
+  local root="${Skyrim64Path:-}"
+  if [[ -z "$root" ]]; then
+    die "--install requires Skyrim64Path to point at the Skyrim root directory (the folder containing Data/)."
+  fi
+  # Accept Windows-style paths under WSL (convert to the /mnt/x/... form).
+  if [[ "$root" =~ ^[A-Za-z]: ]] && command -v wslpath >/dev/null 2>&1; then
+    root="$(wslpath -u "$root")"
+  fi
+  [[ -d "$root" ]] || die "--install: Skyrim64Path=$root does not exist."
+
+  ensure_cmake
+  run_batch "\"$(to_win "$CMAKE_BIN")\" --install \"$(to_win "$BUILD_DIR")\" --config $CFG_NAME || exit /b 1" ||
+    die "Install failed (see output above)"
+  info "Installed into $root/Data/SKSE/Plugins (skee64.dll + shaders)"
+}
+
 # ----------------------------------------------------------------------------
 command -v cmd.exe >/dev/null 2>&1 ||
   die "cmd.exe not found — this project builds with MSVC on Windows. Run this script from Windows, WSL, or Git Bash."
@@ -135,53 +213,9 @@ command -v cmd.exe >/dev/null 2>&1 ||
 info "skee64 build: $BUILD_TYPE (preset: $PRESET)"
 mkdir -p "$TOOLCHAIN"
 
-# --- 1. CommonLibSSE-NG submodule -------------------------------------------
-if [[ ! -f "$SCRIPT_DIR/CommonLibSSE-NG/CMakeLists.txt" ]]; then
-  command -v git >/dev/null 2>&1 ||
-    die "CommonLibSSE-NG/ is missing and git is not available. Run 'git submodule update --init' manually."
-  info "Initializing CommonLibSSE-NG git submodule"
-  git -C "$SCRIPT_DIR" submodule update --init --recursive ||
-    die "git submodule update failed (network required)"
-fi
-
-# --- 2. CMake ----------------------------------------------------------------
-if ! run_batch "\"$(to_win "$CMAKE_BIN")\" --version >nul 2>&1" >/dev/null; then
-  download "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-windows-x86_64.zip" \
-    "$TOOLCHAIN/cmake.zip"
-  unzip_win "$(to_win "$TOOLCHAIN/cmake.zip")" "$(to_win "$TOOLCHAIN")"
-fi
-[[ -f "$CMAKE_BIN" ]] || die "CMake setup failed (expected $(to_win "$CMAKE_BIN"))"
-cmake_ver="$(run_batch "@echo off
-\"$(to_win "$CMAKE_BIN")\" --version" 2>/dev/null | grep -m1 'cmake version')"
-info "CMake: ${cmake_ver:-unknown}"
-
-# --- 3. Ninja ----------------------------------------------------------------
-if [[ ! -f "$NINJA_DIR/ninja.exe" ]]; then
-  download "https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-win.zip" \
-    "$TOOLCHAIN/ninja.zip"
-  mkdir -p "$NINJA_DIR" "$TOOLCHAIN/.ninja-extract"
-  unzip_win "$(to_win "$TOOLCHAIN/ninja.zip")" "$(to_win "$TOOLCHAIN/.ninja-extract")"
-  mv "$TOOLCHAIN/.ninja-extract/ninja.exe" "$NINJA_DIR/ninja.exe"
-  rm -rf "$TOOLCHAIN/.ninja-extract"
-fi
-info "Ninja: $NINJA_DIR/ninja.exe"
-
-# --- 4. vcpkg source at the pinned commit ------------------------------------
-# Full clone (NOT --depth 1): manifest mode checks out port files from
-# historical commits inside the vcpkg repo, so the full history is required.
-vcpkg_head="$(git -C "$VCPKG_DIR" rev-parse HEAD 2>/dev/null || true)"
-if [[ "$vcpkg_head" != "$VCPKG_COMMIT" ]]; then
-  command -v git >/dev/null 2>&1 ||
-    die "toolchain/vcpkg is missing and git is not available."
-  info "Cloning vcpkg @ ${VCPKG_COMMIT:0:12} (full history, a few hundred MB — required by manifest mode)"
-  rm -rf "$VCPKG_DIR"
-  (git clone --progress https://github.com/microsoft/vcpkg.git "$VCPKG_DIR" &&
-    git -C "$VCPKG_DIR" checkout -q "$VCPKG_COMMIT") ||
-    die "Failed to clone vcpkg from GitHub (network required)"
-fi
-info "vcpkg: $VCPKG_DIR @ ${VCPKG_COMMIT:0:12}"
-
-# --- 5. MSVC compiler environment --------------------------------------------
+# --- 1. MSVC compiler environment --------------------------------------------
+# Needed by both the incremental and full paths (vcvars also puts fxc.exe on
+# PATH, which the shader compile step needs).
 PORTABLE_DIR="$TOOLCHAIN/msvc"
 MSVC_SETUP="" # bat that establishes the compiler env ("" = already in env)
 
@@ -231,7 +265,9 @@ foreach ($e in @($env:VSINSTALLDIR, $env:VCToolsInstallDir)) {
 # PowerShell is launched from WSL)
 $editions = @('Community','Professional','Enterprise','BuildTools')
 $years = @('2026','2025','2022','2019')
-$drives = ([System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -eq 'Fixed' } | ForEach-Object { $_.Name.Substring(0, 1) + ':' })
+# Fixed + Removable (USB) drives. NOTE: use "$d\" below — a bare 'P:' means
+# the *current* directory on that drive in PowerShell, not its root.
+$drives = ([System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and @('Fixed','Removable') -contains $_.DriveType } | ForEach-Object { $_.Name.Substring(0, 1) + ':' })
 foreach ($d in $drives) {
     foreach ($y in $years) { foreach ($e in $editions) {
         $c = "$d\Microsoft Visual Studio\$y\$e\VC\Auxiliary\Build\vcvars64.bat"
@@ -242,7 +278,7 @@ foreach ($d in $drives) {
 # 5) relocated installs: top-level *studio* folders on fixed drives, bounded depth
 if (-not $found) {
     foreach ($d in $drives) {
-        $roots = Get-ChildItem -Path $d -Directory | Where-Object { $_.Name -match '(?i)visual\s*studio|^vs$' }
+        $roots = Get-ChildItem -Path "$d\" -Directory | Where-Object { $_.Name -match '(?i)visual\s*studio|^vs$' }
         foreach ($r in $roots) {
             $hit = Get-ChildItem -Path $r.FullName -Recurse -Depth 4 -Filter vcvars64.bat | Select-Object -First 1
             if ($hit) { $found = $hit.FullName; break }
@@ -334,7 +370,68 @@ if [[ -z "$MSVC_SETUP" ]] || ! env_ok "$MSVC_SETUP"; then
   fi
 fi
 
-# --- 6. vcpkg bootstrap (needs the compiler env) ------------------------------
+# --- 2. incremental build (default) -------------------------------------------
+# If the project is already configured, run ninja directly against the existing
+# build.ninja: only changed files are recompiled + relinked (shaders included).
+if [[ $FORCE_FULL -eq 0 && -f "$BUILD_DIR/build.ninja" ]]; then
+  ensure_ninja
+  JOBS="${SKEE_JOBS:-8}"
+  info "Incremental build (ninja, existing configuration)"
+  callline=""
+  [[ -n "$MSVC_SETUP" ]] && callline="call \"$MSVC_SETUP\" >nul 2>&1"
+  run_batch "@echo off
+setlocal
+$callline
+set \"PATH=$(to_win "$NINJA_DIR"));%PATH%\"
+cd /d \"$(to_win "$BUILD_DIR")\"
+ninja -j $JOBS || exit /b 1" ||
+    die "Incremental build failed (see output above)"
+
+  DLL="$BUILD_DIR/skee64.dll"
+  if [[ -f "$DLL" ]]; then
+    info "Success: $DLL"
+  else
+    warn "Build finished but skee64.dll was not found at $DLL"
+  fi
+  install_into_game
+  exit 0
+fi
+
+# --- 3. full setup (first run or --full) ---------------------------------------
+# --- 3a. CommonLibSSE-NG submodule ---------------------------------------------
+if [[ ! -f "$SCRIPT_DIR/CommonLibSSE-NG/CMakeLists.txt" ]]; then
+  command -v git >/dev/null 2>&1 ||
+    die "CommonLibSSE-NG/ is missing and git is not available. Run 'git submodule update --init' manually."
+  info "Initializing CommonLibSSE-NG git submodule"
+  git -C "$SCRIPT_DIR" submodule update --init --recursive ||
+    die "git submodule update failed (network required)"
+fi
+
+# --- 3b. CMake ------------------------------------------------------------------
+ensure_cmake
+cmake_ver="$(run_batch "@echo off
+\"$(to_win "$CMAKE_BIN")\" --version" 2>/dev/null | grep -m1 'cmake version')"
+info "CMake: ${cmake_ver:-unknown}"
+
+# --- 3c. Ninja -------------------------------------------------------------------
+ensure_ninja
+
+# --- 3d. vcpkg source at the pinned commit ----------------------------------------
+# Full clone (NOT --depth 1): manifest mode checks out port files from
+# historical commits inside the vcpkg repo, so the full history is required.
+vcpkg_head="$(git -C "$VCPKG_DIR" rev-parse HEAD 2>/dev/null || true)"
+if [[ "$vcpkg_head" != "$VCPKG_COMMIT" ]]; then
+  command -v git >/dev/null 2>&1 ||
+    die "toolchain/vcpkg is missing and git is not available."
+  info "Cloning vcpkg @ ${VCPKG_COMMIT:0:12} (full history, a few hundred MB — required by manifest mode)"
+  rm -rf "$VCPKG_DIR"
+  (git clone --progress https://github.com/microsoft/vcpkg.git "$VCPKG_DIR" &&
+    git -C "$VCPKG_DIR" checkout -q "$VCPKG_COMMIT") ||
+    die "Failed to clone vcpkg from GitHub (network required)"
+fi
+info "vcpkg: $VCPKG_DIR @ ${VCPKG_COMMIT:0:12}"
+
+# --- 3e. vcpkg bootstrap (needs the compiler env) ----------------------------------
 if [[ ! -f "$VCPKG_DIR/vcpkg.exe" ]]; then
   info "Bootstrapping vcpkg (first run only)"
   callline=""
@@ -347,7 +444,7 @@ bootstrap-vcpkg.bat -disableMetrics || exit /b 1" ||
     die "vcpkg bootstrap failed (needs the MSVC compiler environment)"
 fi
 
-# --- 7. configure + build ------------------------------------------------------
+# --- 3f. configure + build -----------------------------------------------------------
 EXPECTED_TC="$(to_win "$VCPKG_DIR")/scripts/buildsystems/vcpkg.cmake"
 EXPECTED_TC="${EXPECTED_TC//\\//}"
 if [[ -f "$BUILD_DIR/CMakeCache.txt" ]]; then
@@ -375,10 +472,11 @@ cd /d \"$(to_win "$SCRIPT_DIR")\"
 \"$(to_win "$CMAKE_BIN")\" --build \"$(to_win "$BUILD_DIR")\" --config $CFG_NAME || exit /b 1" ||
   die "Build failed (see output above)"
 
-# --- 8. result -----------------------------------------------------------------
+# --- 4. result ------------------------------------------------------------------------
 DLL="$BUILD_DIR/skee64.dll"
 if [[ -f "$DLL" ]]; then
   info "Success: $DLL"
 else
   warn "Build finished but skee64.dll was not found at $DLL"
 fi
+install_into_game
