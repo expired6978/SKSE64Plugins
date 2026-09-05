@@ -173,6 +173,7 @@ void NIOVTaskUpdateTexture::Run()
 			return;
 		}
 
+        RE::BSFixedString texturePath = m_texture->AsBSFixedString();
 		RE::BSLightingShaderProperty* lightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 		if (lightingShader)
 		{
@@ -184,12 +185,12 @@ void NIOVTaskUpdateTexture::Run()
 				{
 					newTextureSetRaw->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(i), material->textureSet->GetTexturePath(static_cast<RE::BSTextureSet::Texture>(i)));
 				}
-				newTextureSetRaw->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(m_index), m_texture->AsBSFixedString().c_str());
+				newTextureSetRaw->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(m_index), texturePath.c_str());
 				material->SetTextureSet(RE::NiPointer<RE::BSTextureSet>(newTextureSetRaw));
 
 				// Load the texture requested and then assign it to the material
 				RE::NiPointer<RE::NiTexture> newTexture;
-				RE::BSShaderManager::GetTexture(m_texture->c_str(), 1, newTexture, false);
+				RE::BSShaderManager::GetTexture(texturePath.c_str(), 1, newTexture, false);
 
 				auto targetTexture = GetTextureFromIndex(material, m_index);
 				if (targetTexture) {

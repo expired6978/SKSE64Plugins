@@ -635,14 +635,7 @@ void NiTransformInterface::SetTransforms(std::uint32_t formId, bool immediate, b
 								newNodes.push_back(node);
 							}
 
-							// Full replacement of BNDT (original used NiStringsExtraData::SetData):
-							// clear the existing entries, then insert the transformed-node set.
-							std::vector<RE::BSFixedString> existing;
-							for (std::uint32_t s = 0; s < globalData->size; ++s)
-								existing.emplace_back(globalData->value[s]);
-							for (const auto& s : existing)
-								globalData->Remove(s);
-							for (auto& nd : newNodes) { globalData->Insert(nd); }
+							NiStringsExtraDataHelper::Replace(globalData, newNodes);
 						}
 					}
 				}

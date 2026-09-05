@@ -149,6 +149,13 @@ void GetTriangleIndices(RE::NiTriStripsData* strips, std::uint16_t i, std::uint1
 
 RE::NiAVObject* GetRootNode(RE::NiAVObject* object, bool refRoot = false);
 
+class NiStringsExtraDataHelper
+{
+public:
+	static void copy_string(char*& a_value, const char* a_copyValue);
+	static void Replace(RE::NiStringsExtraData* _this, std::vector<RE::BSFixedString>& strings);
+};
+
 class NifStreamWrapper
 {
 public:

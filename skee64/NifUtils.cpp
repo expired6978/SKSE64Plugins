@@ -1097,6 +1097,31 @@ SKSEUpdateFaceModel::SKSEUpdateFaceModel(RE::Actor * actor)
 	m_formId = actor->formID;
 }
 
+void NiStringsExtraDataHelper::copy_string(char*& a_value, const char* a_copyValue)
+{
+	std::size_t strLen = std::strlen(a_copyValue) + 1;
+	a_value = RE::NiAlloc<char>(strLen);
+	std::memcpy(a_value, a_copyValue, sizeof(char) * strLen);
+}
+
+void NiStringsExtraDataHelper::Replace(RE::NiStringsExtraData* _this, std::vector<RE::BSFixedString>& strings)
+{
+	if(_this->value) RE::NiFree(_this->value);
+	_this->size = strings.size();
+
+    if (strings.size() == 0)
+    {
+        _this->value = nullptr;
+        return;
+    }
+
+	_this->value = RE::NiAlloc<char*>(strings.size());
+    for (std::size_t i = 0; i < strings.size(); ++i)
+    {
+        copy_string(_this->value[i], strings[i].c_str());
+    }
+}
+
 // NifStreamWrapper - wraps a stack-allocated RE::NiStream using the game's real
 // ctor/dtor (SKEE::NiStreamCtor / SKEE::NiStreamDtor), matching the legacy hack.
 NifStreamWrapper::NifStreamWrapper()

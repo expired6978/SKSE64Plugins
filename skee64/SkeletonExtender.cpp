@@ -189,16 +189,7 @@ void SkeletonExtenderInterface::AddTransforms(RE::TESObjectREFR * refr, bool isF
 	// completely replace them) instead of swapping in a new object.
 	if (globalData)
 	{
-		std::vector<RE::BSFixedString> oldStrings;
-		for (std::uint32_t i = 0; i < globalData->size; i++) {
-			oldStrings.emplace_back(globalData->value[i] ? globalData->value[i] : "");
-		}
-		for (auto& node : oldStrings) {
-			globalData->Remove(node);
-		}
-		for (auto& node : newNodes) {
-			globalData->Insert(node);
-		}
+        NiStringsExtraDataHelper::Replace(globalData, newNodes);
 	}
 
 	// No previous nodes, and we have new nodes
