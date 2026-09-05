@@ -914,6 +914,7 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	g_interfaceMap.AddInterface("Attachment", &g_attachmentInterface);
 	g_interfaceMap.AddInterface("Command", &g_commandInterface);
 	g_interfaceMap.AddInterface("FormTag", &g_formTagInterface);
+    g_interfaceMap.AddInterface("Preset", &g_presetInterface);
 
 	if (g_enableTangentSpaceCorrection)
 	{
