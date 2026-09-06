@@ -802,7 +802,7 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 				HeadPartList * partList = g_partSet.GetPartList(partType);
 				if (partList)
 				{
-					if (newValue == 0.0) {
+					if (newValue == -1.0) {
 						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
 						if (oldPart) {
 							RE::BGSHeadPart * defaultPart = g_partSet.GetDefaultPart(partType);
@@ -813,7 +813,7 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 						}
 						return;
 					}
-					RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)newValue - 1);
+					RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)newValue);
 					if (targetPart) {
 						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
 						if (oldPart != targetPart) {

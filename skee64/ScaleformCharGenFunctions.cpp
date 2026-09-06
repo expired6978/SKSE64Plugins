@@ -591,7 +591,7 @@ void SKSEScaleform_GetSliderData::Call(RE::GFxFunctionHandler::Params& a_params)
 								HeadPartList * partList = g_partSet.GetPartList(partType);
 								if (partList)
 								{
-									RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)value - 1);
+									RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)value);
 									if (targetPart) {
 										RegisterNumber(a_params.retVal, "formId", targetPart->formID);
 										RegisterString(a_params.retVal, a_params.movie, "partName", targetPart->formEditorID.c_str());

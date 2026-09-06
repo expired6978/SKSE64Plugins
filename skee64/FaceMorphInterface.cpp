@@ -1347,7 +1347,7 @@ std::int32_t FaceMorphInterface::LoadSliders(RE::RaceMenuSliderArray * sliderArr
 			upperMultiplier = 1.0;
 			upperBound = (float)slider->presetCount;
 		} else if(slider->type == SliderInternal::kTypeHeadPart) {
-			lowerBound = 0.0;
+			lowerBound = -1.0;
 			interval = 1;
 			lowerMultiplier = 1.0;
 			upperMultiplier = 1.0;
@@ -1355,13 +1355,11 @@ std::int32_t FaceMorphInterface::LoadSliders(RE::RaceMenuSliderArray * sliderArr
 			RE::BGSHeadPart * headPart = npc->GetHeadPartByType(static_cast<RE::TESNPC::HeadPartType>(slider->presetCount));
 			std::int32_t partIndex = -1;
 			if(headPart && headPartList)
-				partIndex = g_partSet.GetPartIndex(headPartList, headPart);
-			if(partIndex != -1)
-				value = (float)(partIndex + 1);
+				value = g_partSet.GetPartIndex(headPartList, headPart);
 			if(headPartList)
-				upperBound = (float)headPartList->size();
+				upperBound = ((float)headPartList->size()) - 1.0f;
 			else
-				upperBound = 0;
+				upperBound = -1.0f;
 		}
 
 #ifdef _DEBUG_SLIDER

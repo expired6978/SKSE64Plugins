@@ -255,9 +255,9 @@ void SkeletonExtenderInterface::ReadTransforms(RE::TESObjectREFR * refr, const c
 				{
 					RE::NiMatrix3 rotation;
 					float rotationEuler[3];
-					rotationEuler[0] = rot[0].asFloat() * RE::NI_PI / 180;
-					rotationEuler[1] = rot[1].asFloat() * RE::NI_PI / 180;
-					rotationEuler[2] = rot[2].asFloat() * RE::NI_PI / 180;
+					rotationEuler[0] = RE::deg_to_rad(rot[0].asFloat());
+					rotationEuler[1] = RE::deg_to_rad(rot[1].asFloat());
+					rotationEuler[2] = RE::deg_to_rad(rot[2].asFloat());
 					rotation.SetEulerAnglesXYZ(rotationEuler[0], rotationEuler[1], rotationEuler[2]);
 
 					float oldRotation[9];

@@ -111,8 +111,8 @@ void GetShaderProperty(RE::NiAVObject* node, OverrideVariant* value)
 			RE::BSLightingShaderMaterial* material = static_cast<RE::BSLightingShaderMaterial*>(shaderProperty->material);
 			switch (value->key)
 			{
-			case OverrideVariant::kParam_ShaderEmissiveColor:		{ auto* em = static_cast<RE::BSEffectShaderMaterial*>(lightingShader->material); PackValue<RE::NiColorA>(value, value->key, value->index, &em->baseColor); } break;
-			case OverrideVariant::kParam_ShaderEmissiveMultiple:	{ auto* em = static_cast<RE::BSEffectShaderMaterial*>(lightingShader->material); PackValue<float>(value, value->key, value->index, &em->baseColorScale); } break;
+			case OverrideVariant::kParam_ShaderEmissiveColor:		PackValue<RE::NiColor>(value, value->key, value->index, lightingShader->emissiveColor); break;
+			case OverrideVariant::kParam_ShaderEmissiveMultiple:	PackValue<float>(value, value->key, value->index, &lightingShader->emissiveMult); break;
 			case OverrideVariant::kParam_ShaderAlpha:				PackValue<float>(value, value->key, value->index, &material->materialAlpha);					break;
 			case OverrideVariant::kParam_ShaderGlossiness:			PackValue<float>(value, value->key, value->index, &material->specularPower);				break;
 			case OverrideVariant::kParam_ShaderSpecularStrength:	PackValue<float>(value, value->key, value->index, &material->specularColorScale);			break;
@@ -293,12 +293,12 @@ void SetShaderProperty(RE::NiAVObject* node, OverrideVariant* value, bool immedi
 			RE::BSLightingShaderMaterial* material = static_cast<RE::BSLightingShaderMaterial*>(shaderProperty->material);
 			switch (value->key)
 			{
-			case OverrideVariant::kParam_ShaderEmissiveColor:		{ auto* em = static_cast<RE::BSEffectShaderMaterial*>(lightingShader->material); UnpackValue(&em->baseColor, value); } return;	break;
-			case OverrideVariant::kParam_ShaderEmissiveMultiple:	{ auto* em = static_cast<RE::BSEffectShaderMaterial*>(lightingShader->material); UnpackValue(&em->baseColorScale, value); } return;	break;
-			case OverrideVariant::kParam_ShaderAlpha:				UnpackValue(&material->materialAlpha, value);					return;	break;
-			case OverrideVariant::kParam_ShaderGlossiness:			UnpackValue(&material->specularPower, value);				return;	break;
+			case OverrideVariant::kParam_ShaderEmissiveColor:		UnpackValue(lightingShader->emissiveColor, value);		return;	break;
+			case OverrideVariant::kParam_ShaderEmissiveMultiple:	UnpackValue(&lightingShader->emissiveMult, value);		return;	break;
+			case OverrideVariant::kParam_ShaderAlpha:				UnpackValue(&material->materialAlpha, value);			return;	break;
+			case OverrideVariant::kParam_ShaderGlossiness:			UnpackValue(&material->specularPower, value);			return;	break;
 			case OverrideVariant::kParam_ShaderSpecularStrength:	UnpackValue(&material->specularColorScale, value);		return;	break;
-			case OverrideVariant::kParam_ShaderLightingEffect1:		UnpackValue(&material->subSurfaceLightRolloff, value);			return;	break;
+			case OverrideVariant::kParam_ShaderLightingEffect1:		UnpackValue(&material->subSurfaceLightRolloff, value);	return;	break;
 			case OverrideVariant::kParam_ShaderLightingEffect2:		UnpackValue(&material->rimLightPower, value);			return;	break;
 
 				// Special cases

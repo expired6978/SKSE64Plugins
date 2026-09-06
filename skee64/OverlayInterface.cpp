@@ -85,7 +85,6 @@ void OverlayInterface::UninstallOverlay(const char * nodeName, RE::TESObjectREFR
 
 void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, RE::TESObjectREFR * refr, RE::BSGeometry * source, RE::NiNode * destination, RE::BGSTextureSet * textureSet)
 {
-{
 	RE::NiPointer<RE::NiAVObject> newShape;
 	RE::NiPointer<RE::NiProperty> alphaProperty;
 	RE::NiPointer<RE::NiProperty> shaderProperty;
@@ -264,8 +263,7 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 			SKSE::log::debug("{} - Successfully installed overlay {} to actor: {:08X}", __FUNCTION__, newShape->name, refr->formID);
 #endif
 		}
-}
-}
+	}
 }
 
 void OverlayInterface::ResetOverlay(const char * nodeName, RE::TESObjectREFR * refr, RE::BSGeometry * source, RE::NiNode * destination, RE::BGSTextureSet * textureSet, bool resetDiffuse)
