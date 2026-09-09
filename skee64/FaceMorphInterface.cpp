@@ -577,12 +577,12 @@ void FaceMorphInterface::LoadMods()
 
 				if (g_allowAllMorphs) {
 					// GMST names mirror the legacy FacePresetList table order
-					static const char* kFacePresetSettings[4] = { "sRSMNoseTypes", "sRSMBrowTypes", "sRSMEyeTypes", "sRSMMouthTypes" };
+					static const char* kFacePresetSettings[RE::TESRace::FaceRelatedData::kNumVariants] = { "iNoseMorphCount", "iBrowMorphCount", "iEyeMorphCount", "iLipMorphCount" };
 					auto* settingCollection = RE::GameSettingCollection::GetSingleton();
 					for (std::uint32_t i = 0; i <= 1; i++) {
 						auto* faceData = race->faceRelatedData[i];
 						if (faceData) {
-							for (std::uint32_t t = 0; t < 4; t++) {
+							for (std::uint32_t t = 0; t < RE::TESRace::FaceRelatedData::kNumVariants; t++) {
 								faceData->availableMorphs[t].morphFlags = 0xFFFFFFFF;
 								faceData->availableMorphs[t].unk04 = 0xFFFFFFFF;
 								faceData->numFlagsSet[t] = 0;
