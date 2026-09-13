@@ -1224,6 +1224,10 @@ void OverrideInterface::Revert()
 	weaponData.Lock();
 	weaponData.m_data.clear();
 	weaponData.Release();
+
+	skinData.Lock();
+	skinData.m_data.clear();
+	skinData.Release();
 }
 
 void OverrideInterface::Impl_RemoveAllOverrides()
