@@ -1146,6 +1146,13 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		}
 	}
 
+	// SKSE unloads a plugin that returns false; do not publish external owners before this point.
+	const auto hookResult = InstallSKEEHooks();
+	if (!hookResult.success) {
+		SKSE::log::critical("RaceMenu hook qualification failed; rejecting skee64.dll before external registration");
+		return false;
+	}
+
 	g_commandInterface.RegisterCommands();
 
 	if (auto* ser = SKSE::GetSerializationInterface()) {
@@ -1213,5 +1220,5 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		g_actorUpdateManager.AddInterface(&g_tintMaskInterface);
 	}
 
-	return InstallSKEEHooks().success;
+	return true;
 }

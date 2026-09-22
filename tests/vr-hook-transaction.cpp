@@ -1,12 +1,62 @@
+#include "../skee64/VRHookQualificationPolicy.h"
 #include "../skee64/VRHookTransactionPolicy.h"
 
 #include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 int main()
 {
+	using namespace SKEE::VR::HookQualification;
+
+	auto noPointer = [](std::uintptr_t, std::uintptr_t&) { return false; };
+	const std::array relativeJump{
+		std::uint8_t{ 0xE9 }, std::uint8_t{ 0xFB }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }
+	};
+	auto branch = DecodeEntryBranch(0x1000, relativeJump, noPointer);
+	assert(branch && branch->kind == EntryBranchKind::kRelativeJump && branch->target == 0x1100);
+
+	const std::array shortJump{ std::uint8_t{ 0xEB }, std::uint8_t{ 0xFE } };
+	branch = DecodeEntryBranch(0x2000, shortJump, noPointer);
+	assert(branch && branch->kind == EntryBranchKind::kShortJump && branch->target == 0x2000);
+
+	const std::array ripIndirectJump{
+		std::uint8_t{ 0xFF }, std::uint8_t{ 0x25 }, std::uint8_t{ 0x10 },
+		std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }
+	};
+	branch = DecodeEntryBranch(
+		0x3000,
+		ripIndirectJump,
+		[](std::uintptr_t a_slot, std::uintptr_t& a_target) {
+			if (a_slot != 0x3016) return false;
+			a_target = 0x9000;
+			return true;
+		});
+	assert(branch && branch->kind == EntryBranchKind::kRipIndirectJump && branch->target == 0x9000);
+
+	std::array<std::uint8_t, 12> absoluteRaxJump{ 0x48, 0xB8 };
+	const std::uintptr_t absoluteTarget = 0x123456789ABCDEF0ULL;
+	std::memcpy(absoluteRaxJump.data() + 2, &absoluteTarget, sizeof(absoluteTarget));
+	absoluteRaxJump[10] = 0xFF;
+	absoluteRaxJump[11] = 0xE0;
+	branch = DecodeEntryBranch(0x4000, absoluteRaxJump, noPointer);
+	assert(branch && branch->kind == EntryBranchKind::kAbsoluteRaxJump && branch->target == absoluteTarget);
+
+	std::array<std::uint8_t, 13> absoluteR11Jump{ 0x49, 0xBB };
+	std::memcpy(absoluteR11Jump.data() + 2, &absoluteTarget, sizeof(absoluteTarget));
+	absoluteR11Jump[10] = 0x41;
+	absoluteR11Jump[11] = 0xFF;
+	absoluteR11Jump[12] = 0xE3;
+	branch = DecodeEntryBranch(0x4800, absoluteR11Jump, noPointer);
+	assert(branch && branch->kind == EntryBranchKind::kAbsoluteR11Jump && branch->target == absoluteTarget);
+
+	const std::array ordinaryProlog{
+		std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }
+	};
+	assert(!DecodeEntryBranch(0x5000, ordinaryProlog, noPointer));
+
 	using namespace SKEE::VR::HookTransaction;
 
 	RelativeCall original{};
@@ -60,5 +110,5 @@ int main()
 	assert(firstSite == hookFirst);
 	assert(callSite == hookCall);
 
-	std::puts("VR two-site hook transaction tests passed.");
+	std::puts("VR entry-detour and two-site hook transaction tests passed.");
 }

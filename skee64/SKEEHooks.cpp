@@ -63,6 +63,7 @@
 #include "NifUtils.h"
 
 #include "PatternScan.h"
+#include "VRHookQualificationPolicy.h"
 
 #include <vector>
 
@@ -197,21 +198,104 @@ namespace SKEE
 			const auto text = REL::Module::get().segment(REL::Segment::Name::textx);
 			const auto textBegin = text.address();
 			const auto textEnd = textBegin + text.size();
-			auto validate = [textBegin, textEnd]<std::size_t N>(
+			constexpr std::uint32_t kMemoryCommitted = 0x1000;
+			constexpr std::uint32_t kPageReadOnly = 0x02;
+			constexpr std::uint32_t kPageReadWrite = 0x04;
+			constexpr std::uint32_t kPageWriteCopy = 0x08;
+			constexpr std::uint32_t kPageExecute = 0x10;
+			constexpr std::uint32_t kPageExecuteRead = 0x20;
+			constexpr std::uint32_t kPageExecuteReadWrite = 0x40;
+			constexpr std::uint32_t kPageExecuteWriteCopy = 0x80;
+			auto queryMemory = [](std::uintptr_t a_address, REX::W32::MEMORY_BASIC_INFORMATION& a_info) {
+				return REX::W32::VirtualQuery(
+					reinterpret_cast<const void*>(a_address),
+					std::addressof(a_info),
+					sizeof(a_info)) == sizeof(a_info);
+			};
+			auto isReadable = [&queryMemory](std::uintptr_t a_address, std::size_t a_size) {
+				REX::W32::MEMORY_BASIC_INFORMATION info{};
+				if (!queryMemory(a_address, info) || info.state != kMemoryCommitted) {
+					return false;
+				}
+				const auto base = reinterpret_cast<std::uintptr_t>(info.baseAddress);
+				const auto protection = info.protect & 0xFF;
+				const bool readable =
+					protection == kPageReadOnly || protection == kPageReadWrite || protection == kPageWriteCopy ||
+					protection == kPageExecuteRead || protection == kPageExecuteReadWrite || protection == kPageExecuteWriteCopy;
+				return readable && a_address >= base && a_size <= info.regionSize - (a_address - base);
+			};
+			auto isExecutable = [&queryMemory](std::uintptr_t a_address) {
+				REX::W32::MEMORY_BASIC_INFORMATION info{};
+				if (!queryMemory(a_address, info) || info.state != kMemoryCommitted) {
+					return false;
+				}
+				const auto protection = info.protect & 0xFF;
+				return protection == kPageExecute || protection == kPageExecuteRead ||
+					protection == kPageExecuteReadWrite || protection == kPageExecuteWriteCopy;
+			};
+			auto describeOwner = [&queryMemory](std::uintptr_t a_address) {
+				REX::W32::MEMORY_BASIC_INFORMATION info{};
+				std::array<char, 1024> path{};
+				if (queryMemory(a_address, info) && info.allocationBase &&
+					REX::W32::GetModuleFileNameA(
+						reinterpret_cast<REX::W32::HMODULE>(info.allocationBase),
+						path.data(),
+						static_cast<std::uint32_t>(path.size())) != 0) {
+					return std::string{ path.data() };
+				}
+				return std::string{ "<private executable allocation>" };
+			};
+			auto recognizeEntryDetour = [&isReadable, &isExecutable, &describeOwner](
+				std::string_view a_name,
+				std::uintptr_t a_address) {
+				constexpr std::size_t kMaximumEntryBranchSize = 16;
+				if (!isReadable(a_address, kMaximumEntryBranchSize)) {
+					return false;
+				}
+				const auto bytes = std::span{
+					reinterpret_cast<const std::uint8_t*>(a_address),
+					kMaximumEntryBranchSize };
+				const auto branch = SKEE::VR::HookQualification::DecodeEntryBranch(
+					a_address,
+					bytes,
+					[&isReadable](std::uintptr_t a_slot, std::uintptr_t& a_target) {
+						if (!isReadable(a_slot, sizeof(a_target))) {
+							return false;
+						}
+						std::memcpy(std::addressof(a_target), reinterpret_cast<const void*>(a_slot), sizeof(a_target));
+						return true;
+					});
+				if (!branch || branch->target == a_address || !isExecutable(branch->target)) {
+					return false;
+				}
+				SKSE::log::info(
+					"SkyrimVR helper {} has a supported pre-existing entry detour: entry=0x{:X}, target=0x{:X}, owner={}",
+					a_name,
+					a_address,
+					branch->target,
+					describeOwner(branch->target));
+				return true;
+			};
+			auto validate = [textBegin, textEnd, &recognizeEntryDetour]<std::size_t N>(
 				std::string_view a_name,
 				std::uintptr_t a_rva,
-				const std::array<std::uint8_t, N>& a_expected) {
+				const std::array<std::uint8_t, N>& a_expected,
+				bool a_allowEntryDetour = false) {
 				const auto address = REL::Offset(a_rva).address();
 				const bool inside = address >= textBegin && address <= textEnd &&
 					a_expected.size() <= textEnd - address;
-				if (!inside || std::memcmp(reinterpret_cast<const void*>(address), a_expected.data(), a_expected.size()) != 0) {
-					SKSE::log::critical(
-						"SkyrimVR helper {} failed exact 1.4.15 qualification at RVA 0x{:X}",
-						a_name,
-						a_rva);
-					return false;
+				if (inside && std::memcmp(reinterpret_cast<const void*>(address), a_expected.data(), a_expected.size()) == 0) {
+					return true;
 				}
-				return true;
+				if (inside && a_allowEntryDetour && recognizeEntryDetour(a_name, address)) {
+					return true;
+				}
+				SKSE::log::critical(
+					"SkyrimVR helper {} failed 1.4.15 qualification at RVA 0x{:X}{}",
+					a_name,
+					a_rva,
+					a_allowEntryDetour ? " (neither the original entry nor a supported executable detour was present)" : "");
+				return false;
 			};
 
 			// These entry windows were read independently from the retained exact
@@ -238,7 +322,8 @@ namespace SKEE
 				validate("UpdateHeadState", 0x003727B0,
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 } }) &&
 				validate("Actor::ChangeHeadPart", 0x003EBD30,
-					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } }) &&
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } },
+					true) &&
 				validate("UpdateModelFace", 0x003EB710,
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x28 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x8D }, std::uint8_t{ 0x54 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x38 }, std::uint8_t{ 0xC6 }, std::uint8_t{ 0x44 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x38 }, std::uint8_t{ 0x01 } }) &&
 				validate("UpdateModelSkin", 0x003EC090,
@@ -2515,6 +2600,7 @@ SKEEHookInstallResult InstallSKEEHooks()
 			const SKEEHookGroupResult faceGenCache{ "facegen-cache-bypass", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
 			auto result = MakeVRHookResult(bodySystems, nativeSliders, morphs, sculpt, headPresets, tintInventory, faceOverlays, faceGenCache);
 			result.success = false;
+			result.groups[0] = { "core-services", SKEEHookStatus::kInitializationFailed, "plugin load is rejected before SKSE callbacks, event sinks, or interfaces are registered" };
 			LogHookResult(result);
 			installedResult = result;
 			return *installedResult;
