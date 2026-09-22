@@ -21,7 +21,6 @@
 #undef InterlockedIncrement
 #endif
 
-#include <unordered_set>
 #include <format>
 #include <cstdint>
 #include "NiRTTIUtils.h"
@@ -52,8 +51,6 @@ extern std::uint16_t	g_overlayAlphaThreshold;
 extern bool		g_overlayForceDecal;
 
 extern bool		g_immediateArmor;
-
-extern std::unordered_set<void*> g_adjustedBlocks;
 
 skee_u32 OverlayInterface::GetVersion()
 {
@@ -108,13 +105,14 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 		// shader/alpha properties are carried onto the new shape; attachNew marks that a
 		// fresh overlay should be attached to the destination node.
 		NifStreamWrapper niStream;
-		if (!niStream->Load1(&binaryStream)) {
+		if (!niStream.LoadStream(&binaryStream)) {
 			return;
 		}
 
-		for (std::uint32_t t = 0; t < niStream->topObjects.size() && !attachNew; ++t)
+		RE::NiStream* stream = niStream.get();
+		for (std::uint32_t t = 0; t < stream->topObjects.size() && !attachNew; ++t)
 		{
-			RE::NiObject* root = niStream->topObjects[t].get();
+			RE::NiObject* root = stream->topObjects[t].get();
 			if (!root)
 				continue;
 
@@ -164,16 +162,16 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 		if (alphaProperty && alphaProperty.get())
 			targetShape->GetGeometryRuntimeData().alphaProperty.reset(static_cast<RE::NiAlphaProperty*>(alphaProperty.get()));
 
-		// Dynamic shape data copy: share the buffer when in g_adjustedBlocks, else memcpy.
+		// Dynamic shape data copy: retain a RaceMenu-adjusted buffer when possible,
+		// otherwise make an independent copy.  The helper performs the tracked-set
+		// lookup and retain under the same lock used by the free hooks.
 		if (auto * newDynShape = targetShape ? targetShape->AsDynamicTriShape() : nullptr) {
 			if (auto * sourceShape = source ? source->AsDynamicTriShape() : nullptr) {
 				auto & srcRT = sourceShape->GetDynamicTrishapeRuntimeData();
 				auto & dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
 				dstRT.dataSize = srcRT.dataSize;
 				dstRT.frameCount = srcRT.frameCount;
-				if (g_enableFaceOverlays && g_adjustedBlocks.find(srcRT.dynamicData) != g_adjustedBlocks.end()) {
-					void * ptr = reinterpret_cast<void*>((uintptr_t)srcRT.dynamicData - 0x10);
-					REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(ptr));
+				if (g_enableFaceOverlays && RetainAdjustedDynamicData(srcRT.dynamicData)) {
 					dstRT.dynamicData = srcRT.dynamicData;  // shared buffer
 				} else {
 					dstRT.dynamicData = RE::NiMalloc(srcRT.dataSize);

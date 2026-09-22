@@ -243,7 +243,7 @@ private:
 	size_t totalMemory;
 };
 
-class NIOVTaskUpdateModelWeight : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateModelWeight : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -255,7 +255,7 @@ private:
 	std::uint32_t	m_formId;
 };
 
-class NIOVTaskUpdateSkinPartition : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateSkinPartition : public SKEETaskDelegate
 {
 public:
 	virtual void Run();

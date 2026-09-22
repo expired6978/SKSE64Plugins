@@ -183,7 +183,7 @@ bool NodeTransformRegistrationMapHolder::Load(SKSE::SerializationInterface* intf
 	return error;
 }
 
-class NIOVTaskUpdateReference : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateReference : public SKEETaskDelegate
 {
 public:
 	NIOVTaskUpdateReference(std::uint32_t formId, NiTransformInterface * xFormInterface)
@@ -871,9 +871,14 @@ RE::NiTransform * NodeTransformCache::GetBaseTransform(SKEEFixedString rootModel
 	RE::NiTransform * foundTransform = nullptr;
 
 	NifStreamWrapper niStream;
-	niStream->Load1(&binaryStream);
-	for (std::uint32_t i = 0; i < niStream->topObjects.size(); i++) {
-		RE::NiObject * object = niStream->topObjects[i].get();
+	if (!binaryStream.good() || !niStream.LoadStream(&binaryStream)) {
+		m_data.insert_or_assign(rootModel, std::move(transformMap));
+		return nullptr;
+	}
+
+	RE::NiStream* stream = niStream.get();
+	for (std::uint32_t i = 0; i < stream->topObjects.size(); i++) {
+		RE::NiObject * object = stream->topObjects[i].get();
 		if (object) {
 			RE::NiAVObject * node = netimmerse_cast<RE::NiAVObject*>(object);
 			if (node) {

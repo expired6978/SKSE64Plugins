@@ -18,10 +18,12 @@
 #include <RE/E/ExtraDataList.h>
 #include <RE/E/ExtraRank.h>
 #include <RE/E/ExtraUniqueID.h>
+#include <RE/F/FxDelegate.h>
 #include <RE/G/GArray.h>
 #include <RE/G/GFxMovieView.h>
 #include <RE/G/GFxValue.h>
 #include <RE/I/Inventory3DManager.h>
+#include "InventoryPreviewPolicy.h"
 #include <RE/N/NiAVObject.h>
 #include <RE/N/NiGeometryData.h>
 #include <RE/N/NiBooleanExtraData.h>
@@ -70,12 +72,20 @@
 
 #include <queue>
 
+#include <array>
+#include <atomic>
+#include <cstring>
 #include <cstdint>
+#include <mutex>
+#include <optional>
 
 // The real windows.h (via the PCH) maps the Interlocked* API names to their
 // underscored forms as macros; drop them so REX::W32's declarations resolve.
 #ifdef InterlockedDecrement
 #undef InterlockedDecrement
+#endif
+#ifdef InterlockedIncrement
+#undef InterlockedIncrement
 #endif
 
 // Win32 MessageBox constants (REX/W32 does not define them; values from winuser.h).
@@ -99,6 +109,9 @@ extern CommandInterface		g_commandInterface;
 extern PresetInterface		g_presetInterface;
 
 extern bool					g_enableFaceOverlays;
+extern bool					g_enableOverlays;
+extern bool					g_enableSculpting;
+extern bool					g_enableHeadExport;
 extern bool					g_enableTintSync;
 extern bool					g_enableTintInventory;
 extern std::uint32_t				g_numFaceOverlays;
@@ -146,10 +159,161 @@ BSFaceGenModelApplyMorphFn BSFaceGenModel_ApplyMorph_Original = nullptr;
 SetInventoryItemModelFn    SetInventoryItemModel_Original = nullptr;
 TransferItemUIDFn          TransferItemUID_Original = nullptr;
 
-// ini setting (data relocation, not a function)
-REL::Relocation<bool> g_useFaceGenPreProcessedHeads{ REL::RelocationID(0, kID_useFaceGenPreProcessedHeads) };
+#if defined(ENABLE_SKYRIM_VR)
+namespace
+{
+	using GetHeadPartsVRFn = void* (*)(void*, void*);
+	using AddRaceMenuSliderVRFn = std::int32_t (*)(RE::RaceMenuSliderArray*, RE::RaceMenuSlider*);
+	using DoubleMorphCallbackVRFn = void (*)(RE::RaceSexMenu*, float, std::uint32_t);
+	using UpdateNPCMorphsVRFn = void (*)(RE::TESNPC*, void*, RE::BSFaceGenNiNode*);
+	using UpdateNPCMorphVRFn = void (*)(RE::TESNPC*, RE::BGSHeadPart*, RE::BSFaceGenNiNode*);
+	using UpdateHeadStateVRFn = std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t);
+	using SetNewInventoryItemModelVRFn = void (*)(RE::Inventory3DManager*, RE::TESForm*, RE::TESForm*, RE::NiNode**);
 
-static void InstallArmorAddonHook(RE::TESObjectREFR* refr, RE::BIPOBJECT& params, RE::NiNode* boneTree, RE::NiAVObject* resultNode);
+	GetHeadPartsVRFn             g_getHeadPartsVROriginal{ nullptr };
+	AddRaceMenuSliderVRFn        g_addRaceMenuSliderVROriginal{ nullptr };
+	DoubleMorphCallbackVRFn      g_doubleMorphCallbackVROriginal{ nullptr };
+	BSFaceGenModelApplyMorphFn   g_applyRaceMorphVROriginal{ nullptr };
+	UpdateNPCMorphsVRFn          g_updateNPCMorphsVROriginal{ nullptr };
+	UpdateNPCMorphVRFn           g_updateNPCMorphVROriginal{ nullptr };
+	UpdateHeadStateVRFn          g_updateHeadStateVROriginal{ nullptr };
+	SetNewInventoryItemModelVRFn g_setNewInventoryItemModelVROriginal{ nullptr };
+}
+#endif
+
+namespace SKEE
+{
+	bool HasQualifiedVRHelperAddresses() noexcept
+	{
+#if defined(ENABLE_SKYRIM_VR)
+		if (!REL::Module::IsVR() || REL::Module::get().version() != REL::Version{ 1, 4, 15, 0 }) {
+			return false;
+		}
+
+		// Cache the result before any hook commits. Several helpers are themselves
+		// detour targets, so re-reading their prologs after installation would
+		// correctly observe our branches rather than the pristine executable.
+		static const bool qualified = []() {
+			const auto text = REL::Module::get().segment(REL::Segment::Name::textx);
+			const auto textBegin = text.address();
+			const auto textEnd = textBegin + text.size();
+			auto validate = [textBegin, textEnd]<std::size_t N>(
+				std::string_view a_name,
+				std::uintptr_t a_rva,
+				const std::array<std::uint8_t, N>& a_expected) {
+				const auto address = REL::Offset(a_rva).address();
+				const bool inside = address >= textBegin && address <= textEnd &&
+					a_expected.size() <= textEnd - address;
+				if (!inside || std::memcmp(reinterpret_cast<const void*>(address), a_expected.data(), a_expected.size()) != 0) {
+					SKSE::log::critical(
+						"SkyrimVR helper {} failed exact 1.4.15 qualification at RVA 0x{:X}",
+						a_name,
+						a_rva);
+					return false;
+				}
+				return true;
+			};
+
+			// These entry windows were read independently from the retained exact
+			// SkyrimVR.exe image (timestamp 0x5AEADAA0, SizeOfImage 0x3959000).
+			// They protect locally implemented RaceMenu NG calls; no SKEEVR code or
+			// binary is used to define the functions or their behavior.
+			return
+				validate("BSLightingShaderProperty::InitializeShader", 0x01303AC0,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x6C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 } }) &&
+				validate("BSLightingShaderMaterial::CopyFrom", 0x0130DE50,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } }) &&
+				validate("TaskQueueInterface::SetNiGeometryTexture", 0x005CF190,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x53 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x81 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0xB0 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
+				validate("BSFaceGenManager::ApplyMorph", 0x003E1B80,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x6C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x7C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x20 }, std::uint8_t{ 0x41 } }) &&
+				validate("BSFaceGenManager::ApplyMorphByPart", 0x003E1CE0,
+					std::array{ std::uint8_t{ 0x4D }, std::uint8_t{ 0x85 }, std::uint8_t{ 0xC0 }, std::uint8_t{ 0x0F }, std::uint8_t{ 0x84 }, std::uint8_t{ 0x3E }, std::uint8_t{ 0x01 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x50 } }) &&
+				validate("BSFaceGenModel::ApplyRaceMorph", 0x003E3FA0,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } }) &&
+				validate("UpdateNPCMorphs", 0x00370140,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x81 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x80 }, std::uint8_t{ 0x01 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
+				validate("UpdateNPCMorph", 0x00370330,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x81 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x80 }, std::uint8_t{ 0x01 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
+				validate("UpdateHeadState", 0x003727B0,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 } }) &&
+				validate("Actor::ChangeHeadPart", 0x003EBD30,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } }) &&
+				validate("UpdateModelFace", 0x003EB710,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x28 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x8D }, std::uint8_t{ 0x54 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x38 }, std::uint8_t{ 0xC6 }, std::uint8_t{ 0x44 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x38 }, std::uint8_t{ 0x01 } }) &&
+				validate("UpdateModelSkin", 0x003EC090,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x54 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x53 } }) &&
+				validate("UpdateModelHair", 0x003EC150,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x54 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x53 } }) &&
+				validate("AddRaceMenuSlider", 0x008E9850,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } }) &&
+				validate("DoubleMorphCallback", 0x008E23B0,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x54 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 } }) &&
+				validate("RaceSexMenu::LoadSliders", 0x008E39B0,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x50 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x08 } }) &&
+				validate("NiTriBasedGeom::ctor", 0x00CC7420,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x4C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x08 }, std::uint8_t{ 0x55 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 } }) &&
+				validate("CreateBSTriShape", 0x00CAD6D0,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
+				validate("CreateBSDynamicTriShape", 0x00CB8530,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
+				validate("NiStream::ctor", 0x00C9EC40,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x4C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x08 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } }) &&
+				validate("NiStream::dtor", 0x00C9EEA0,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
+				validate("NiStream::AddObject", 0x00C9F090,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
+				validate("BSFadeNode::ctor", 0x012C8230,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x53 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } }) &&
+				validate("CreateSourceTexture", 0x00CAEF60,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
+				validate("SetNewInventoryItemModel", 0x008B5B40,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x55 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 } }) &&
+				validate("InventoryChanges::SetUniqueID", 0x001FD7D0,
+					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x85 }, std::uint8_t{ 0xD2 }, std::uint8_t{ 0x0F }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC0 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
+				validate("FxDelegate::Invoke target", 0x00F342E0,
+					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } });
+		}();
+
+		static const bool reported = []() {
+			if (qualified) {
+				SKSE::log::info("All direct SkyrimVR helper entry points match the qualified 1.4.15 executable windows");
+			}
+			return true;
+		}();
+		(void)reported;
+		return qualified;
+#else
+		return false;
+#endif
+	}
+
+	void InvalidateTextures(RE::BSLightingShaderProperty* a_this, std::uint32_t a_unk1)
+	{
+		if (!a_this) {
+			return;
+		}
+
+#if defined(ENABLE_SKYRIM_VR)
+		if (REL::Module::IsVR()) {
+			a_this->InvalidateTextures(a_unk1);
+			return;
+		}
+#endif
+
+		static REL::Relocation<void (*)(RE::BSLightingShaderProperty*, std::uint32_t)> func{
+			REL::RelocationID(0, kID_InvalidateTextures)
+		};
+		func(a_this, a_unk1);
+	}
+
+	bool LookupREFRByHandle(std::uint32_t& a_handle, RE::NiPointer<RE::TESObjectREFR>& a_refr)
+	{
+		return RE::TESObjectREFR::LookupByHandle(a_handle, a_refr);
+	}
+}
+
+static void InstallArmorAddonHook(RE::TESObjectREFR* refr, RE::TESForm* armor, RE::TESObjectARMA* addon, RE::NiNode* boneTree, RE::NiAVObject* resultNode);
 static void __stdcall InstallFaceOverlayHook(RE::TESObjectREFR* refr, bool attemptUninstall, bool immediate);
 
 void __stdcall InstallWeaponHook(RE::Actor * actor, RE::TESObjectWEAP * weapon, RE::NiAVObject * resultNode1, RE::NiAVObject * resultNode2, std::uint32_t firstPerson)
@@ -286,12 +450,17 @@ RE::NiAVObject * AttachBipedObject_Hooked(RE::BipedAnim * bipedInfo, RE::NiNode 
 	std::uint32_t handle = bipedInfo->actorRef.native_handle();
 	SKEE::LookupREFRByHandle(handle, reference);
 	if (reference)
-		InstallArmorAddonHook(reference.get(), bipedInfo->objects[bipedIndex], bipedInfo->root, retVal);
+		InstallArmorAddonHook(
+			reference.get(),
+			bipedInfo->objects[bipedIndex].item,
+			bipedInfo->objects[bipedIndex].addon,
+			bipedInfo->root,
+			retVal);
 
 	return retVal;
 }
 
-static void InstallArmorAddonHook(RE::TESObjectREFR * refr, RE::BIPOBJECT& params, RE::NiNode * boneTree, RE::NiAVObject * resultNode)
+static void InstallArmorAddonHook(RE::TESObjectREFR* refr, RE::TESForm* armor, RE::TESObjectARMA* addon, RE::NiNode* boneTree, RE::NiAVObject* resultNode)
 {
 	if (!refr) {
 #ifdef _DEBUG
@@ -299,7 +468,7 @@ static void InstallArmorAddonHook(RE::TESObjectREFR * refr, RE::BIPOBJECT& param
 #endif
 		return;
 	}
-	if (!params.item || !params.addon) {
+	if (!armor || !addon) {
 #ifdef _DEBUG
 		SKSE::log::error("{} - Armor or ArmorAddon found.", __FUNCTION__);
 #endif
@@ -313,8 +482,8 @@ static void InstallArmorAddonHook(RE::TESObjectREFR * refr, RE::BIPOBJECT& param
 	}
 	if (!resultNode) {
 #ifdef _DEBUG
-		std::uint32_t addonFormid = params.addon ? params.addon->formID : 0;
-		std::uint32_t armorFormid = params.item ? params.item->formID : 0;
+		std::uint32_t addonFormid = addon ? addon->formID : 0;
+		std::uint32_t armorFormid = armor ? armor->formID : 0;
 		SKSE::log::error("{} - Error no node found on Reference ({:08X}) while attaching ArmorAddon ({:08X}) of Armor ({:08X})", __FUNCTION__, refr->formID, addonFormid, armorFormid);
 #endif
 		return;
@@ -346,9 +515,9 @@ static void InstallArmorAddonHook(RE::TESObjectREFR * refr, RE::BIPOBJECT& param
 #endif
 		return;
 	}
-	if (params.item->IsArmor() && params.addon->Is(RE::TESObjectARMA::FORMTYPE))
+	if (armor->IsArmor() && addon->Is(RE::TESObjectARMA::FORMTYPE))
 	{
-		g_actorUpdateManager.OnAttach(refr, static_cast<RE::TESObjectARMO*>(params.item), static_cast<RE::TESObjectARMA*>(params.addon), resultNode, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
+		g_actorUpdateManager.OnAttach(refr, static_cast<RE::TESObjectARMO*>(armor), addon, resultNode, isFirstPerson, isFirstPerson ? node1P : node3P, boneTree);
 	}
 
 	
@@ -426,14 +595,30 @@ static void __stdcall InstallFaceOverlayHook(RE::TESObjectREFR* refr, bool attem
 
 std::int32_t UpdateHeadState_Enable_Hooked(RE::TESNPC * npc, RE::Actor * actor, std::uint32_t unk1)
 {
-	std::int32_t ret = SKEE::UpdateHeadState(npc, actor, unk1);
+	std::int32_t ret = 0;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		ret = g_updateHeadStateVROriginal ? g_updateHeadStateVROriginal(npc, actor, unk1) : 0;
+	} else
+#endif
+	{
+		ret = SKEE::UpdateHeadState(npc, actor, unk1);
+	}
 	InstallFaceOverlayHook(actor, true, g_immediateFace);
 	return ret;
 }
 
 std::int32_t UpdateHeadState_Disabled_Hooked(RE::TESNPC * npc, RE::Actor * actor, std::uint32_t unk1)
 {
-	std::int32_t ret = SKEE::UpdateHeadState(npc, actor, unk1);
+	std::int32_t ret = 0;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		ret = g_updateHeadStateVROriginal ? g_updateHeadStateVROriginal(npc, actor, unk1) : 0;
+	} else
+#endif
+	{
+		ret = SKEE::UpdateHeadState(npc, actor, unk1);
+	}
 	InstallFaceOverlayHook(actor, false, g_immediateFace);
 	return ret;
 }
@@ -489,7 +674,13 @@ bool UsePreprocessedHead(RE::TESNPC * npc)
 			i++;
 		}
 	}
-	return presetData == nullptr && g_useFaceGenPreProcessedHeads.get();
+	if (REL::Module::IsVR()) {
+		static REL::Relocation<bool> useFaceGenPreProcessedHeads{ REL::Offset(0x01EA71B0) };
+		return presetData == nullptr && useFaceGenPreProcessedHeads.get();
+	}
+
+	static REL::Relocation<bool> useFaceGenPreProcessedHeads{ REL::RelocationID(0, kID_useFaceGenPreProcessedHeads) };
+	return presetData == nullptr && useFaceGenPreProcessedHeads.get();
 }
 
 void _cdecl ClearFaceGenCache_Hooked()
@@ -500,7 +691,16 @@ void _cdecl ClearFaceGenCache_Hooked()
 
 void UpdateMorphs_Hooked(RE::TESNPC * npc, void * unk1, RE::BSFaceGenNiNode * faceNode)
 {
-	SKEE::UpdateNPCMorphs(npc, unk1, faceNode);
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		if (g_updateNPCMorphsVROriginal) {
+			g_updateNPCMorphsVROriginal(npc, unk1, faceNode);
+		}
+	} else
+#endif
+	{
+		SKEE::UpdateNPCMorphs(npc, unk1, faceNode);
+	}
 #ifdef _DEBUG_HOOK
 	SKSE::log::debug("UpdateMorphs_Hooked - Applying custom morphs");
 #endif
@@ -516,7 +716,16 @@ void UpdateMorphs_Hooked(RE::TESNPC * npc, void * unk1, RE::BSFaceGenNiNode * fa
 
 void UpdateMorph_Hooked(RE::TESNPC * npc, RE::BGSHeadPart * headPart, RE::BSFaceGenNiNode * faceNode)
 {
-	SKEE::UpdateNPCMorph(npc, headPart, faceNode);
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		if (g_updateNPCMorphVROriginal) {
+			g_updateNPCMorphVROriginal(npc, headPart, faceNode);
+		}
+	} else
+#endif
+	{
+		SKEE::UpdateNPCMorph(npc, headPart, faceNode);
+	}
 #ifdef _DEBUG_HOOK
 	SKSE::log::debug("UpdateMorph_Hooked - Applying single custom morph");
 #endif
@@ -607,6 +816,25 @@ std::uint8_t GetSex_Hooked(RE::TESNPC* npc)
 	return gender;
 }
 
+void* GetHeadParts_Hooked(void* a_unk1, void* a_unk2)
+{
+	void* result = nullptr;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR() && g_getHeadPartsVROriginal) {
+		result = g_getHeadPartsVROriginal(a_unk1, a_unk2);
+	}
+#endif
+
+	auto* player = RE::PlayerCharacter::GetSingleton();
+	if (player) {
+		if (auto* npc = player->GetActorBase()) {
+			GetSex_Hooked(npc);
+		}
+	}
+
+	return result;
+}
+
 class MorphVisitor : public MorphMap::Visitor
 {
 public:
@@ -642,7 +870,15 @@ private:
 
 std::uint8_t ApplyRaceMorph_Hooked(RE::BSFaceGenModel * model, RE::BSFixedString * morphName, RE::TESModelTri * modelMorph, RE::NiAVObject ** headNode, float relative, std::uint8_t unk1)
 {
-	std::uint8_t ret = SKEE::BSFaceGenModel_ApplyRaceMorph(model, morphName, modelMorph, headNode, relative, unk1);
+	std::uint8_t ret = 0;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		ret = g_applyRaceMorphVROriginal ? g_applyRaceMorphVROriginal(model, morphName, modelMorph, headNode, relative, unk1) : 0;
+	} else
+#endif
+	{
+		ret = SKEE::BSFaceGenModel_ApplyRaceMorph(model, morphName, modelMorph, headNode, relative, unk1);
+	}
 
 	try
 	{
@@ -659,7 +895,15 @@ std::uint8_t ApplyRaceMorph_Hooked(RE::BSFaceGenModel * model, RE::BSFixedString
 
 std::uint8_t ApplyChargenMorph_Hooked(RE::BSFaceGenModel * model, RE::BSFixedString * morphName, RE::TESModelTri * modelMorph, RE::NiAVObject ** headNode, float relative, std::uint8_t unk1)
 {
-	std::uint8_t ret = BSFaceGenModel_ApplyMorph_Original(model, morphName, modelMorph, headNode, relative, unk1);
+	std::uint8_t ret = 0;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		ret = g_applyRaceMorphVROriginal ? g_applyRaceMorphVROriginal(model, morphName, modelMorph, headNode, relative, unk1) : 0;
+	} else
+#endif
+	{
+		ret = BSFaceGenModel_ApplyMorph_Original(model, morphName, modelMorph, headNode, relative, unk1);
+	}
 
 	try
 	{
@@ -717,12 +961,20 @@ void InvokeCategoryList_Hook(RE::GFxMovieView * movie, const char * fnName, RE::
 	arguments.args.PushBack(RE::GFxValue(SLIDER_CATEGORY_EXTRA));
 	arguments.args.PushBack(RE::GFxValue("$EXPRESSIONS"));
 	arguments.args.PushBack(RE::GFxValue(SLIDER_CATEGORY_EXPRESSIONS));
-	SKEE::GFxInvokeFunction(movie, fnName, arguments);
+	RE::FxDelegate::Invoke(movie, fnName, arguments);
 }
 
 std::int32_t AddSlider_Hook(RE::RaceMenuSliderArray * sliders, RE::RaceMenuSlider * slider)
 {
-	std::int32_t totalSliders = SKEE::AddRaceMenuSlider(sliders, slider);
+	std::int32_t totalSliders = 0;
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		totalSliders = g_addRaceMenuSliderVROriginal ? g_addRaceMenuSliderVROriginal(sliders, slider) : 0;
+	} else
+#endif
+	{
+		totalSliders = SKEE::AddRaceMenuSlider(sliders, slider);
+	}
 	totalSliders = g_morphInterface.LoadSliders(sliders, slider);
 	return totalSliders;
 }
@@ -734,9 +986,6 @@ float SliderLookup_Hooked(RE::RaceMenuSlider * slider)
 
 void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint32_t sliderId)
 {
-	RE::RaceMenuSlider * slider = NULL;
-	RE::RaceComponent * raceData = NULL;
-
 	std::uint8_t gender = 0;
 	RE::PlayerCharacter * player = RE::PlayerCharacter::GetSingleton();
 	RE::TESNPC * actorBase = player->GetActorBase();
@@ -744,13 +993,9 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 		gender = static_cast<std::uint8_t>(actorBase->GetSex());
 	RE::BSFaceGenNiNode * faceNode = player->GetFaceNodeSkinned();
 
-	auto& menuData = menu->GetRuntimeData();
-	if (menuData.unk188 < menuData.sliderData[gender].size())
-		raceData = &menuData.sliderData[gender][menuData.unk188];
-	if (raceData && sliderId < raceData->sliders.size())
-		slider = &raceData->sliders[sliderId];
+	RE::RaceMenuSlider* slider = skee::GetActiveRaceMenuSlider(menu, gender, sliderId);
 
-	if (raceData && slider) {
+	if (slider) {
 #ifdef _DEBUG_HOOK
 		SKSE::log::debug("Name: {} Value: {} Callback: {} Index: {}")(slider->name, slider->value, slider->callback, slider->index);
 #endif
@@ -879,6 +1124,14 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 		}
 	}
 
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		if (g_doubleMorphCallbackVROriginal) {
+			g_doubleMorphCallbackVROriginal(menu, newValue, sliderId);
+		}
+		return;
+	}
+#endif
 	SKEE::DoubleMorphCallback(menu, newValue, sliderId);
 }
 
@@ -892,11 +1145,30 @@ void * NiAllocate_Hooked(size_t size)
 {
 	std::lock_guard<std::recursive_mutex> scs(g_cs);
 	void* ptr = RE::NiMalloc(size + 0x10);
+	if (!ptr) {
+		return nullptr;
+	}
 	*((uintptr_t*)ptr) = 1;
 	*((uintptr_t*)ptr+1) = 0;
 	void* adjusted = reinterpret_cast<void*>((uintptr_t)ptr + 0x10);
 	g_adjustedBlocks.emplace(adjusted);
 	return adjusted;
+}
+
+bool RetainAdjustedDynamicData(void* a_data)
+{
+	if (!a_data) {
+		return false;
+	}
+
+	std::lock_guard<std::recursive_mutex> scs(g_cs);
+	if (g_adjustedBlocks.find(a_data) == g_adjustedBlocks.end()) {
+		return false;
+	}
+
+	void* allocation = reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(a_data) - 0x10);
+	REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(allocation));
+	return true;
 }
 
 void NiFree_Hooked(void* ptr)
@@ -1018,7 +1290,7 @@ void UpdateModelHair_Hooked(RE::NiAVObject * object, RE::NiColorA *& color)
 
 void SetInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE::TESForm * baseForm, RE::ExtraDataList * baseExtraList)
 {
-	if (baseForm && baseForm->IsArmor()) {
+	if (inventoryManager && baseForm && baseForm->IsArmor()) {
 		RE::TESObjectARMO* armor = baseForm ? baseForm->As<RE::TESObjectARMO>() : nullptr;
 		if (armor) {
 			std::uint32_t rankId = 0; // Rank 0 will reset if applicable
@@ -1030,14 +1302,17 @@ void SetInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE:
 			}
 
 			RE::NiNode * rootNode = nullptr;
-			auto& loadedModels = inventoryManager->GetRuntimeData().loadedModels;
-			for (std::size_t i = 0; i < loadedModels.size(); ++i)
+			auto findRoot = [&](auto& loadedModels) {
+				const auto* model = SKEE::InventoryPreview::FindLoadedModel(loadedModels, baseForm);
+				return model && model->spModel ? model->spModel->AsNode() : nullptr;
+			};
+#if defined(ENABLE_SKYRIM_VR)
+			if (REL::Module::IsVR()) {
+				rootNode = findRoot(inventoryManager->GetVRRuntimeData().loadedModels);
+			} else
+#endif
 			{
-				if (loadedModels[i].itemBase == baseForm)
-				{
-					rootNode = loadedModels[i].spModel->AsNode();
-					break;
-				}
+				rootNode = findRoot(inventoryManager->GetRuntimeData().loadedModels);
 			}
 
 			if (rootNode) {
@@ -1051,7 +1326,7 @@ void SetInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE:
 
 void SetNewInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE::TESForm * form1, RE::TESForm * form2, RE::NiNode ** node)
 {
-	if (form1 && form1->IsArmor() && *node) {
+	if (inventoryManager && form1 && form1->IsArmor() && node && *node) {
 		RE::TESObjectARMO* armor = form1 ? form1->As<RE::TESObjectARMO>() : nullptr;
 		if (armor) {
 			RE::ExtraDataList& baseExtraList = inventoryManager->originalExtra;
@@ -1066,6 +1341,14 @@ void SetNewInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, 
 		}
 	}
 
+#if defined(ENABLE_SKYRIM_VR)
+	if (REL::Module::IsVR()) {
+		if (g_setNewInventoryItemModelVROriginal) {
+			g_setNewInventoryItemModelVROriginal(inventoryManager, form1, form2, node);
+		}
+		return;
+	}
+#endif
 	SKEE::SetNewInventoryItemModel(inventoryManager, form1, form2, node);
 }
 
@@ -1075,7 +1358,7 @@ void TransferItemUID_Hooked(RE::InventoryChanges* extraContainerChangeData, RE::
 
 	if (extraList) {
 		if (extraList->HasType(RE::ExtraDataType::kRank) && !extraList->HasType(RE::ExtraDataType::kUniqueID)) {
-			SKEE::InventoryChanges_SetUniqueID(extraContainerChangeData, extraList, oldForm, newForm);
+			extraContainerChangeData->SetUniqueID(extraList, oldForm, newForm);
 			RE::ExtraRank* rank = static_cast<RE::ExtraRank*>(extraList->GetByType(RE::ExtraDataType::kRank));
 			RE::ExtraUniqueID* uniqueId = static_cast<RE::ExtraUniqueID*>(extraList->GetByType(RE::ExtraDataType::kUniqueID));
 			if (rank && uniqueId) {
@@ -1119,28 +1402,655 @@ static uintptr_t ScanPatternTarget(const char * patternName, const uint8_t * bas
 static SKSE::Trampoline g_branchTrampoline;
 static SKSE::Trampoline g_localTrampoline;
 
-bool InstallSKEEHooks()
+static bool InitializeSKEEHookTrampolines()
 {
+	static std::atomic<int> state{ 0 };
+	if (state.load(std::memory_order_acquire) == 1) {
+		return true;
+	}
+	if (state.load(std::memory_order_acquire) == -1) {
+		return false;
+	}
+
+	constexpr std::size_t kTrampolineSize = 4096;
 	if (const auto* trampolineIface = SKSE::GetTrampolineInterface()) {
-		void* branch = trampolineIface->AllocateFromBranchPool(512);
+		void* branch = trampolineIface->AllocateFromBranchPool(kTrampolineSize);
 		if (!branch) {
 			SKSE::log::error("couldn't create branch trampoline. this is fatal. skipping remainder of init process.");
+			state.store(-1, std::memory_order_release);
 			return false;
 		}
 
-		g_branchTrampoline.set_trampoline(branch, 512);
+		g_branchTrampoline.set_trampoline(branch, kTrampolineSize);
 
-		void* local = trampolineIface->AllocateFromLocalPool(512);
+		void* local = trampolineIface->AllocateFromLocalPool(kTrampolineSize);
 		if (!local) {
 			SKSE::log::error("couldn't create codegen buffer. this is fatal. skipping remainder of init process.");
+			state.store(-1, std::memory_order_release);
 			return false;
 		}
 
-		g_localTrampoline.set_trampoline(local, 512);
+		g_localTrampoline.set_trampoline(local, kTrampolineSize);
 	}
 	else {
-		g_branchTrampoline.create(512);
-		g_localTrampoline.create(512);
+		g_branchTrampoline.create(kTrampolineSize);
+		g_localTrampoline.create(kTrampolineSize);
+	}
+
+	state.store(1, std::memory_order_release);
+	return true;
+}
+
+#if defined(ENABLE_SKYRIM_VR)
+namespace
+{
+	// Address Library ID 15501 identifies Skyrim VR's biped attach routine. The
+	// call window, register contract, BipedAnim slot stride, and original target
+	// were independently qualified against the exact SkyrimVR 1.4.15 executable
+	// captured in the retained full-memory dump. No external implementation is
+	// used by this bridge.
+	constexpr std::uint64_t kVRBipedAttachRoutineID = 15501;
+	constexpr std::uintptr_t kVRBipedAttachCallOffset = 0xC41;
+	constexpr std::uintptr_t kVRCreateArmorNodeRVA = 0x001DB680;
+	constexpr std::array<std::uint8_t, 14> kVRBipedAttachExpectedBytes{
+		0x45, 0x8B, 0xC7,              // mov r8d, r15d
+		0x48, 0x8B, 0xD6,              // mov rdx, rsi
+		0x49, 0x8B, 0xCD,              // mov rcx, r13
+		0xE8, 0xE1, 0x35, 0x00, 0x00   // call SkyrimVR.exe+0x1DB680
+	};
+
+	using CreateArmorNodeVRFn = RE::NiAVObject* (*)(
+		RE::BipedAnim*,
+		RE::NiNode*,
+		std::uint32_t,
+		std::uint8_t,
+		std::uint8_t,
+		std::uint64_t);
+
+	// The VR caller passes a temporary descriptor in r9.  Its first two qwords
+	// precede the armor/addon pair used by RaceMenu; no other part of the
+	// temporary is read here.
+	struct VRBipedAttachParams
+	{
+		std::uint64_t     unknown00;
+		std::uint64_t     unknown08;
+		RE::TESForm*      armor;
+		RE::TESObjectARMA* addon;
+	};
+	static_assert(offsetof(VRBipedAttachParams, armor) == 0x10);
+	static_assert(offsetof(VRBipedAttachParams, addon) == 0x18);
+
+	CreateArmorNodeVRFn g_createArmorNodeVROriginal{ nullptr };
+
+	RE::NiAVObject* CreateArmorNodeVRHook(
+		RE::BipedAnim* a_biped,
+		RE::NiNode* a_objectRoot,
+		std::uint64_t a_packedThirdAndFourth,
+		VRBipedAttachParams* a_params,
+		std::uint64_t a_fifth,
+		std::uint64_t a_sixth)
+	{
+		const auto third = static_cast<std::uint32_t>(a_packedThirdAndFourth >> 32);
+		const auto fourth = static_cast<std::uint8_t>(a_packedThirdAndFourth & 0xFF);
+		auto* result = g_createArmorNodeVROriginal ?
+			g_createArmorNodeVROriginal(a_biped, a_objectRoot, third, fourth, static_cast<std::uint8_t>(a_fifth), a_sixth) :
+			nullptr;
+
+		if (!a_biped || !a_params) {
+			return result;
+		}
+
+		RE::NiPointer<RE::TESObjectREFR> reference;
+		std::uint32_t handle = a_biped->actorRef.native_handle();
+		if (SKEE::LookupREFRByHandle(handle, reference) && reference) {
+			InstallArmorAddonHook(
+				reference.get(),
+				a_params->armor,
+				a_params->addon,
+				a_biped->root,
+				result);
+		}
+
+		return result;
+	}
+
+	struct VRBipedAttachHookCode : Xbyak::CodeGenerator
+	{
+		VRBipedAttachHookCode(std::uintptr_t a_returnAddress) :
+			Xbyak::CodeGenerator(256)
+		{
+			Xbyak::Label hookLabel;
+			Xbyak::Label returnLabel;
+
+			// Preserve the original stack arguments. Pack the original r8d/r9
+			// pair into r8 and use r9 for the temporary descriptor expected by
+			// CreateArmorNodeVRHook.
+			mov(r8d, r15d);
+			shl(r8, 0x20);
+			and_(r9, 0xFFFFFFFF);
+			or_(r8, r9);
+			lea(r9, ptr[r12 + r13]);
+			mov(rdx, rsi);
+			mov(rcx, r13);
+			call(ptr[rip + hookLabel]);
+			jmp(ptr[rip + returnLabel]);
+
+			L(hookLabel);
+			dq(reinterpret_cast<std::uintptr_t>(CreateArmorNodeVRHook));
+
+			L(returnLabel);
+			dq(a_returnAddress);
+		}
+	};
+
+	SKEEHookGroupResult InstallVRBodySystemHooks()
+	{
+		REL::Relocation<std::uintptr_t> routine{ REL::ID(kVRBipedAttachRoutineID) };
+		const auto callSite = routine.address() + kVRBipedAttachCallOffset;
+		const auto text = REL::Module::get().segment(REL::Segment::Name::textx);
+		const auto textEnd = text.address() + text.size();
+		if (!routine.address() || callSite < text.address() || callSite + kVRBipedAttachExpectedBytes.size() > textEnd) {
+			SKSE::log::error("VR body hook address is unavailable or outside Skyrim's text segment: 0x{:X}", callSite);
+			return { "body-systems", SKEEHookStatus::kUnavailableAddress, "armor attachment callbacks remain unavailable" };
+		}
+
+		const auto* observed = reinterpret_cast<const std::uint8_t*>(callSite);
+		if (std::memcmp(observed, kVRBipedAttachExpectedBytes.data(), kVRBipedAttachExpectedBytes.size()) != 0) {
+			SKSE::log::error(
+				"VR body hook signature mismatch at 0x{:X}: observed={:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+				callSite,
+				observed[0], observed[1], observed[2], observed[3], observed[4], observed[5], observed[6],
+				observed[7], observed[8], observed[9], observed[10], observed[11], observed[12], observed[13]);
+			return { "body-systems", SKEEHookStatus::kSignatureMismatch, "armor attachment callbacks remain unavailable" };
+		}
+
+		const auto callDisplacement = *reinterpret_cast<const std::int32_t*>(callSite + 10);
+		const auto originalTarget = callSite + kVRBipedAttachExpectedBytes.size() + callDisplacement;
+		const auto expectedTarget = REL::Offset(kVRCreateArmorNodeRVA).address();
+		if (originalTarget != expectedTarget || originalTarget < text.address() || originalTarget >= textEnd) {
+			SKSE::log::error(
+				"VR body hook original target mismatch: decoded=0x{:X}, expected=0x{:X}",
+				originalTarget,
+				expectedTarget);
+			return { "body-systems", SKEEHookStatus::kSignatureMismatch, "armor attachment callbacks remain unavailable" };
+		}
+
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "body-systems", SKEEHookStatus::kInitializationFailed, "armor attachment callbacks remain unavailable" };
+		}
+
+		VRBipedAttachHookCode code(callSite + kVRBipedAttachExpectedBytes.size());
+		void* entry = g_localTrampoline.allocate(code);
+		if (!entry) {
+			SKSE::log::error("VR body hook could not allocate its local trampoline");
+			return { "body-systems", SKEEHookStatus::kInitializationFailed, "armor attachment callbacks remain unavailable" };
+		}
+
+		g_createArmorNodeVROriginal = reinterpret_cast<CreateArmorNodeVRFn>(originalTarget);
+		g_branchTrampoline.write_branch<6>(callSite, reinterpret_cast<std::uintptr_t>(entry));
+		g_hookBipedAttach = true;
+		SKSE::log::info(
+			"VR body hook installed: callSite=0x{:X}, original=0x{:X}, continuation=0x{:X}",
+			callSite,
+			originalTarget,
+			callSite + kVRBipedAttachExpectedBytes.size());
+		return {
+			"body-systems",
+			SKEEHookStatus::kEnabled,
+			"qualified armor attachment callbacks feed body morph, skeleton, and override observers; rendering overlays remain separately gated"
+		};
+	}
+
+	struct VRCallPatch
+	{
+		std::string_view name;
+		std::uintptr_t rva;
+		std::uintptr_t hook;
+		std::uintptr_t expectedTargetRva;
+	};
+
+	[[nodiscard]] bool IsVRTextAddress(std::uintptr_t a_address, std::size_t a_size = 1)
+	{
+		const auto text = REL::Module::get().segment(REL::Segment::Name::textx);
+		return a_address >= text.address() && a_address + a_size >= a_address && a_address + a_size <= text.address() + text.size();
+	}
+
+	[[nodiscard]] bool ValidateVRCallPatch(const VRCallPatch& a_patch, std::uintptr_t* a_decodedTarget = nullptr)
+	{
+		const auto address = REL::Offset(a_patch.rva).address();
+		if (!IsVRTextAddress(address, 5)) {
+			SKSE::log::error("VR hook {} is outside SkyrimVR.exe .text: RVA=0x{:X}", a_patch.name, a_patch.rva);
+			return false;
+		}
+		if (*reinterpret_cast<const std::uint8_t*>(address) != 0xE8) {
+			SKSE::log::error("VR hook {} expected CALL at RVA 0x{:X}, observed opcode 0x{:02X}", a_patch.name, a_patch.rva, *reinterpret_cast<const std::uint8_t*>(address));
+			return false;
+		}
+		const auto displacement = *reinterpret_cast<const std::int32_t*>(address + 1);
+		const auto target = address + 5 + displacement;
+		const auto expectedTarget = REL::Offset(a_patch.expectedTargetRva).address();
+		if (!IsVRTextAddress(target) || target != expectedTarget) {
+			SKSE::log::error(
+				"VR hook {} original target mismatch at RVA 0x{:X}: decoded=0x{:X}, expected=0x{:X}",
+				a_patch.name,
+				a_patch.rva,
+				target,
+				expectedTarget);
+			return false;
+		}
+		if (a_decodedTarget) {
+			*a_decodedTarget = target;
+		}
+		return true;
+	}
+
+	template <std::size_t N>
+	[[nodiscard]] bool ValidateVRCallPatches(
+		const std::array<VRCallPatch, N>& a_patches,
+		std::array<std::uintptr_t, N>& a_originalTargets)
+	{
+		for (std::size_t i = 0; i < N; ++i) {
+			if (!ValidateVRCallPatch(a_patches[i], std::addressof(a_originalTargets[i]))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	template <std::size_t N>
+	void CommitVRCallPatches(const std::array<VRCallPatch, N>& a_patches)
+	{
+		for (const auto& patch : a_patches) {
+			const auto address = REL::Offset(patch.rva).address();
+			g_branchTrampoline.write_call<5>(address, patch.hook);
+			SKSE::log::info("VR hook {} installed at RVA 0x{:X}", patch.name, patch.rva);
+		}
+	}
+
+	SKEEHookGroupResult InstallVRNativeSliderHooks()
+	{
+		if (!g_hookNativeSliders || !g_hookSliderCallbacks) {
+			return { "native-face-sliders", SKEEHookStatus::kDisabledByPolicy, "disabled by the user's hook configuration" };
+		}
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "native-face-sliders", SKEEHookStatus::kInitializationFailed, "slider trampolines could not be allocated" };
+		}
+
+		constexpr std::uintptr_t loadSliders = 0x008E39B0;
+		const std::array patches{
+			VRCallPatch{ "head-part-list", loadSliders + 0x215, reinterpret_cast<std::uintptr_t>(GetHeadParts_Hooked), 0x00175DA0 },
+			VRCallPatch{ "slider-category-list", 0x008E2DC0 + 0x9FB, reinterpret_cast<std::uintptr_t>(InvokeCategoryList_Hook), 0x00F342E0 },
+			VRCallPatch{ "add-native-slider", loadSliders + 0x37E4, reinterpret_cast<std::uintptr_t>(AddSlider_Hook), 0x008E9850 },
+			VRCallPatch{ "double-morph-primary", loadSliders + 0x3CD5, reinterpret_cast<std::uintptr_t>(DoubleMorphCallback_Hook), 0x008E23B0 },
+			VRCallPatch{ "double-morph-secondary", 0x008DF4E0 + 0x4F, reinterpret_cast<std::uintptr_t>(DoubleMorphCallback_Hook), 0x008E23B0 }
+		};
+		const auto lookupSite = REL::Offset(loadSliders + 0x3895).address();
+		constexpr std::array expectedLookup{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0x4C }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x18 } };
+		std::array<std::uintptr_t, patches.size()> originalTargets{};
+		if (!ValidateVRCallPatches(patches, originalTargets) ||
+			!IsVRTextAddress(lookupSite, expectedLookup.size()) ||
+			std::memcmp(reinterpret_cast<const void*>(lookupSite), expectedLookup.data(), expectedLookup.size()) != 0) {
+			SKSE::log::error("VR slider lookup signature mismatch at RVA 0x{:X}", loadSliders + 0x3895);
+			return { "native-face-sliders", SKEEHookStatus::kSignatureMismatch, "one or more established SkyrimVR 1.4.15 slider sites or targets did not match" };
+		}
+
+		struct SliderLookupCode : Xbyak::CodeGenerator
+		{
+			SliderLookupCode(std::uintptr_t a_returnAddress) : Xbyak::CodeGenerator(256)
+			{
+				Xbyak::Label function;
+				Xbyak::Label returnAddress;
+				lea(rcx, ptr[rax + rbx]);
+				call(ptr[rip + function]);
+				movss(xmm6, xmm0);
+				mov(rcx, ptr[rcx + 0x18]);
+				jmp(ptr[rip + returnAddress]);
+				L(function);
+				dq(reinterpret_cast<std::uintptr_t>(SliderLookup_Hooked));
+				L(returnAddress);
+				dq(a_returnAddress);
+			}
+		};
+
+		SliderLookupCode lookupCode(lookupSite + expectedLookup.size());
+		auto* lookupEntry = g_localTrampoline.allocate(lookupCode);
+		if (!lookupEntry) {
+			return { "native-face-sliders", SKEEHookStatus::kInitializationFailed, "the slider lookup bridge could not be allocated" };
+		}
+
+		g_getHeadPartsVROriginal = reinterpret_cast<GetHeadPartsVRFn>(originalTargets[0]);
+		g_addRaceMenuSliderVROriginal = reinterpret_cast<AddRaceMenuSliderVRFn>(originalTargets[2]);
+		g_doubleMorphCallbackVROriginal = reinterpret_cast<DoubleMorphCallbackVRFn>(originalTargets[3]);
+		CommitVRCallPatches(patches);
+		g_branchTrampoline.write_branch<5>(lookupSite, reinterpret_cast<std::uintptr_t>(lookupEntry));
+		return { "native-face-sliders", SKEEHookStatus::kEnabled, "head-part discovery, extra categories, custom sliders, lookup, and slider callbacks are installed" };
+	}
+
+	SKEEHookGroupResult InstallVRHeadPresetHooks()
+	{
+		if (!g_hookHeadPreprocessing || g_externalHeads) {
+			return { "head-preset-compatibility", SKEEHookStatus::kDisabledByPolicy, "disabled by hook configuration or external-head ownership" };
+		}
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "head-preset-compatibility", SKEEHookStatus::kInitializationFailed, "head preprocessing trampolines could not be allocated" };
+		}
+
+		constexpr std::uintptr_t preprocessing = 0x00373740;
+		const auto site1 = REL::Offset(preprocessing + 0x58).address();
+		const auto site2 = REL::Offset(preprocessing + 0x81).address();
+		const auto site3 = REL::Offset(preprocessing + 0x67).address();
+		const auto regenerate = REL::Offset(0x003E23D0).address();
+		constexpr std::array site1Expected{
+			std::uint8_t{ 0x0F }, std::uint8_t{ 0xB6 }, std::uint8_t{ 0x0D },
+			std::uint8_t{ 0x11 }, std::uint8_t{ 0x3A }, std::uint8_t{ 0xB3 },
+			std::uint8_t{ 0x01 }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC9 }
+		};
+		constexpr std::array site2Expected{
+			std::uint8_t{ 0x0F }, std::uint8_t{ 0xB6 }, std::uint8_t{ 0x0D },
+			std::uint8_t{ 0xE8 }, std::uint8_t{ 0x39 }, std::uint8_t{ 0xB3 },
+			std::uint8_t{ 0x01 }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC9 }
+		};
+		constexpr std::array site3Expected{ std::uint8_t{ 0x85 }, std::uint8_t{ 0xC0 } };
+		constexpr std::array regenerateProlog{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x55 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x54 } };
+		if (!IsVRTextAddress(site1, site1Expected.size()) ||
+			!IsVRTextAddress(site2, site2Expected.size()) ||
+			!IsVRTextAddress(site3, site3Expected.size()) ||
+			!IsVRTextAddress(regenerate, regenerateProlog.size()) ||
+			std::memcmp(reinterpret_cast<const void*>(site1), site1Expected.data(), site1Expected.size()) != 0 ||
+			std::memcmp(reinterpret_cast<const void*>(site2), site2Expected.data(), site2Expected.size()) != 0 ||
+			std::memcmp(reinterpret_cast<const void*>(site3), site3Expected.data(), site3Expected.size()) != 0 ||
+			std::memcmp(reinterpret_cast<const void*>(regenerate), regenerateProlog.data(), regenerateProlog.size()) != 0) {
+			SKSE::log::error("VR head preprocessing signature/range validation failed");
+			return { "head-preset-compatibility", SKEEHookStatus::kSignatureMismatch, "one or more established head preprocessing sites did not match" };
+		}
+
+		struct UsePreprocessedHeadCode : Xbyak::CodeGenerator
+		{
+			UsePreprocessedHeadCode(std::uintptr_t a_returnAddress) : Xbyak::CodeGenerator(256)
+			{
+				Xbyak::Label function;
+				Xbyak::Label returnAddress;
+				mov(rcx, rdi);
+				call(ptr[rip + function]);
+				jmp(ptr[rip + returnAddress]);
+				L(function);
+				dq(reinterpret_cast<std::uintptr_t>(UsePreprocessedHead));
+				L(returnAddress);
+				dq(a_returnAddress);
+			}
+		};
+		UsePreprocessedHeadCode code1(site1 + 6);
+		UsePreprocessedHeadCode code2(site2 + 6);
+		auto* entry1 = g_localTrampoline.allocate(code1);
+		auto* entry2 = g_localTrampoline.allocate(code2);
+
+		struct RegenerateHeadCode : Xbyak::CodeGenerator
+		{
+			RegenerateHeadCode(std::uintptr_t a_returnAddress) : Xbyak::CodeGenerator(256)
+			{
+				Xbyak::Label returnAddress;
+				mov(rax, rsp);
+				push(rbp);
+				push(r12);
+				jmp(ptr[rip + returnAddress]);
+				L(returnAddress);
+				dq(a_returnAddress);
+			}
+		};
+		RegenerateHeadCode regenerateCode(regenerate + regenerateProlog.size());
+		auto* regenerateEntry = g_localTrampoline.allocate(regenerateCode);
+		if (!entry1 || !entry2 || !regenerateEntry) {
+			return { "head-preset-compatibility", SKEEHookStatus::kInitializationFailed, "one or more head preprocessing bridges could not be allocated" };
+		}
+
+		// Commit only after every instruction window has matched and every bridge
+		// has been allocated, so this group cannot be left half-installed.
+		RegenerateHead_Original = reinterpret_cast<RegenerateHeadFn>(regenerateEntry);
+		g_branchTrampoline.write_branch<6>(site1, reinterpret_cast<std::uintptr_t>(entry1));
+		g_branchTrampoline.write_branch<6>(site2, reinterpret_cast<std::uintptr_t>(entry2));
+		constexpr std::array resultFix{ std::uint8_t{ 0x90 }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC0 } };
+		constexpr std::array testFix{ std::uint8_t{ 0x85 }, std::uint8_t{ 0xDB } };
+		REL::safe_write(site1 + 6, resultFix.data(), resultFix.size());
+		REL::safe_write(site2 + 6, resultFix.data(), resultFix.size());
+		REL::safe_write(site3, testFix.data(), testFix.size());
+		g_branchTrampoline.write_branch<6>(regenerate, reinterpret_cast<std::uintptr_t>(RegenerateHead_Hooked));
+		return { "head-preset-compatibility", SKEEHookStatus::kEnabled, "preprocessed-head selection and mapped-preset regeneration are installed" };
+	}
+
+	SKEEHookGroupResult InstallVRMorphHooks()
+	{
+		if (!g_hookMorphUpdates || !g_hookMorphExtensions) {
+			return { "face-morph-application", SKEEHookStatus::kDisabledByPolicy, "disabled by the user's morph hook configuration" };
+		}
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "face-morph-application", SKEEHookStatus::kInitializationFailed, "morph hook trampolines could not be allocated" };
+		}
+
+		std::array<VRCallPatch, 4> patches{
+			VRCallPatch{ "chargen-morph", 0x003E1CE0 + 0xF3, reinterpret_cast<std::uintptr_t>(ApplyChargenMorph_Hooked), 0x003E3FA0 },
+			VRCallPatch{ "race-morph", 0x003E3F20 + 0x56, reinterpret_cast<std::uintptr_t>(ApplyRaceMorph_Hooked), 0x003E3FA0 },
+			VRCallPatch{ "update-all-morphs", 0x003E1E50 + 0xC7, reinterpret_cast<std::uintptr_t>(UpdateMorphs_Hooked), 0x00370140 },
+			VRCallPatch{ "update-one-morph", 0x003EBB30 + 0x79, reinterpret_cast<std::uintptr_t>(UpdateMorph_Hooked), 0x00370330 }
+		};
+		if (!g_extendedMorphs) {
+			patches[0].hook = 0;
+			patches[1].hook = 0;
+		}
+		std::array<std::uintptr_t, 4> originalTargets{};
+		for (std::size_t i = 0; i < patches.size(); ++i) {
+			if (patches[i].hook && !ValidateVRCallPatch(patches[i], std::addressof(originalTargets[i]))) {
+				return { "face-morph-application", SKEEHookStatus::kSignatureMismatch, "one or more established face morph call sites did not match" };
+			}
+		}
+
+		g_updateNPCMorphsVROriginal = reinterpret_cast<UpdateNPCMorphsVRFn>(originalTargets[2]);
+		g_updateNPCMorphVROriginal = reinterpret_cast<UpdateNPCMorphVRFn>(originalTargets[3]);
+		if (g_extendedMorphs) {
+			g_applyRaceMorphVROriginal = reinterpret_cast<BSFaceGenModelApplyMorphFn>(originalTargets[0]);
+		}
+		for (const auto& patch : patches) {
+			if (patch.hook) {
+				g_branchTrampoline.write_call<5>(REL::Offset(patch.rva).address(), patch.hook);
+				SKSE::log::info("VR hook {} installed at RVA 0x{:X}", patch.name, patch.rva);
+			}
+		}
+		return { "face-morph-application", SKEEHookStatus::kEnabled, g_extendedMorphs ? "custom TRI application and per-head morph updates are installed" : "per-head morph updates are installed; extended TRI application is disabled by configuration" };
+	}
+
+	SKEEHookGroupResult InstallVRSculptRenderHook()
+	{
+		REL::Relocation<std::uintptr_t> raceSexMenuVtable{ RE::VTABLE_RaceSexMenu[0] };
+		const auto slot = raceSexMenuVtable.address() + 0x30;
+		const auto rdata = REL::Module::get().segment(REL::Segment::Name::rdata);
+		if (slot < rdata.address() || slot + sizeof(std::uintptr_t) > rdata.address() + rdata.size()) {
+			return { "sculpt-rendering", SKEEHookStatus::kUnavailableAddress, "the RaceSexMenu render vtable slot is unavailable" };
+		}
+		const auto original = *reinterpret_cast<const std::uintptr_t*>(slot);
+		const auto expectedOriginal = REL::Offset(0x0052EDE0).address();
+		if (!IsVRTextAddress(original) || original != expectedOriginal) {
+			SKSE::log::error(
+				"VR RaceSexMenu render vtable target mismatch: observed=0x{:X}, expected=0x{:X}",
+				original,
+				expectedOriginal);
+			return { "sculpt-rendering", SKEEHookStatus::kSignatureMismatch, "the RaceSexMenu render vtable slot did not match SkyrimVR 1.4.15" };
+		}
+		const auto hook = reinterpret_cast<std::uintptr_t>(RaceSexMenu_Render_Hooked);
+		REL::safe_write(slot, std::addressof(hook), sizeof(hook));
+		SKSE::log::info("VR RaceSexMenu sculpt render hook installed: slot RVA=0x{:X}, original=0x{:X}", slot - REL::Module::get().base(), original);
+		return { "sculpt-rendering", SKEEHookStatus::kEnabled, "RaceSexMenu renders the sculpt world before displaying its Scaleform movie" };
+	}
+
+	SKEEHookGroupResult InstallVRFaceOverlayHooks()
+	{
+		if (!g_hookFaceOverlays || !g_enableFaceOverlays) {
+			return { "face-overlays", SKEEHookStatus::kDisabledByPolicy, "disabled by the user's face-overlay configuration" };
+		}
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "face-overlays", SKEEHookStatus::kInitializationFailed, "face-overlay hook trampolines could not be allocated" };
+		}
+		// Skyrim VR emits more BSDynamicTriShape allocation/free paths than the
+		// flat executable.  Every path that can own the +0x10 adjusted buffer must
+		// use the refcount-aware pair; otherwise an assignment or the virtual
+		// deleting destructor can pass the interior data pointer to NiFree.
+		const std::array patches{
+			VRCallPatch{ "face-overlay-free-copy", 0x00CB82B0 + 0x8B, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), 0x00C698E0 },
+			VRCallPatch{ "face-overlay-allocate-copy", 0x00CB82B0 + 0x92, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), 0x00C69680 },
+			VRCallPatch{ "face-overlay-free-assignment", 0x00CB8390 + 0x65, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), 0x00C698E0 },
+			VRCallPatch{ "face-overlay-allocate-assignment", 0x00CB8390 + 0x6C, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), 0x00C69680 },
+			VRCallPatch{ "face-overlay-allocate-constructor", 0x00CB8600 + 0x76, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), 0x00C69680 },
+			VRCallPatch{ "face-overlay-free-destructor", 0x00CB8700 + 0x28, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), 0x00C698E0 },
+			VRCallPatch{ "face-overlay-free-resize", 0x00CB8800 + 0x4E, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), 0x00C698E0 },
+			VRCallPatch{ "face-overlay-allocate-resize", 0x00CB8800 + 0x55, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), 0x00C69680 },
+			VRCallPatch{ "face-overlay-free-deleting-destructor", 0x00CB9000 + 0x3F, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), 0x00C698E0 },
+			VRCallPatch{ "face-overlay-enable", 0x00373880 + 0x1E0, reinterpret_cast<std::uintptr_t>(UpdateHeadState_Enable_Hooked), 0x003727B0 },
+			VRCallPatch{ "face-overlay-disable", 0x00372920 + 0x1DF, reinterpret_cast<std::uintptr_t>(UpdateHeadState_Disabled_Hooked), 0x003727B0 }
+		};
+		std::array<std::uintptr_t, patches.size()> originalTargets{};
+		if (!ValidateVRCallPatches(patches, originalTargets)) {
+			return { "face-overlays", SKEEHookStatus::kSignatureMismatch, "one or more established face-overlay allocation/lifecycle sites did not match" };
+		}
+		g_updateHeadStateVROriginal = reinterpret_cast<UpdateHeadStateVRFn>(originalTargets[9]);
+		CommitVRCallPatches(patches);
+		return { "face-overlays", SKEEHookStatus::kEnabled, "dynamic face geometry refcounting and face-overlay refresh hooks are installed" };
+	}
+
+	SKEEHookGroupResult InstallVRTintInventoryHooks()
+	{
+		if (!InitializeSKEEHookTrampolines()) {
+			return { "tint-and-inventory", SKEEHookStatus::kInitializationFailed, "tint/inventory hook trampolines could not be allocated" };
+		}
+
+		const bool installTint = g_hookTinting && g_enableTintSync;
+		const bool installInventory = g_hookTintInventory && g_enableTintInventory;
+		const auto skin = REL::Offset(0x003EC090).address();
+		const auto hair = REL::Offset(0x003EC150).address();
+		const auto setModel = REL::Offset(0x008B60A0).address();
+		const auto transfer = REL::Offset(0x001FD990).address();
+		constexpr std::array tintProlog{
+			std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x54 },
+			std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x53 }
+		};
+		constexpr std::array setModelProlog{
+			std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C },
+			std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }
+		};
+		constexpr std::array transferProlog{
+			std::uint8_t{ 0x40 }, std::uint8_t{ 0x53 }, std::uint8_t{ 0x55 },
+			std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 },
+			std::uint8_t{ 0x56 }
+		};
+
+		if (installTint &&
+			(!IsVRTextAddress(skin, tintProlog.size()) ||
+			 !IsVRTextAddress(hair, tintProlog.size()) ||
+			 std::memcmp(reinterpret_cast<const void*>(skin), tintProlog.data(), tintProlog.size()) != 0 ||
+			 std::memcmp(reinterpret_cast<const void*>(hair), tintProlog.data(), tintProlog.size()) != 0)) {
+			return { "tint-and-inventory", SKEEHookStatus::kSignatureMismatch, "skin/hair tint entry-point signatures did not match SkyrimVR 1.4.15" };
+		}
+
+		const VRCallPatch newModel{
+			"new-inventory-model",
+			0x008B6220 + 0x1B0,
+			reinterpret_cast<std::uintptr_t>(SetNewInventoryItemModel_Hooked),
+			0x008B5B40
+		};
+		std::uintptr_t newModelOriginal = 0;
+		if (installInventory &&
+			(!ValidateVRCallPatch(newModel, std::addressof(newModelOriginal)) ||
+			 !IsVRTextAddress(setModel, setModelProlog.size()) ||
+			 std::memcmp(reinterpret_cast<const void*>(setModel), setModelProlog.data(), setModelProlog.size()) != 0)) {
+			return { "tint-and-inventory", SKEEHookStatus::kSignatureMismatch, "inventory model hook sites did not match SkyrimVR 1.4.15" };
+		}
+
+		if (!IsVRTextAddress(transfer, transferProlog.size()) ||
+			std::memcmp(reinterpret_cast<const void*>(transfer), transferProlog.data(), transferProlog.size()) != 0) {
+			return { "tint-and-inventory", SKEEHookStatus::kSignatureMismatch, "item UID transfer entry-point signature did not match SkyrimVR 1.4.15" };
+		}
+
+		struct SetInventoryModelCode : Xbyak::CodeGenerator
+		{
+			SetInventoryModelCode(std::uintptr_t a_returnAddress) : Xbyak::CodeGenerator(256)
+			{
+				Xbyak::Label returnAddress;
+				mov(ptr[rsp + 0x18], rbx);
+				jmp(ptr[rip + returnAddress]);
+				L(returnAddress);
+				dq(a_returnAddress);
+			}
+		};
+		struct TransferItemUIDCode : Xbyak::CodeGenerator
+		{
+			TransferItemUIDCode(std::uintptr_t a_returnAddress) : Xbyak::CodeGenerator(256)
+			{
+				Xbyak::Label returnAddress;
+				push(rbx);
+				push(rbp);
+				push(rsi);
+				push(rdi);
+				push(r14);
+				jmp(ptr[rip + returnAddress]);
+				L(returnAddress);
+				dq(a_returnAddress);
+			}
+		};
+
+		void* setModelEntry = nullptr;
+		if (installInventory) {
+			SetInventoryModelCode setModelCode(setModel + setModelProlog.size());
+			setModelEntry = g_localTrampoline.allocate(setModelCode);
+		}
+		TransferItemUIDCode transferCode(transfer + 7);
+		auto* transferEntry = g_localTrampoline.allocate(transferCode);
+		if ((installInventory && !setModelEntry) || !transferEntry) {
+			return { "tint-and-inventory", SKEEHookStatus::kInitializationFailed, "one or more tint/inventory original bridges could not be allocated" };
+		}
+
+		// Commit only after every enabled site has matched and every bridge exists.
+		if (installTint) {
+			g_branchTrampoline.write_branch<6>(skin, reinterpret_cast<std::uintptr_t>(UpdateModelSkin_Hooked));
+			g_branchTrampoline.write_branch<6>(hair, reinterpret_cast<std::uintptr_t>(UpdateModelHair_Hooked));
+		}
+		if (installInventory) {
+			SetInventoryItemModel_Original = reinterpret_cast<SetInventoryItemModelFn>(setModelEntry);
+			g_setNewInventoryItemModelVROriginal = reinterpret_cast<SetNewInventoryItemModelVRFn>(newModelOriginal);
+			// The displaced instruction is exactly five bytes; resuming at +6 would
+			// enter the middle of the following mov [rsp+0x20],rsi instruction.
+			g_branchTrampoline.write_branch<5>(setModel, reinterpret_cast<std::uintptr_t>(SetInventoryItemModel_Hooked));
+			g_branchTrampoline.write_call<5>(REL::Offset(newModel.rva).address(), newModel.hook);
+		}
+		TransferItemUID_Original = reinterpret_cast<TransferItemUIDFn>(transferEntry);
+		g_branchTrampoline.write_branch<6>(transfer, reinterpret_cast<std::uintptr_t>(TransferItemUID_Hooked));
+		return { "tint-and-inventory", SKEEHookStatus::kEnabled, "skin/hair tint synchronization, inventory dyeing, and item UID transfer are installed" };
+	}
+
+	SKEEHookGroupResult InstallVRFaceGenCacheBypass()
+	{
+		if (!g_disableFaceGenCache) {
+			return { "facegen-cache-bypass", SKEEHookStatus::kDisabledByPolicy, "FaceGen cache bypass is disabled by configuration" };
+		}
+		const auto address = REL::Offset(0x008E8930).address();
+		constexpr std::array expectedProlog{
+			std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C },
+			std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 },
+			std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 },
+			std::uint8_t{ 0x18 }
+		};
+		if (!IsVRTextAddress(address, expectedProlog.size()) ||
+			std::memcmp(reinterpret_cast<const void*>(address), expectedProlog.data(), expectedProlog.size()) != 0) {
+			return { "facegen-cache-bypass", SKEEHookStatus::kSignatureMismatch, "the FaceGen cache entry-point signature did not match SkyrimVR 1.4.15" };
+		}
+		constexpr std::uint8_t ret = 0xC3;
+		REL::safe_write(address, std::addressof(ret), sizeof(ret));
+		SKSE::log::info("VR FaceGen cache bypass installed at RVA 0x{:X}", 0x008E8930);
+		return { "facegen-cache-bypass", SKEEHookStatus::kEnabled, "the vanilla FaceGen part cache is bypassed as configured" };
+	}
+}
+#endif
+
+static bool InstallFlatSKEEHooks()
+{
+	if (!InitializeSKEEHookTrampolines()) {
+		return false;
 	}
 
 	constexpr size_t kSliderFuncScanRange = 0x5000; // this function is ~0x3A00 bytes in both known builds
@@ -1501,4 +2411,144 @@ bool InstallSKEEHooks()
 	}
 
 	return true;
+}
+
+namespace
+{
+	constexpr std::string_view HookStatusName(SKEEHookStatus a_status)
+	{
+		switch (a_status) {
+		case SKEEHookStatus::kEnabled:
+			return "enabled";
+		case SKEEHookStatus::kDisabledByPolicy:
+			return "disabled-by-policy";
+		case SKEEHookStatus::kUnavailableAddress:
+			return "unavailable-address";
+		case SKEEHookStatus::kSignatureMismatch:
+			return "signature-mismatch";
+		case SKEEHookStatus::kInitializationFailed:
+			return "initialization-failed";
+		}
+
+		return "initialization-failed";
+	}
+
+	SKEEHookInstallResult MakeVRHookResult(
+		const SKEEHookGroupResult& a_bodySystems,
+		const SKEEHookGroupResult& a_nativeSliders,
+		const SKEEHookGroupResult& a_morphs,
+		const SKEEHookGroupResult& a_sculpt,
+		const SKEEHookGroupResult& a_headPresets,
+		const SKEEHookGroupResult& a_tintInventory,
+		const SKEEHookGroupResult& a_faceOverlays,
+		const SKEEHookGroupResult& a_faceGenCache)
+	{
+		return {
+			true,
+			{ {
+				{ "core-services", SKEEHookStatus::kEnabled, "SKSE lifecycle, serialization, Papyrus, and plugin interfaces remain available" },
+				a_bodySystems,
+				a_nativeSliders,
+				a_morphs,
+				a_sculpt,
+				a_headPresets,
+				a_tintInventory,
+				a_faceOverlays,
+				a_faceGenCache
+			} }
+		};
+	}
+
+	SKEEHookInstallResult MakeFlatHookResult(bool a_success)
+	{
+		const auto activeStatus = a_success ? SKEEHookStatus::kEnabled : SKEEHookStatus::kInitializationFailed;
+		return {
+			a_success,
+			{ {
+				{ "core-services", SKEEHookStatus::kEnabled, "SKSE lifecycle, serialization, Papyrus, and plugin interfaces remain available" },
+				{ "body-systems", activeStatus, "flat-runtime body behavior is preserved" },
+				{ "native-face-sliders", activeStatus, "flat-runtime slider behavior is preserved" },
+				{ "face-morph-application", activeStatus, "flat-runtime morph behavior is preserved" },
+				{ "sculpt-rendering", activeStatus, "flat-runtime sculpt behavior is preserved" },
+				{ "head-preset-compatibility", activeStatus, "flat-runtime head and preset behavior is preserved" },
+				{ "tint-and-inventory", activeStatus, "flat-runtime tint and inventory behavior is preserved" },
+				{ "face-overlays", activeStatus, "flat-runtime face overlay behavior is preserved" },
+				{ "facegen-cache-bypass", activeStatus, "flat-runtime FaceGen cache policy is preserved" }
+			} }
+		};
+	}
+
+	void LogHookResult(const SKEEHookInstallResult& a_result)
+	{
+		SKSE::log::info(
+			"RaceMenu VR 2 hook qualification: runtime={}, CommonLibSSE-NG={}, Skyrim VR Address Library baseline={}",
+			REL::Module::get().version().string("."),
+			SKEE_COMMONLIB_VERSION,
+			SKEE_VR_ADDRESS_LIBRARY_VERSION);
+
+		for (const auto& group : a_result.groups) {
+			SKSE::log::info("hook-group {}: {} - {}", group.group, HookStatusName(group.status), group.consequence);
+		}
+	}
+}
+
+SKEEHookInstallResult InstallSKEEHooks()
+{
+	static std::mutex installLock;
+	static std::optional<SKEEHookInstallResult> installedResult;
+	std::lock_guard lock{ installLock };
+	if (installedResult) {
+		SKSE::log::info("SKEE hooks were already evaluated; returning the original install result without patching twice");
+		return *installedResult;
+	}
+
+	if (REL::Module::IsVR()) {
+#if defined(ENABLE_SKYRIM_VR)
+		if (!SKEE::HasQualifiedCustomAddresses()) {
+			const SKEEHookGroupResult bodySystems{ "body-systems", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult nativeSliders{ "native-face-sliders", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult morphs{ "face-morph-application", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult sculpt{ "sculpt-rendering", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult headPresets{ "head-preset-compatibility", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult tintInventory{ "tint-and-inventory", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult faceOverlays{ "face-overlays", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			const SKEEHookGroupResult faceGenCache{ "facegen-cache-bypass", SKEEHookStatus::kSignatureMismatch, "the exact SkyrimVR 1.4.15 helper-entry contract did not match; no SKEE hooks were written" };
+			auto result = MakeVRHookResult(bodySystems, nativeSliders, morphs, sculpt, headPresets, tintInventory, faceOverlays, faceGenCache);
+			result.success = false;
+			LogHookResult(result);
+			installedResult = result;
+			return *installedResult;
+		}
+		const auto bodySystems = InstallVRBodySystemHooks();
+		const auto nativeSliders = InstallVRNativeSliderHooks();
+		const auto morphs = InstallVRMorphHooks();
+		const auto sculpt = InstallVRSculptRenderHook();
+		const auto headPresets = InstallVRHeadPresetHooks();
+		const auto tintInventory = InstallVRTintInventoryHooks();
+		const auto faceOverlays = InstallVRFaceOverlayHooks();
+		const auto faceGenCache = InstallVRFaceGenCacheBypass();
+#else
+		const SKEEHookGroupResult bodySystems{
+			"body-systems",
+			SKEEHookStatus::kUnavailableAddress,
+			"VR armor attachment callbacks are unavailable in this build"
+		};
+		const SKEEHookGroupResult nativeSliders{ "native-face-sliders", SKEEHookStatus::kUnavailableAddress, "VR slider hooks are unavailable in this build" };
+		const SKEEHookGroupResult morphs{ "face-morph-application", SKEEHookStatus::kUnavailableAddress, "VR morph hooks are unavailable in this build" };
+		const SKEEHookGroupResult sculpt{ "sculpt-rendering", SKEEHookStatus::kUnavailableAddress, "VR sculpt hooks are unavailable in this build" };
+		const SKEEHookGroupResult headPresets{ "head-preset-compatibility", SKEEHookStatus::kUnavailableAddress, "VR head hooks are unavailable in this build" };
+		const SKEEHookGroupResult tintInventory{ "tint-and-inventory", SKEEHookStatus::kUnavailableAddress, "VR tint hooks are unavailable in this build" };
+		const SKEEHookGroupResult faceOverlays{ "face-overlays", SKEEHookStatus::kUnavailableAddress, "VR face overlay hooks are unavailable in this build" };
+		const SKEEHookGroupResult faceGenCache{ "facegen-cache-bypass", SKEEHookStatus::kUnavailableAddress, "VR FaceGen cache hooks are unavailable in this build" };
+#endif
+		auto result = MakeVRHookResult(bodySystems, nativeSliders, morphs, sculpt, headPresets, tintInventory, faceOverlays, faceGenCache);
+		LogHookResult(result);
+		installedResult = result;
+		return *installedResult;
+	}
+
+	auto result = MakeFlatHookResult(InstallFlatSKEEHooks());
+	LogHookResult(result);
+	installedResult = result;
+	return *installedResult;
 }

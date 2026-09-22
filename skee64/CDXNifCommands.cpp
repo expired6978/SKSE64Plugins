@@ -1,5 +1,7 @@
 #include "CDXNifCommands.h"
 #include "SKEETasks.h"
+#include "SculptTrace.h"
+#include "SculptHistoryDispatch.h"
 #include "CDXNifMesh.h"
 #include "CDXNifScene.h"
 
@@ -57,8 +59,10 @@ void ApplyMorphData(RE::BSTriShape * geometry, CDXVectorMap & vectorMap, float m
 
 void AddStrokeCommand(CDXStroke * stroke, RE::BSTriShape * geometry, std::int32_t id)
 {
-	if (g_task)
+	if (g_task) {
+		SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryQueued);
 		SKEE_AddUITask(g_task, new CRGNUITaskAddStroke(stroke, geometry, id));
+	} else SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryNoTask);
 }
 
 void CDXNifInflateStroke::Undo()
@@ -227,7 +231,11 @@ void CRGNTaskUpdateModel::Dispose()
 CRGNUITaskAddStroke::CRGNUITaskAddStroke(CDXStroke * stroke, RE::BSTriShape * geometry, std::int32_t id)
 {
 	m_id = id;
-	m_stroke = stroke;
+	m_editorGeneration = g_World.GetEditorGeneration();
+	m_undoType = stroke->GetUndoType();
+	m_strokeType = stroke->GetStrokeType();
+	m_vertices = stroke->Length();
+	m_mirror = stroke->IsMirror();
 	m_geometry.reset(geometry);
 }
 
@@ -238,6 +246,11 @@ void CRGNUITaskAddStroke::Dispose()
 
 void CRGNUITaskAddStroke::Run()
 {
+	SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryRun);
+	if (m_editorGeneration != g_World.GetEditorGeneration() || !g_World.GetNumMeshes()) {
+		SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryStale);
+		return;
+	}
 	RE::IMenu * menu = RE::UI::GetSingleton()->GetMenu(RE::InterfaceStrings::GetSingleton()->raceSexMenu).get();
 	if (menu && menu->uiMovie) {
 		RE::GFxValue obj{};
@@ -246,29 +259,34 @@ void CRGNUITaskAddStroke::Run()
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", commandId);
 		RE::GFxValue type{};
-		type.SetNumber(m_stroke->GetUndoType());
+		type.SetNumber(m_undoType);
 		obj.SetMember("type", type);
 		RE::GFxValue strokeType{};
-		strokeType.SetNumber(m_stroke->GetStrokeType());
+		strokeType.SetNumber(m_strokeType);
 		obj.SetMember("stroke", strokeType);
 		RE::GFxValue vertices{};
-		vertices.SetNumber(m_stroke->Length());
+		vertices.SetNumber(m_vertices);
 		obj.SetMember("vertices", vertices);
 		RE::GFxValue mirror{};
-		mirror.SetBoolean(m_stroke->IsMirror());
+		mirror.SetBoolean(m_mirror);
 		obj.SetMember("mirror", mirror);
 		RE::GFxValue partName{};
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
-		RE::GFxValue args[1] = { obj };
-		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+		const bool invoked = SKEE::DispatchSculptHistory(REL::Module::IsVR(), obj,
+			[&](const char* method, const RE::GFxValue* args, std::uint32_t count) {
+				return menu->uiMovie->Invoke(method, nullptr, args, count);
+			});
+		SKEE::SculptTrace::Count(invoked ? SKEE::SculptTrace::Event::HistoryInvoked : SKEE::SculptTrace::Event::HistoryInvokeFailed);
 	}
+	else SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryNoMovie);
 }
 
 CRGNUITaskStandardCommand::CRGNUITaskStandardCommand(CDXUndoCommand * cmd, RE::BSTriShape * geometry, std::int32_t id)
 {
 	m_id = id;
-	m_cmd = cmd;
+	m_editorGeneration = g_World.GetEditorGeneration();
+	m_undoType = cmd->GetUndoType();
 	m_geometry.reset(geometry);
 }
 
@@ -279,6 +297,7 @@ void CRGNUITaskStandardCommand::Dispose()
 
 void CRGNUITaskStandardCommand::Run()
 {
+	if (m_editorGeneration != g_World.GetEditorGeneration() || !g_World.GetNumMeshes()) return;
 	RE::IMenu * menu = RE::UI::GetSingleton()->GetMenu(RE::InterfaceStrings::GetSingleton()->raceSexMenu).get();
 	if (menu && menu->uiMovie) {
 		RE::GFxValue obj;
@@ -287,13 +306,15 @@ void CRGNUITaskStandardCommand::Run()
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", commandId);
 		RE::GFxValue type;
-		type.SetNumber(m_cmd->GetUndoType());
+		type.SetNumber(m_undoType);
 		obj.SetMember("type", type);
 		RE::GFxValue partName;
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
-		RE::GFxValue args[1] = { obj };
-		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+		SKEE::DispatchSculptHistory(REL::Module::IsVR(), obj,
+			[&](const char* method, const RE::GFxValue* args, std::uint32_t count) {
+				return menu->uiMovie->Invoke(method, nullptr, args, count);
+			});
 	}
 }
 

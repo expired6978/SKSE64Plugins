@@ -6,6 +6,12 @@
 
 
 #include "ScaleformCharGenFunctions.h"
+#include "SculptTrace.h"
+#include <nlohmann/json.hpp>
+#include <cmath>
+#include "CharacterNameUpdate.h"
+#include "RaceSexMenuFaceView.h"
+#include "RaceSexCameraPolicy.h"
 #include "ScaleformUtils.h"
 
 #include "FaceMorphInterface.h"
@@ -78,6 +84,23 @@ extern std::int32_t						g_viewWidth;
 extern std::int32_t						g_viewHeight;
 extern bool							g_enableHeadExport;
 
+void SKSEScaleform_SetCharacterName::Call(RE::GFxFunctionHandler::Params& a_params)
+{
+	bool changed = false;
+	if (a_params.argCount >= 1 &&
+		a_params.args[0].GetType() == RE::GFxValue::ValueType::kString) {
+		const auto* name = a_params.args[0].GetString();
+		auto* ui = RE::UI::GetSingleton();
+		auto menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : RE::GPtr<RE::RaceSexMenu>{};
+		if (menu && menu->uiMovie.get() == a_params.movie) {
+			changed = SKEE::UpdateCharacterNameWithoutFinishing(name);
+		}
+	}
+	if (a_params.retVal) {
+		a_params.retVal->SetBoolean(changed);
+	}
+}
+
 extern float	g_sculptOffsetX;
 extern float	g_sculptOffsetY;
 extern float	g_sculptOffsetZ;
@@ -100,7 +123,6 @@ void SKSEScaleform_SavePreset::Call(RE::GFxFunctionHandler::Params& a_params)
 void SKSEScaleform_LoadPreset::Call(RE::GFxFunctionHandler::Params& a_params)
 {
 	using namespace ScaleformUtils;
-
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kString);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kObject);
@@ -334,22 +356,13 @@ std::pair<RE::RaceSexMenu*, RE::RaceMenuSlider*> GetRaceMenuSlider(std::uint32_t
 		auto raceMenu = mm->GetMenu<RE::RaceSexMenu>();
 		if (raceMenu)
 		{
-			RE::RaceMenuSlider* slider = NULL;
-			RE::RaceComponent* raceData = NULL;
-
 			std::uint8_t gender = 0;
 			RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
 			RE::TESNPC* actorBase = player->GetBaseObject() ? player->GetBaseObject()->As<RE::TESNPC>() : nullptr;
 			if (actorBase)
 				gender = actorBase->GetSex();
 
-			auto& menuData = raceMenu->GetRuntimeData();
-			if (menuData.unk188 < menuData.sliderData[gender].size())
-				raceData = &menuData.sliderData[gender][menuData.unk188];
-			if (raceData && sliderId < raceData->sliders.size())
-				slider = &raceData->sliders[sliderId];
-
-			if (raceData && slider)
+			if (auto* slider = skee::GetActiveRaceMenuSlider(raceMenu.get(), gender, sliderId))
 			{
 				return {raceMenu.get(), slider};
 			}
@@ -472,11 +485,14 @@ void SKSEScaleform_GetSliderPartData::Call(RE::GFxFunctionHandler::Params& a_par
 				{
 					createFilterTags(a_params.movie, &tagArray, slider->index);
 
-					auto& headPartList = raceMenu->GetRuntimeData().headParts[slider->index];
+					auto* headPartList = skee::GetRaceMenuHeadPartList(raceMenu, slider->index);
+					if (!headPartList) {
+						break;
+					}
 					RE::BGSHeadPart * headPart = NULL;
-					for (int32_t i = 0; i < (int32_t)headPartList.size(); ++i)
+					for (int32_t i = 0; i < (int32_t)headPartList->size(); ++i)
 					{
-						headPart = headPartList[i];
+						headPart = (*headPartList)[i];
 						if (headPart)
 						{
 							addHeadPart(a_params.movie, &partArray, headPart, i);
@@ -564,13 +580,16 @@ void SKSEScaleform_GetSliderData::Call(RE::GFxFunctionHandler::Params& a_params)
 			{
 				if(slider->index < skee::kNumHeadPartLists)
 				{
-					auto& headPartList = raceMenu->GetRuntimeData().headParts[slider->index];
-					RE::BGSHeadPart * headPart = (value < headPartList.size()) ? headPartList[(std::uint32_t)value] : NULL;
+					auto* headPartList = skee::GetRaceMenuHeadPartList(raceMenu, slider->index);
+					if (!headPartList) {
+						break;
+					}
+					RE::BGSHeadPart * headPart = (value < headPartList->size()) ? (*headPartList)[(std::uint32_t)value] : NULL;
 					if(headPart) {
 						RegisterNumber(a_params.retVal, "formId", headPart->formID);
 						RegisterString(a_params.retVal, a_params.movie, "partName", headPart->formEditorID.c_str());
 					}
-					RegisterNumber(a_params.retVal, "parts", static_cast<double>(headPartList.size()));
+					RegisterNumber(a_params.retVal, "parts", static_cast<double>(headPartList->size()));
 				}
 			}
 			break;
@@ -666,13 +685,12 @@ void SKSEScaleform_ImportHead::Call(RE::GFxFunctionHandler::Params& a_params)
 		return;
 
 	NifStreamWrapper niStreamScope;
-	RE::NiStream * niStream = niStreamScope.get();
 
 	RE::NiNode * rootNode = NULL;
 	RE::BSResourceNiBinaryStream binaryStream(strData);
-	if (binaryStream.good())
-	{		
-		niStream->Load1(&binaryStream);
+	if (binaryStream.good() && niStreamScope.LoadStream(&binaryStream))
+	{
+		RE::NiStream* niStream = niStreamScope.get();
 		if (niStream->topObjects.size() > 0)
 		{
 			if (niStream->topObjects[0].get()) // Get the root node
@@ -799,6 +817,7 @@ void SKSEScaleform_LoadImportedHead::Call(RE::GFxFunctionHandler::Params& a_para
 
 void SKSEScaleform_ClearSculptData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kArray);
 
@@ -939,16 +958,42 @@ void SKSEScaleform_SetPlayerRotation::Call(RE::GFxFunctionHandler::Params& a_par
 	}
 }
 
+namespace
+{
+    RE::NiPointer<RE::NiNode> FlatRaceSexCamera()
+    {
+        // This helper must only be called by the non-VR branch. Keep the menu
+        // alive while acquiring an owning reference to its camera node.
+        if (REL::Module::IsVR()) return {};
+        auto* ui = RE::UI::GetSingleton();
+        auto menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : RE::GPtr<RE::RaceSexMenu>{};
+        return menu ? menu->GetRuntimeData().camera.cameraRoot : RE::NiPointer<RE::NiNode>{};
+    }
+    bool RaceSexCameraTransform(RE::NiPoint3& position, RE::NiMatrix3& rotation)
+    {
+        return SKEE::CameraPolicy::Select(REL::Module::IsVR(),
+            [&] { return SKEE::FaceView::GetCameraTransform(position, rotation); },
+            [&] {
+                auto camera = FlatRaceSexCamera();
+                if (!camera || !SKEE::CameraPolicy::Valid(camera->local)) return false;
+                position = camera->local.translate; rotation = camera->local.rotate;
+                return true;
+            });
+    }
+}
+
 void SKSEScaleform_GetRaceSexCameraRot::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	RE::RaceSexMenu * raceMenu = RE::UI::GetSingleton()->GetMenu<RE::RaceSexMenu>().get();
-	if(raceMenu) {
-		RE::NiNode * raceCamera = raceMenu->camera.cameraRoot.get();
+    if (!a_params.retVal || !a_params.movie) return;
+    a_params.retVal->SetUndefined();
+    RE::NiPoint3 position;
+    RE::NiMatrix3 rotation;
+	if (RaceSexCameraTransform(position, rotation)) {
 		a_params.movie->CreateArray(a_params.retVal);
 		for(std::uint32_t i = 0; i < 3 * 3; i++)
 		{
 			RE::GFxValue index{};
-			index.SetNumber(((float*)raceCamera->local.rotate.entry)[i]);
+			index.SetNumber(rotation.entry[i / 3][i % 3]);
 			a_params.retVal->PushBack(index);
 		}
 	}
@@ -956,47 +1001,56 @@ void SKSEScaleform_GetRaceSexCameraRot::Call(RE::GFxFunctionHandler::Params& a_p
 
 void SKSEScaleform_GetRaceSexCameraPos::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	RE::RaceSexMenu * raceMenu = RE::UI::GetSingleton()->GetMenu<RE::RaceSexMenu>().get();
-	if(raceMenu) {
-		RE::NiNode * raceCamera = raceMenu->camera.cameraRoot.get();
+    if (!a_params.retVal || !a_params.movie) return;
+    a_params.retVal->SetUndefined();
+    RE::NiPoint3 position;
+    RE::NiMatrix3 rotation;
+	if (RaceSexCameraTransform(position, rotation)) {
 		a_params.movie->CreateObject(a_params.retVal);
 		RE::GFxValue x{};
-		x.SetNumber(raceCamera->local.translate.x);
+		x.SetNumber(position.x);
 		a_params.retVal->SetMember("x", x);
 		RE::GFxValue y{};
-		y.SetNumber(raceCamera->local.translate.y);
+		y.SetNumber(position.y);
 		a_params.retVal->SetMember("y", y);
 		RE::GFxValue z{};
-		z.SetNumber(raceCamera->local.translate.z);
+		z.SetNumber(position.z);
 		a_params.retVal->SetMember("z", z);
 	}
 }
 
 void SKSEScaleform_SetRaceSexCameraPos::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 1);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kObject);
-
-	RE::RaceSexMenu * raceMenu = RE::UI::GetSingleton()->GetMenu<RE::RaceSexMenu>().get();
-	if(raceMenu) {
-		RE::NiNode * raceCamera = raceMenu->camera.cameraRoot.get();
-
-		RE::GFxValue val{};
-		a_params.args[0].GetMember("x", &val);
-		if(val.GetType() == RE::GFxValue::ValueType::kNumber)
-			raceCamera->local.translate.x = val.GetNumber();
-
-		a_params.args[0].GetMember("y", &val);
-		if(val.GetType() == RE::GFxValue::ValueType::kNumber)
-			raceCamera->local.translate.y = val.GetNumber();
-
-		a_params.args[0].GetMember("z", &val);
-		if(val.GetType() == RE::GFxValue::ValueType::kNumber)
-			raceCamera->local.translate.z = val.GetNumber();
-
-		RE::NiUpdateData ctx;
-		raceCamera->UpdateWorldData(&ctx);
-	}
+    if (a_params.retVal) a_params.retVal->SetBoolean(false);
+    if (a_params.argCount < 1 || !a_params.args || !a_params.args[0].IsObject()) return;
+    RE::NiPoint3 position;
+    RE::NiMatrix3 rotation;
+    if (!RaceSexCameraTransform(position, rotation)) return;
+    float* components[]{&position.x, &position.y, &position.z};
+    constexpr const char* names[]{"x", "y", "z"};
+    bool changed = false;
+    // Preserve omitted coordinates, but validate every supplied component
+    // before committing any change (including doubles overflowing float).
+    for (unsigned i = 0; i < 3; ++i) {
+        RE::GFxValue value;
+        if (!a_params.args[0].GetMember(names[i], &value)) continue;
+        if (!value.IsNumber() || !std::isfinite(value.GetNumber())) return;
+        *components[i] = static_cast<float>(value.GetNumber());
+        if (!std::isfinite(*components[i])) return;
+        changed = true;
+    }
+    if (!changed) return;
+    const bool accepted = SKEE::CameraPolicy::Select(REL::Module::IsVR(),
+        [&] { return SKEE::FaceView::RequestCameraPosition(position); },
+        [&] {
+            auto camera = FlatRaceSexCamera();
+            if (!camera) return false;
+            camera->local.translate = position;
+            RE::NiUpdateData ctx{0, RE::NiUpdateData::Flag::kDirty};
+            camera->UpdateWorldData(&ctx);
+            return true;
+        });
+    if (a_params.retVal) a_params.retVal->SetBoolean(accepted);
 }
 
 void SKSEScaleform_CreateMorphEditor::Call(RE::GFxFunctionHandler::Params& a_params)
@@ -1197,6 +1251,7 @@ void SKSEScaleform_ReleaseMorphEditor::Call(RE::GFxFunctionHandler::Params& a_pa
 
 void SKSEScaleform_BeginRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1220,6 +1275,7 @@ void SKSEScaleform_EndRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_BeginPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1241,64 +1297,112 @@ void SKSEScaleform_EndPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 	g_Camera.OnMoveEnd();
 };
 
+namespace
+{
+	void PublishSculptTrace(RE::GFxMovie* movie, const SKEE::SculptTrace::Snapshot& snapshot)
+	{
+		// Papyrus UI.Invoke discards GFx return values. Publish a bounded scalar
+		// readout independently, readable via the existing native UI.GetString.
+		nlohmann::json report{
+			{"contractVersion", 2}, {"active", snapshot.active}, {"generation", snapshot.generation},
+			{"editorGeneration", g_World.GetEditorGeneration()}, {"meshCount", g_World.GetNumMeshes()},
+			{"activePaint", g_World.HasActivePaint()}, {"nativeUndoCount", g_undoStack.size()},
+			{"nativeUndoIndex", g_undoStack.GetIndex()}, {"taskInterfaceAvailable", g_task != nullptr},
+			{"brushType", g_World.GetCurrentBrush() ? static_cast<int>(g_World.GetCurrentBrush()->GetType()) : -1}
+		};
+		for (unsigned i = 0; i < snapshot.samples.size(); ++i) {
+			const auto& sample = snapshot.samples[i];
+			report[SKEE::SculptTrace::names[i]] = {{"calls", sample.calls}, {"units", sample.units},
+				{"totalUs", sample.nanoseconds / 1000.0}, {"maxUs", sample.maximumNanoseconds / 1000.0}};
+		}
+		for (const char* path : {"AddAction", "_root.AddAction",
+			"_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance.AddAction"}) {
+			RE::GFxValue callback;
+			const bool found = movie->GetVariable(&callback, path);
+			report["movieCallbacks"][path] = {{"found", found},
+				{"valueType", found ? nlohmann::json(static_cast<unsigned>(callback.GetType())) : nlohmann::json(nullptr)}};
+		}
+		RE::GFxValue plugin;
+		if (movie->GetVariable(&plugin, "_global.skse.plugins.CharGen") && plugin.IsObject()) {
+			const auto json = report.dump();
+			RE::GFxValue readout;
+			movie->CreateString(&readout, json.c_str());
+			plugin.SetMember("sculptTraceJson", readout);
+		}
+	}
+}
+
+void SKSEScaleform_BeginSculptTrace::Call(RE::GFxFunctionHandler::Params& a_params)
+{
+	SKEE::SculptTrace::Start();
+	PublishSculptTrace(a_params.movie, SKEE::SculptTrace::Read());
+	if (a_params.retVal) a_params.retVal->SetBoolean(true);
+}
+
+void SKSEScaleform_ReadSculptTrace::Call(RE::GFxFunctionHandler::Params& a_params)
+{
+	const auto snapshot = SKEE::SculptTrace::Read(a_params.argCount > 0 && a_params.args[0].IsBool() && a_params.args[0].GetBool());
+	PublishSculptTrace(a_params.movie, snapshot);
+	if (!a_params.retVal) return;
+	a_params.movie->CreateObject(a_params.retVal);
+	ScaleformUtils::RegisterNumber(a_params.retVal, "active", snapshot.active ? 1 : 0);
+	ScaleformUtils::RegisterNumber(a_params.retVal, "generation", static_cast<double>(snapshot.generation));
+	for (unsigned i = 0; i < snapshot.samples.size(); ++i) {
+		RE::GFxValue sample;
+		a_params.movie->CreateObject(&sample);
+		const auto& s = snapshot.samples[i];
+		ScaleformUtils::RegisterNumber(&sample, "calls", static_cast<double>(s.calls));
+		ScaleformUtils::RegisterNumber(&sample, "totalUs", s.nanoseconds / 1000.0);
+		ScaleformUtils::RegisterNumber(&sample, "maxUs", s.maximumNanoseconds / 1000.0);
+		ScaleformUtils::RegisterNumber(&sample, "units", static_cast<double>(s.units));
+		a_params.retVal->SetMember(SKEE::SculptTrace::names[i], sample);
+	}
+}
+
+namespace
+{
+	bool SculptPointer(RE::GFxFunctionHandler::Params& args, std::int32_t& x, std::int32_t& y)
+	{
+		if (args.argCount < 2 || !args.args[0].IsNumber() || !args.args[1].IsNumber()) return false;
+		const double px = args.args[0].GetNumber(), py = args.args[1].GetNumber();
+		if (!std::isfinite(px) || !std::isfinite(py) || px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX) return false;
+		x = static_cast<std::int32_t>(px); y = static_cast<std::int32_t>(py); return true;
+	}
+}
+
 void SKSEScaleform_BeginPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
-
-	bool hitMesh = false;
-
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if (brush) {
-		CDXBrushPickerBegin brushStroke(brush);
-		brushStroke.SetMirror(brush->IsMirror());
-		if (g_World.Pick(&g_Camera, x, y, brushStroke))
-			hitMesh = true;
-	}
-
-	a_params.retVal->SetBoolean(hitMesh);
+	std::int32_t x{}, y{};
+	if (!SculptPointer(a_params, x, y)) { g_World.EndPaint(); if (a_params.retVal) a_params.retVal->SetBoolean(false); return; }
+	const auto hit = g_World.BeginPaint(&g_Camera, x, y);
+	if (a_params.retVal) a_params.retVal->SetBoolean(hit);
 };
 
 void SKSEScaleform_DoPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
-
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if (brush) {
-		CDXBrushPickerUpdate brushStroke(brush);
-		brushStroke.SetMirror(brush->IsMirror());
-		g_World.Pick(&g_Camera, x, y, brushStroke);
-	}
+	std::int32_t x{}, y{};
+	if (SculptPointer(a_params, x, y)) g_World.UpdatePaint(&g_Camera, x, y);
 };
 
 void SKSEScaleform_EndPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if(brush)
-		brush->EndStroke();
+	SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::EndCallback);
+	g_World.EndPaint();
 };
 
 void SKSEScaleform_DoHoverMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
+	SKEE::SculptTrace::Scope trace(SKEE::SculptTrace::Event::Hover);
+	std::int32_t x{}, y{};
+	if (!SculptPointer(a_params, x, y) || g_World.GetNumMeshes() < 2) return;
+	auto cursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(0));
+	auto mirrorCursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(1));
+	if (!cursor || !mirrorCursor) return; // Partial brush resource creation must not become an invalid cast.
 
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush) {
-		CDXBrushTranslator translator(brush, static_cast<CDXBrushMesh*>(g_World.GetNthMesh(0)), static_cast<CDXBrushMesh*>(g_World.GetNthMesh(1)));
+		if (!brush->IsMirror()) mirrorCursor->SetVisible(false);
+		CDXBrushTranslator translator(brush, cursor, mirrorCursor);
 		g_World.Pick(&g_Camera, x, y, translator);
 	}
 };
@@ -1415,6 +1519,7 @@ void SKSEScaleform_GetMeshes::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_SetMeshData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kObject);
@@ -1455,16 +1560,19 @@ void SKSEScaleform_GetActionLimit::Call(RE::GFxFunctionHandler::Params& a_params
 
 void SKSEScaleform_UndoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Undo(true));
 }
 
 void SKSEScaleform_RedoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Redo(true));
 }
 
 void SKSEScaleform_GoToAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 

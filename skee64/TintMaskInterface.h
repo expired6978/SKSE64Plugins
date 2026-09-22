@@ -179,7 +179,7 @@ private:
 	virtual RE::BSEventNotifyControl ProcessEvent(const SKSE::NiNodeUpdateEvent* a_event, RE::BSTEventSource<SKSE::NiNodeUpdateEvent>* a_source) override;
 };
 
-class NIOVTaskDeferredMask : public SKSE::detail::TaskDelegate
+class NIOVTaskDeferredMask : public SKEETaskDelegate
 {
 public:
 	NIOVTaskDeferredMask(RE::TESObjectREFR * refr, bool isFirstPerson, RE::TESObjectARMO * armor, RE::TESObjectARMA * addon, RE::NiAVObject * object, ItemAttributeDataPtr overrides);

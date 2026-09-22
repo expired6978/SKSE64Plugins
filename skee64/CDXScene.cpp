@@ -1,4 +1,5 @@
 #include "CDXScene.h"
+#include "SculptTrace.h"
 #include "CDXCamera.h"
 #include "CDXMesh.h"
 #include "CDXShader.h"
@@ -103,6 +104,7 @@ void CDXScene::AddMesh(CDXMesh * mesh)
 
 bool CDXScene::Pick(CDXCamera * camera, int x, int y, CDXPicker & picker)
 {
+	SKEE::SculptTrace::Scope trace(SKEE::SculptTrace::Event::ScenePick);
 	CDXRayInfo rayInfo;
 	CDXRayInfo mRayInfo;
 	CDXVec mousePoint = XMVectorSet((float)x, (float)-y, 1.0f, 0.0f);

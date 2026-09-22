@@ -2,6 +2,7 @@
 #include <REX/W32/KERNEL32.h>
 #include "CDXMesh.h"
 #include "CDXUndo.h"
+#include "SculptTrace.h"
 #include "CDXShader.h"
 #include "CDXMaterial.h"
 #include <cstdint>
@@ -101,6 +102,7 @@ void CDXBasicBrush::EndStroke()
 	for (auto stroke : m_strokes) {
 		stroke->End();
 		if (stroke->Length() > 0) {
+			SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::StrokeCommit, stroke->Length());
 			stroke->Apply(g_undoStack.Push(stroke));
 		}
 	}
@@ -177,10 +179,12 @@ float CDXBrush::CalculateFalloff(float & dist)
 
 CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditableMesh * mesh)
 {
-	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMeshVert * pVertices = mesh->LockVertices(CDXMesh::LockMode::READ);
 	CDXHitIndexMap hitVertex;
-	if (!pVertices)
+	if (!pVertices) {
+		mesh->UnlockVertices(CDXMesh::LockMode::READ);
 		return hitVertex;
+	}
 
 	for (std::uint16_t i = 0; i < mesh->GetVertexCount(); i++) {
 		if (FilterVertex(mesh, pVertices, i))
@@ -193,7 +197,7 @@ CDXHitIndexMap CDXBasicHitBrush::GetHitIndices(CDXPickInfo & pickInfo, CDXEditab
 			hitVertex.emplace(i, CalculateFalloff(testRadius));
 		}
 	}
-	mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	mesh->UnlockVertices(CDXMesh::LockMode::READ);
 	return hitVertex;
 }
 

@@ -4,6 +4,7 @@
   "version-string": "1.0.0",
   "builtin-baseline": "ee12231b20c95013c6638d845d04c91559a1d1ff",
   "dependencies": [
+    "zlib",
     { "name": "vcpkg-cmake-config", "host": true },
     { "name": "directxmath", "version>=": "2025-04-03" },
     { "name": "directxtex" },

@@ -20,7 +20,7 @@
 #include <cstdint>
 
 
-class NIOVTaskUpdateTexture : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateTexture : public SKEETaskDelegate
 {
 public:
 	NIOVTaskUpdateTexture(RE::NiPointer<RE::BSGeometry> geometry, std::uint32_t index, StringTableItem texture) : m_geometry(geometry), m_index(index), m_texture(texture) { }
@@ -33,7 +33,7 @@ public:
 	StringTableItem	m_texture;
 };
 
-class NIOVTaskUpdateWorldData : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateWorldData : public SKEETaskDelegate
 {
 public:
 	NIOVTaskUpdateWorldData(RE::NiPointer<RE::NiAVObject> object) : m_object(object) { }
@@ -44,7 +44,7 @@ public:
 	RE::NiPointer<RE::NiAVObject> m_object;
 };
 
-class NIOVTaskMoveNode : public SKSE::detail::TaskDelegate
+class NIOVTaskMoveNode : public SKEETaskDelegate
 {
 public:
 	NIOVTaskMoveNode(RE::NiPointer<RE::NiNode> destination, RE::NiPointer<RE::NiAVObject> object) : m_object(object), m_destination(destination) { }
@@ -59,7 +59,7 @@ public:
 void GetShaderProperty(RE::NiAVObject* node, OverrideVariant* value);
 void SetShaderProperty(RE::NiAVObject* node, OverrideVariant* value, bool immediate);
 
-class NIOVTaskSetShaderProperty : public SKSE::detail::TaskDelegate
+class NIOVTaskSetShaderProperty : public SKEETaskDelegate
 {
 public:
 	NIOVTaskSetShaderProperty(RE::NiAVObject* node, const OverrideVariant& variant) : m_object(node), m_variant(variant) { }

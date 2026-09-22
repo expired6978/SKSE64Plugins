@@ -30,7 +30,7 @@ class InventoryEntryData;
 class TESObjectARMO;
 class TESObjectARMA;
 
-class SKSETaskExportHead : public SKSE::detail::TaskDelegate
+class SKSETaskExportHead : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -43,7 +43,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSETaskExportTintMask : public SKSE::detail::TaskDelegate
+class SKSETaskExportTintMask : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -55,7 +55,7 @@ public:
 	RE::BSFixedString		m_fileName;
 };
 
-class SKSETaskRefreshTintMask : public SKSE::detail::TaskDelegate
+class SKSETaskRefreshTintMask : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -67,7 +67,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSEUpdateFaceModel : public SKSE::detail::TaskDelegate
+class SKSEUpdateFaceModel : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -162,14 +162,20 @@ public:
 	NifStreamWrapper();
 	~NifStreamWrapper();
 
+	[[nodiscard]] bool IsReady() const noexcept { return initialized; }
 	bool LoadStream(RE::NiBinaryStream* stream);
+	bool AddObject(RE::NiObject* object);
+	bool SaveStream(const char* path);
 	bool VisitObjects(std::function<bool(RE::NiObject*)> functor);
 
 	// mem is a byte buffer standing in for a NiStream; the game API writes
 	// through it, so expose a non-const pointer from this const accessor.
-	RE::NiStream* get() const { return reinterpret_cast<RE::NiStream*>(const_cast<std::uint8_t*>(&mem[0])); }
+	RE::NiStream* get() const { return initialized ? raw() : nullptr; }
 	RE::NiStream* operator->() const { return get(); }
 
 protected:
-	std::uint8_t mem[sizeof(RE::NiStream)];
+	RE::NiStream* raw() const { return reinterpret_cast<RE::NiStream*>(const_cast<std::uint8_t*>(&mem[0])); }
+
+	alignas(RE::NiStream) std::uint8_t mem[sizeof(RE::NiStream)]{};
+	bool initialized{ false };
 };

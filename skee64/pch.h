@@ -10,6 +10,8 @@ using namespace std::literals;
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
+#include "SKEETasks.h"
+
 
 // DirectXTK's SimpleMath.h (pulled in via RE/S/State.h) transitively includes
 // <windows.h>, which leaves several Win32 macros defined at the end of the PCH.

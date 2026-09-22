@@ -42,7 +42,7 @@
 #define FEET_MESH "meshes\\actors\\character\\character assets\\feet_overlay.nif"
 #define FEET_MAGIC_MESH "meshes\\actors\\character\\character assets\\feet_magicoverlay.nif"
 
-class SKSETaskRevertOverlay : public SKSE::detail::TaskDelegate
+class SKSETaskRevertOverlay : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -57,7 +57,7 @@ public:
 	bool			m_resetDiffuse;
 };
 
-class SKSETaskRevertFaceOverlay : public SKSE::detail::TaskDelegate
+class SKSETaskRevertFaceOverlay : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -72,7 +72,7 @@ public:
 	bool			m_resetDiffuse;
 };
 
-class SKSETaskInstallFaceOverlay : public SKSE::detail::TaskDelegate
+class SKSETaskInstallFaceOverlay : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -87,7 +87,7 @@ public:
 	RE::BSShaderMaterial::Feature	m_shaderType;
 };
 
-class SKSETaskInstallOverlay : public SKSE::detail::TaskDelegate
+class SKSETaskInstallOverlay : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -102,7 +102,7 @@ public:
 	std::uint32_t			m_addonMask;
 };
 
-class SKSETaskModifyOverlay : public SKSE::detail::TaskDelegate
+class SKSETaskModifyOverlay : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -123,7 +123,7 @@ public:
 	SKSETaskUninstallOverlay(RE::TESObjectREFR * refr, RE::BSFixedString nodeName) : SKSETaskModifyOverlay(refr, nodeName){};
 };
 
-class SKSETaskUpdateOverlays : public SKSE::detail::TaskDelegate
+class SKSETaskUpdateOverlays : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -135,7 +135,7 @@ private:
 	std::uint32_t	m_formId;
 };
 
-class SKSETaskRemoveOverlays : public SKSE::detail::TaskDelegate
+class SKSETaskRemoveOverlays : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
@@ -147,7 +147,7 @@ private:
 	std::uint32_t	m_formId;
 };
 
-class SKSETaskRevertOverlays : public SKSE::detail::TaskDelegate
+class SKSETaskRevertOverlays : public SKEETaskDelegate
 {
 public:
 	virtual void Run();
