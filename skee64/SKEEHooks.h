@@ -108,6 +108,8 @@ inline constexpr std::uint32_t kID_useFaceGenPreProcessedHeads     = 378620; // 
 // The Skyrim VR Address Library identifies these SSE IDs as bit-for-bit
 // identical in Skyrim VR 1.4.15. They deliberately do not use the kID_ prefix:
 // that prefix denotes the AE-keyed inventory above.
+inline constexpr std::uint32_t kReloc_SetUniqueIDSEVR = 15907;
+inline constexpr std::uint32_t kReloc_UpdateHeadStateSEVR = 24220;
 inline constexpr std::uint32_t kReloc_NiStreamCtorSEVR = 68971;
 inline constexpr std::uint32_t kReloc_NiStreamDtorSEVR = 68972;
 
@@ -267,13 +269,12 @@ namespace SKEE
 
 	inline std::int32_t UpdateHeadState(RE::TESNPC* a_npc, RE::Actor* a_actor, std::uint32_t a_unk1)
 	{
-		if (REL::Module::IsVR()) {
-			return VRFunction<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)>(0x003727B0)(a_npc, a_actor, a_unk1);
-		}
 		if (!HasQualifiedCustomAddresses()) {
 			return 0;
 		}
-		static REL::Relocation<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)> func{ REL::RelocationID(0, kID_UpdateHeadState) };
+		static REL::Relocation<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)> func{
+			REL::RelocationID(kReloc_UpdateHeadStateSEVR, kID_UpdateHeadState, kReloc_UpdateHeadStateSEVR)
+		};
 		return func(a_npc, a_actor, a_unk1);
 	}
 
@@ -481,14 +482,12 @@ namespace SKEE
 
 	inline void InventoryChanges_SetUniqueID(RE::InventoryChanges* a_this, RE::ExtraDataList* a_extraList, RE::TESForm* a_oldForm, RE::TESForm* a_newForm)
 	{
-		if (REL::Module::IsVR()) {
-			VRFunction<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)>(0x001FD7D0)(a_this, a_extraList, a_oldForm, a_newForm);
-			return;
-		}
 		if (!HasQualifiedCustomAddresses()) {
 			return;
 		}
-		static REL::Relocation<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)> func{ REL::RelocationID(0, kID_InventoryChanges_SetUniqueID) };
+		static REL::Relocation<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)> func{
+			REL::RelocationID(kReloc_SetUniqueIDSEVR, kID_InventoryChanges_SetUniqueID, kReloc_SetUniqueIDSEVR)
+		};
 		func(a_this, a_extraList, a_oldForm, a_newForm);
 	}
 

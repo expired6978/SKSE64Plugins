@@ -294,8 +294,14 @@ namespace SKEE
 					"SkyrimVR helper {} failed 1.4.15 qualification at RVA 0x{:X}{}",
 					a_name,
 					a_rva,
-					a_allowEntryDetour ? " (neither the original entry nor a supported executable detour was present)" : "");
+				a_allowEntryDetour ? " (neither the original entry nor a supported executable detour was present)" : "");
 				return false;
+			};
+			auto validateRelocation = [&validate]<std::size_t N>(
+				std::string_view a_name,
+				REL::RelocationID a_id,
+				const std::array<std::uint8_t, N>& a_expected) {
+				return validate(a_name, a_id.offset(), a_expected);
 			};
 
 			// These entry windows were read independently from the retained exact
@@ -319,7 +325,8 @@ namespace SKEE
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x81 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x80 }, std::uint8_t{ 0x01 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
 				validate("UpdateNPCMorph", 0x00370330,
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0xC4 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x81 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x80 }, std::uint8_t{ 0x01 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
-				validate("UpdateHeadState", 0x003727B0,
+				validateRelocation("UpdateHeadState",
+					REL::RelocationID(kReloc_UpdateHeadStateSEVR, kID_UpdateHeadState, kReloc_UpdateHeadStateSEVR),
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x56 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x57 } }) &&
 				validate("Actor::ChangeHeadPart", 0x003EBD30,
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x74 }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x20 } },
@@ -342,9 +349,11 @@ namespace SKEE
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
 				validate("CreateBSDynamicTriShape", 0x00CB8530,
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
-				validate("NiStream::ctor", 0x00C9EC40,
+				validateRelocation("NiStream::ctor",
+					REL::RelocationID(kReloc_NiStreamCtorSEVR, kID_NiStreamCtor, kReloc_NiStreamCtorSEVR),
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x4C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x08 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } }) &&
-				validate("NiStream::dtor", 0x00C9EEA0,
+				validateRelocation("NiStream::dtor",
+					REL::RelocationID(kReloc_NiStreamDtorSEVR, kID_NiStreamDtor, kReloc_NiStreamDtorSEVR),
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
 				validate("NiStream::AddObject", 0x00C9F090,
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
@@ -354,7 +363,8 @@ namespace SKEE
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x30 } }) &&
 				validate("SetNewInventoryItemModel", 0x008B5B40,
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x55 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 } }) &&
-				validate("InventoryChanges::SetUniqueID", 0x001FD7D0,
+				validateRelocation("InventoryChanges::SetUniqueID",
+					REL::RelocationID(kReloc_SetUniqueIDSEVR, kID_InventoryChanges_SetUniqueID, kReloc_SetUniqueIDSEVR),
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x85 }, std::uint8_t{ 0xD2 }, std::uint8_t{ 0x0F }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC0 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
 				validate("FxDelegate::Invoke target", 0x00F342E0,
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } });
