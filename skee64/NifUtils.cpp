@@ -21,10 +21,12 @@
 #include <unordered_set>
 #include <cstdint>
 #include "NiRTTIUtils.h"
+#include "VisualEquipmentInterface.h"
 
 
 
 extern bool g_exportSkinToBone;
+extern VisualEquipmentInterface g_visualEquipmentInterface;
 
 namespace {
 	// Legacy create factories for NIF-level geometry (matches legacy skse64/NiGeometry.cpp):
@@ -716,15 +718,26 @@ RE::TESObjectARMO* GetActorSkin(RE::Actor* actor)
 
 struct MatchBySlot
 {
+	RE::Actor* m_actor;
 	std::uint32_t m_mask;
 public:
-	MatchBySlot(std::uint32_t slot) :
-		m_mask(slot)
+	MatchBySlot(RE::Actor* actor, std::uint32_t slot) :
+		m_actor(actor), m_mask(slot)
 	{
 
 	}
 
 	bool Matches(RE::TESForm* pForm) const {
+		if (m_actor) {
+			auto* armor = pForm ? pForm->As<RE::TESObjectARMO>() : nullptr;
+			if (armor) {
+				const auto sourceMask = static_cast<std::uint32_t>(armor->bipedModelData.bipedObjectSlots.underlying());
+				std::uint32_t effectiveMask = sourceMask;
+				if (g_visualEquipmentInterface.ResolveSlotMask(m_actor, armor, nullptr, sourceMask, &effectiveMask) == IVisualEquipmentProvider::kHandled) {
+					return (effectiveMask & m_mask) != 0;
+				}
+			}
+		}
 		return IsSlotMatch(pForm, m_mask);
 	}
 };
@@ -739,6 +752,21 @@ bool IsSlotMatch(RE::TESForm* pForm, std::uint32_t mask)
 	}
 
 	return false;
+}
+
+bool IsSlotMatch(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, std::uint32_t mask)
+{
+	if (!armor || !addon) {
+		return false;
+	}
+
+	const auto sourceMask = static_cast<std::uint32_t>(addon->bipedModelData.bipedObjectSlots.underlying());
+	std::uint32_t effectiveMask = sourceMask;
+	if (actor && g_visualEquipmentInterface.ResolveSlotMask(actor, armor, addon, sourceMask, &effectiveMask) == IVisualEquipmentProvider::kHandled) {
+		return (effectiveMask & mask) != 0;
+	}
+
+	return IsSlotMatch(addon, mask);
 }
 
 RE::TESForm* GetSkinForm(RE::Actor* thisActor, std::uint32_t mask)
@@ -780,7 +808,7 @@ static bool EntryIsWorn(RE::InventoryEntryData* a_entry)
 
 RE::TESForm* GetWornForm(RE::Actor* thisActor, std::uint32_t mask)
 {
-	MatchBySlot matcher(mask);
+	MatchBySlot matcher(thisActor, mask);
 
 	struct WornFinder : RE::InventoryChanges::IItemChangeVisitor
 	{
@@ -810,7 +838,7 @@ RE::TESForm* GetWornForm(RE::Actor* thisActor, std::uint32_t mask)
 
 void VisitAllWornItems(RE::Actor* thisActor, std::uint32_t mask, std::function<void(RE::InventoryEntryData*)> functor)
 {
-	MatchBySlot matcher(mask);
+	MatchBySlot matcher(thisActor, mask);
 
 	struct WornVisitor : RE::InventoryChanges::IItemChangeVisitor
 	{
@@ -964,8 +992,12 @@ void VisitSkeletalRoots(RE::TESObjectREFR* ref, std::function<void(RE::NiNode*, 
 	}
 }
 
-void VisitArmorAddon(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectARMA* arma, std::function<void(bool, RE::NiNode*, RE::NiAVObject*)> functor)
+static void VisitArmorAddonRaw(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectARMA* arma, std::function<void(bool, RE::NiNode*, RE::NiAVObject*)> functor)
 {
+	if (!actor || !armor || !arma) {
+		return;
+	}
+
 	char addonString[REX::W32::MAX_PATH];
 	memset(addonString, 0, sizeof(addonString));
 	arma->GetNodeName(addonString, actor, armor, -1.0f);
@@ -1009,6 +1041,42 @@ void VisitArmorAddon(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectAR
 			}
 		}
 	});
+}
+
+void VisitArmorAddon(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectARMA* arma, std::function<void(bool, RE::NiNode*, RE::NiAVObject*)> functor)
+{
+	class EffectiveAddonVisitor final : public IVisualEquipmentProvider::ArmorAddonVisitor
+	{
+	public:
+		EffectiveAddonVisitor(RE::Actor* actor, std::function<void(bool, RE::NiNode*, RE::NiAVObject*)>& functor) :
+			m_actor(actor), m_functor(functor)
+		{}
+
+		bool Visit(RE::TESObjectARMO* effectiveArmor, RE::TESObjectARMA* effectiveAddon) override
+		{
+			if (!effectiveArmor || !effectiveAddon) {
+				return true;
+			}
+
+			const std::uint64_t key = (static_cast<std::uint64_t>(effectiveArmor->formID) << 32) | effectiveAddon->formID;
+			if (m_visited.insert(key).second) {
+				VisitArmorAddonRaw(m_actor, effectiveArmor, effectiveAddon, m_functor);
+			}
+			return true;
+		}
+
+	private:
+		RE::Actor* m_actor;
+		std::function<void(bool, RE::NiNode*, RE::NiAVObject*)>& m_functor;
+		std::unordered_set<std::uint64_t> m_visited;
+	};
+
+	EffectiveAddonVisitor visitor(actor, functor);
+	if (g_visualEquipmentInterface.VisitArmorAddons(actor, armor, arma, &visitor) == IVisualEquipmentProvider::kHandled) {
+		return;
+	}
+
+	VisitArmorAddonRaw(actor, armor, arma, functor);
 }
 
 bool ResolveAnyForm(SKSE::SerializationInterface* intfc, std::uint32_t handle, std::uint32_t* newHandle)

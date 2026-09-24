@@ -57,6 +57,87 @@ public:
 	virtual void OnAttach(RE::TESObjectREFR * refr, RE::TESObjectARMO * armor, RE::TESObjectARMA * addon, RE::NiAVObject * object, bool isFirstPerson, RE::NiNode * skeleton, RE::NiNode * root) = 0;
 };
 
+// Allows mods which change an actor's rendered equipment without changing the
+// inventory entry (variants, transmog, outfit visualizers, hidden equipment,
+// and similar systems) to describe the resulting visual state to RaceMenu.
+//
+// RaceMenu never owns provider or visitor objects. Providers must remain alive
+// until unregistered and must coordinate unregistration with any in-flight
+// query. Only POD values and virtual visitors cross the DLL boundary; STL
+// containers and std::function deliberately do not.
+class IVisualEquipmentProvider
+{
+public:
+	enum ResolveResult : skee_u32
+	{
+		kUnhandled = 0,
+		kHandled = 1
+	};
+
+	class ArmorAddonVisitor
+	{
+	public:
+		virtual ~ArmorAddonVisitor() = default;
+
+		// Return true to continue enumeration, false to stop.
+		virtual bool Visit(RE::TESObjectARMO* armor, RE::TESObjectARMA* addon) = 0;
+	};
+
+	virtual ~IVisualEquipmentProvider() = default;
+
+	// Resolve the effective rendered slot mask for a source inventory armor or
+	// one of its source armor addons. sourceAddon is null for an armor-level
+	// query. A handled result may return a zero mask to mean visually hidden.
+	virtual ResolveResult ResolveSlotMask(
+		RE::Actor* actor,
+		RE::TESObjectARMO* sourceArmor,
+		RE::TESObjectARMA* sourceAddon,
+		skee_u32 sourceMask,
+		skee_u32* effectiveMask) = 0;
+
+	// Enumerate the effective rendered (ARMO, ARMA) pairs corresponding to one
+	// source pair. A handled result with no visits means deliberately hidden.
+	// Return kUnhandled to retain RaceMenu's ordinary source-pair traversal;
+	// visits made by an unhandled provider are discarded.
+	virtual ResolveResult VisitArmorAddons(
+		RE::Actor* actor,
+		RE::TESObjectARMO* sourceArmor,
+		RE::TESObjectARMA* sourceAddon,
+		ArmorAddonVisitor* visitor) = 0;
+};
+
+class IVisualEquipmentInterface : public IPluginInterface
+{
+public:
+	enum
+	{
+		kPluginVersion1 = 1,
+		kCurrentPluginVersion = kPluginVersion1,
+	};
+
+	// Higher priority providers are queried first. The first provider returning
+	// kHandled owns that query. Provider keys must be unique.
+	virtual bool RegisterProvider(const char* key, skee_i32 priority, IVisualEquipmentProvider* provider) = 0;
+	virtual bool UnregisterProvider(const char* key, IVisualEquipmentProvider* provider) = 0;
+
+	// Public query surface for RaceMenu and other consumers.
+	virtual IVisualEquipmentProvider::ResolveResult ResolveSlotMask(
+		RE::Actor* actor,
+		RE::TESObjectARMO* sourceArmor,
+		RE::TESObjectARMA* sourceAddon,
+		skee_u32 sourceMask,
+		skee_u32* effectiveMask) = 0;
+	virtual IVisualEquipmentProvider::ResolveResult VisitArmorAddons(
+		RE::Actor* actor,
+		RE::TESObjectARMO* sourceArmor,
+		RE::TESObjectARMA* sourceAddon,
+		IVisualEquipmentProvider::ArmorAddonVisitor* visitor) = 0;
+
+	// Reapply RaceMenu visual state after a provider changes an actor's mapping.
+	// Calls must be made while the actor is valid.
+	virtual bool NotifyChanged(RE::Actor* actor) = 0;
+};
+
 class IBodyMorphInterface : public IPluginInterface
 {
 public:
