@@ -18,6 +18,12 @@ public:
 	void Call(RE::GFxFunctionHandler::Params& a_params) override;
 };
 
+class SKSEScaleform_SetCharacterName : public RE::GFxFunctionHandler
+{
+public:
+	void Call(RE::GFxFunctionHandler::Params& a_params) override;
+};
+
 class SKSEScaleform_GetSliderData : public RE::GFxFunctionHandler
 {
 public:
@@ -259,6 +265,18 @@ public:
 };
 
 class SKSEScaleform_SetMeshCameraRadius : public RE::GFxFunctionHandler
+{
+public:
+	void Call(RE::GFxFunctionHandler::Params& a_params) override;
+};
+
+class SKSEScaleform_BeginSculptTrace : public RE::GFxFunctionHandler
+{
+public:
+	void Call(RE::GFxFunctionHandler::Params& a_params) override;
+};
+
+class SKSEScaleform_ReadSculptTrace : public RE::GFxFunctionHandler
 {
 public:
 	void Call(RE::GFxFunctionHandler::Params& a_params) override;

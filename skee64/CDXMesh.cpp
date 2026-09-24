@@ -5,6 +5,8 @@
 #include "CDXMaterial.h"
 #include "CDXPicker.h"
 #include <cstdint>
+#include <cstring>
+#include "SculptTrace.h"
 
 
 
@@ -168,17 +170,8 @@ bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVe
 
 CDXMeshVert * CDXMesh::LockVertices(const LockMode type)
 {
-	if (type == LockMode::WRITE)
-	{
-		REX::W32::D3D11_MAPPED_SUBRESOURCE vertResource;
-		CDXMeshVert* pVertices = nullptr;
-		HRESULT res = m_pDevice->GetDeviceContext()->Map(m_vertexBuffer.Get(), 0, (REX::W32::D3D11_MAP)type, 0, &vertResource);
-		if (res == S_OK)
-		{
-			return static_cast<CDXMeshVert*>(vertResource.data);
-		}
-	}
-
+	// CPU-owned authoritative copy. D3D write mappings can be write-combined:
+	// reading them during picking or read/modify/write strokes is very costly.
 	return m_vertices.get();
 }
 
@@ -189,10 +182,23 @@ CDXMeshIndex * CDXMesh::LockIndices()
 
 void CDXMesh::UnlockVertices(const LockMode type)
 {
-	if (type == LockMode::WRITE)
-	{
-		m_pDevice->GetDeviceContext()->Unmap(m_vertexBuffer.Get(), 0);
-	}
+	if (type == LockMode::WRITE && m_vertices) m_verticesDirty = true;
+}
+
+bool CDXMesh::FlushVertices()
+{
+	if (!m_verticesDirty) return true;
+	if (!m_pDevice || !m_vertexBuffer.Get() || !m_vertices) return false;
+	auto context = m_pDevice->GetDeviceContext();
+	if (!context.Get()) return false;
+	SKEE::SculptTrace::Scope trace(SKEE::SculptTrace::Event::Upload, sizeof(CDXMeshVert) * m_vertCount);
+	REX::W32::D3D11_MAPPED_SUBRESOURCE resource{};
+	if (FAILED(context->Map(m_vertexBuffer.Get(), 0, REX::W32::D3D11_MAP_WRITE_DISCARD, 0, &resource)))
+		return false; // Keep dirty; retry on the next render, without losing edits.
+	std::memcpy(resource.data, m_vertices.get(), sizeof(CDXMeshVert) * m_vertCount);
+	context->Unmap(m_vertexBuffer.Get(), 0);
+	m_verticesDirty = false;
+	return true;
 }
 
 void CDXMesh::UnlockIndices(bool write)
@@ -203,14 +209,18 @@ void CDXMesh::UnlockIndices(bool write)
 
 bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 {
+	SKEE::SculptTrace::Scope trace(SKEE::SculptTrace::Event::MeshPick, GetFaceCount());
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
-	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
+	CDXMeshVert* pVertices = LockVertices(LockMode::READ);
 	CDXMeshIndex* pIndices = LockIndices();
 
-	if (!pVertices || !pIndices)
+	if (!pVertices || !pIndices) {
+		UnlockVertices(LockMode::READ);
+		UnlockIndices();
 		return false;
+	}
 
 	float hitDist = FLT_MAX;
 	CDXVec hitNormal = XMVectorZero();
@@ -249,7 +259,7 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 		}
 	}
 
-	UnlockVertices(LockMode::WRITE);
+	UnlockVertices(LockMode::READ);
 	UnlockIndices();
 
 	pickInfo.ray = rayInfo;
@@ -293,7 +303,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, std::uint32_t vertexCount
 	}
 
 	auto pDeviceContext = device->GetDeviceContext();
-	if (!pDevice.Get()) {
+	if (!pDeviceContext.Get()) {
 		SKSE::log::error("{} - No device deviceContext4 found", __FUNCTION__);
 		return false;
 	}
@@ -338,7 +348,7 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, std::uint32_t vertexCount
 		return false;
 	}
 
-	m_vertices.release();
+	m_verticesDirty = false;
 
 	// Set up the description of the static index buffer.
 	indexBufferDesc.usage = REX::W32::D3D11_USAGE_DEFAULT;
@@ -369,6 +379,7 @@ void CDXMesh::Render(CDXD3DDevice * device, CDXShader * shader)
 #ifdef CDX_MUTEX
 	std::lock_guard<std::mutex> guard(m_mutex);
 #endif
+	if (!FlushVertices()) return;
 	unsigned int stride;
 	unsigned int offset;
 

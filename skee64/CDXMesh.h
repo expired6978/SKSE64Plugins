@@ -55,6 +55,8 @@ public:
 
 	virtual void UnlockVertices(const LockMode type);
 	virtual void UnlockIndices(bool write = false);
+	// Upload edited CPU vertices once before drawing, never while picking.
+	bool FlushVertices();
 
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer> GetVertexBuffer();
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer> GetIndexBuffer();
@@ -76,18 +78,16 @@ protected:
 		CDXVec	Position;
 		CDXVec	Color;
 	};
-	union
-	{
-		std::unique_ptr<CDXMeshVert[]>		m_vertices{};
-		std::unique_ptr<ColoredPrimitive[]> m_primitive;
-	};
+	std::unique_ptr<CDXMeshVert[]> m_vertices;
+	std::unique_ptr<ColoredPrimitive[]> m_primitive;
+	bool m_verticesDirty{false};
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer>	m_indexBuffer;
 	std::uint32_t					m_indexCount;
 	std::unique_ptr<CDXMeshIndex[]>	m_indices;
 	REX::W32::D3D_PRIMITIVE_TOPOLOGY	m_topology;
 	std::shared_ptr<CDXMaterial> m_material;
 	CDXMatrix				m_transform;
-	CDXD3DDevice		*	m_pDevice;
+	CDXD3DDevice		*	m_pDevice{};
 
 #ifdef CDX_MUTEX
 	mutable std::mutex		m_mutex;

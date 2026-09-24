@@ -2,11 +2,12 @@
 
 // Race-menu types now come straight from CommonLibSSE-NG (v7.0.0+):
 //   RE::RaceMenuSlider, RE::RaceComponent, RE::RaceMenuSliderArray  (RE/R/RaceMenuSlider.h)
-//   RE::RaceSexMenu::RUNTIME_DATA (headParts / sliderData / ...)    (RE/R/RaceSexMenu.h)
+//   RE::RaceSexMenu runtime data (headParts / sliderData / ...)     (RE/R/RaceSexMenu.h)
 // The project-owned mirrors that used to live here (skee::RaceMenuSlider,
 // skee::RaceComponent, skee::RaceSexMenuData + GetRaceSexMenuData) were removed
-// once CommonLib typed those regions. Access the menu's runtime data directly via
-//   RE::RaceSexMenu::GetRuntimeData()  ->  .headParts[7], .sliderData[2], .unk188, ...
+// once CommonLib typed those regions. Access RaceSexMenu data through the helpers
+// below: Skyrim VR omits the flat RaceSexCamera member and therefore needs the
+// distinct VR_RUNTIME_DATA layout.
 //
 // The only thing kept in this header is a small factory for building an
 // RE::RaceMenuSlider (CommonLib's type is a plain POD with no convenience
@@ -15,14 +16,56 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 #include <RE/R/RaceMenuSlider.h>
 #include <RE/R/RaceSexMenu.h>
 
 namespace skee
 {
-	// Number of per-race head-part lists in RaceSexMenu::RUNTIME_DATA::headParts.
+	// Number of per-race head-part lists in both RaceSexMenu runtime layouts.
 	constexpr std::size_t kNumHeadPartLists = 7;
+
+	// RaceSexMenu has a distinct VR layout: Skyrim VR removes the flat
+	// RaceSexCamera block between headParts and sliderData.  Keep all callers on
+	// one runtime-aware path so a flat accessor can never silently interpret the
+	// VR sex/race fields as a BSTArray again.
+	inline RE::RaceMenuSlider* GetActiveRaceMenuSlider(
+		RE::RaceSexMenu* a_menu, std::uint8_t a_gender, std::uint32_t a_sliderID) noexcept
+	{
+		if (!a_menu || a_gender >= 2) {
+			return nullptr;
+		}
+
+		if (REL::Module::IsVR()) {
+			auto& data = a_menu->GetVRRuntimeData();
+			const auto gender = static_cast<std::uint8_t>(data.sex.underlying());
+			if (gender >= 2 || data.unk188 >= data.sliderData[gender].size()) {
+				return nullptr;
+			}
+			auto& sliders = data.sliderData[gender][data.unk188].sliders;
+			return a_sliderID < sliders.size() ? std::addressof(sliders[a_sliderID]) : nullptr;
+		}
+
+		auto& data = a_menu->GetRuntimeData();
+		if (data.unk188 >= data.sliderData[a_gender].size()) {
+			return nullptr;
+		}
+		auto& sliders = data.sliderData[a_gender][data.unk188].sliders;
+		return a_sliderID < sliders.size() ? std::addressof(sliders[a_sliderID]) : nullptr;
+	}
+
+	inline RE::BSTArray<RE::BGSHeadPart*>* GetRaceMenuHeadPartList(
+		RE::RaceSexMenu* a_menu, std::size_t a_index) noexcept
+	{
+		if (!a_menu || a_index >= kNumHeadPartLists) {
+			return nullptr;
+		}
+		if (REL::Module::IsVR()) {
+			return std::addressof(a_menu->GetVRRuntimeData().headParts[a_index]);
+		}
+		return std::addressof(a_menu->GetRuntimeData().headParts[a_index]);
+	}
 
 	// Build an RE::RaceMenuSlider with the same field layout/initialization the old
 	// project-owned mirror constructor used to provide (name is stored as a raw pointer;

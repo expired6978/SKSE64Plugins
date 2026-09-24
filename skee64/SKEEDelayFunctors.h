@@ -96,12 +96,15 @@ protected:
 // class, so this vtable-only declaration matches slot 0. Retrieve the live
 // instance via SKSE::GetObjectInterface()->GetDelayFunctorManager() (non-const)
 // or SKSE::GetDelayFunctorManager() (const*).
-class SKSEDelayFunctorManager
+namespace SKSE
 {
-public:
-	// Takes ownership of a_func. Runs it on the game thread.
-	virtual void Enqueue(ISKSEDelayFunctor* a_func, std::int32_t a_delayMS = 0) const = 0;
-};
+	class SKSEDelayFunctorManager
+	{
+	public:
+		// Takes ownership of a_func. Runs it on the game thread.
+		virtual void Enqueue(::ISKSEDelayFunctor* a_func, std::int32_t a_delayMS = 0) const = 0;
+	};
+}
 
 // Factory for an ISKSEObject (legacy PapyrusObjects.h). The object registry
 // stores the vtable directly, so RegisterFactory may be handed a temporary.
@@ -133,9 +136,12 @@ public:
 // The SKSE runtime's object registry. Only RegisterFactory / GetFactoryByName
 // are virtual (legacy PapyrusObjects.h). Retrieve the live instance via
 // SKSE::GetObjectInterface()->GetObjectRegistry() or SKSE::GetObjectRegistry().
-class SKSEObjectRegistry
+namespace SKSE
 {
-public:
-	virtual void RegisterFactory(ISKSEObjectFactory* a_factory) const = 0;
-	virtual const ISKSEObjectFactory* GetFactoryByName(const char* a_name) const = 0;
-};
+	class SKSEObjectRegistry
+	{
+	public:
+		virtual void RegisterFactory(::ISKSEObjectFactory* a_factory) const = 0;
+		virtual const ::ISKSEObjectFactory* GetFactoryByName(const char* a_name) const = 0;
+	};
+}

@@ -116,7 +116,7 @@ private:
 	CDXVectorMap	m_current;
 };
 
-class CRGNTaskUpdateModel : public SKSE::detail::TaskDelegate
+class CRGNTaskUpdateModel : public SKEETaskDelegate
 {
 public:
 	CRGNTaskUpdateModel(RE::BSTriShape * geometry);
@@ -128,7 +128,7 @@ private:
 	RE::NiPointer<RE::BSTriShape> m_geometry;
 };
 
-class CRGNUITaskAddStroke : public SKSE::detail::UIDelegate_v1
+class CRGNUITaskAddStroke : public SKEETaskDelegate
 {
 public:
 	CRGNUITaskAddStroke(CDXStroke * stroke, RE::BSTriShape * geometry, std::int32_t i);
@@ -137,12 +137,14 @@ public:
 	virtual void Dispose();
 
 private:
-	CDXStroke * m_stroke;
+	std::uint64_t m_editorGeneration;
+	std::uint32_t m_undoType, m_strokeType, m_vertices;
+	bool m_mirror;
 	std::int32_t	m_id;
 	RE::NiPointer<RE::BSTriShape> m_geometry;
 };
 
-class CRGNUITaskStandardCommand : public SKSE::detail::UIDelegate_v1
+class CRGNUITaskStandardCommand : public SKEETaskDelegate
 {
 public:
 	CRGNUITaskStandardCommand(CDXUndoCommand * cmd, RE::BSTriShape * geometry, std::int32_t i);
@@ -151,7 +153,8 @@ public:
 	virtual void Dispose();
 
 private:
-	CDXUndoCommand * m_cmd;
+	std::uint64_t m_editorGeneration;
+	std::uint32_t m_undoType;
 	std::int32_t	m_id;
 	RE::NiPointer<RE::BSTriShape> m_geometry;
 };

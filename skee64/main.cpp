@@ -31,22 +31,35 @@
 #include "RE/T/TESInitScriptEvent.h"
 #include "RE/T/TESLoadGameEvent.h"
 #include "RE/T/TESUniqueIDChangeEvent.h"
+#include "RE/I/INISettingCollection.h"
 #include "RE/I/IVirtualMachine.h"
 #include "RE/V/Variable.h"
 #include "RE/N/NativeFunction.h"
 #include "RE/G/GFxMovieView.h"
 #include "RE/G/GFxValue.h"
 #include "RE/G/GFxFunctionHandler.h"
+#include "RE/M/MenuOpenCloseEvent.h"
+#include "RE/R/RaceSexMenu.h"
+#include "RE/U/UI.h"
 #include "SKSE/Events.h"
 #include "PluginInterface.h"
 #include "OverrideInterface.h"
 #include "OverlayInterface.h"
 #include "BodyMorphInterface.h"
+#include "CharacterCreationInterface.h"
+#include "VRNewGameIntent.h"
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
 #include "SkinLayerInterface.h"
 #include "PresetInterface.h"
+#include "RaceSexMenuVRInput.h"
+#include "RaceSexMenuVRKeyboard.h"
+#include "MenuAppearance.h"
+#include "MenuConfiguration.h"
+#include "MenuExtensions.h"
+#include "RaceSexMenuFaceView.h"
+#include "AvatarLighting.h"
 #include "SkeletonExtender.h"
 #include "AttachmentInterface.h"
 #include "ActorUpdateManager.h"
@@ -76,10 +89,170 @@
 #include "PapyrusNiOverride.h"
 #include "PapyrusCharGen.h"
 #include "SKEEHooks.h"
+#include "BuildVersion.h"
+
+#include <spdlog/sinks/basic_file_sink.h>
+
+namespace
+{
+	void InitializeVR2Logging()
+	{
+#if defined(ENABLE_SKYRIM_VR)
+		try {
+			auto logDirectory = SKSE::log::log_directory();
+			if (!logDirectory) {
+				return;
+			}
+
+			auto logPath = *logDirectory / "RaceMenuNGVR2.log";
+			auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
+			auto logger = std::make_shared<spdlog::logger>("RaceMenuNGVR2", std::move(fileSink));
+			spdlog::set_default_logger(std::move(logger));
+			spdlog::set_pattern("[%Y-%m-%d %T.%e] [%l] %v");
+			spdlog::set_level(spdlog::level::info);
+			spdlog::flush_on(spdlog::level::info);
+		} catch (...) {
+			// Diagnostics must never prevent the plugin from loading.
+		}
+#endif
+	}
+
+#if defined(ENABLE_SKYRIM_VR)
+	constexpr std::uint32_t kRaceSexCursorConfigureAttempts = 8;
+
+	bool g_enableRaceSexMouseCursor = true;
+	bool g_applyRaceSexMenuPlacement = true;
+	float g_raceSexMenuOffsetX = 40.0F;
+	float g_raceSexMenuOffsetY = -40.0F;
+	float g_raceSexMenuOffsetZ = 100.0F;
+	// RaceSex offsets translate one shared projected UI quad. Rotate that quad
+	// itself so the left-offset panel faces the viewer.
+	float g_raceSexMenuWorldYaw = 158.2F;
+	float g_raceSexMenuWorldScale = 1.5F;
+	std::uint32_t g_raceSexMenuCategoryMask = 0xFFFFFFFF;
+
+	bool ApplyRaceSexMenuPlacement()
+	{
+		auto* settings = RE::INISettingCollection::GetSingleton();
+		if (!settings) {
+			SKSE::log::error("RaceSexMenu VR placement could not access Skyrim's INI setting collection");
+			return false;
+		}
+
+		struct PlacementSetting
+		{
+			const char* name;
+			float value;
+		};
+
+		const PlacementSetting placementSettings[] = {
+			{ "fRaceSexMenuOffsetX:VRUI", g_raceSexMenuOffsetX },
+			{ "fRaceSexMenuOffsetY:VRUI", g_raceSexMenuOffsetY },
+			{ "fRaceSexMenuOffsetZ:VRUI", g_raceSexMenuOffsetZ }
+		};
+
+		bool appliedAll = true;
+		for (const auto& requested : placementSettings) {
+			auto* setting = settings->GetSetting(requested.name);
+			if (!setting || setting->GetType() != RE::Setting::Type::kFloat) {
+				SKSE::log::error("RaceSexMenu VR placement setting '{}' is unavailable or not a float", requested.name);
+				appliedAll = false;
+				continue;
+			}
+
+			const auto previous = setting->GetFloat();
+			setting->SetFloat(requested.value);
+			SKSE::log::info(
+				"RaceSexMenu VR placement setting '{}' applied: {:.4f}->{:.4f}",
+				requested.name,
+				previous,
+				setting->GetFloat());
+		}
+
+		return appliedAll;
+	}
+
+	void QueueRaceSexMouseCursorConfiguration(std::uint32_t a_attempt = 1);
+
+	void ConfigureRaceSexMouseCursor(std::uint32_t a_attempt)
+	{
+		auto* ui = RE::UI::GetSingleton();
+		auto menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : RE::GPtr<RE::RaceSexMenu>{};
+		if (!menu || !menu->uiMovie) {
+			if (a_attempt < kRaceSexCursorConfigureAttempts) {
+				QueueRaceSexMouseCursorConfiguration(a_attempt + 1);
+			} else {
+				SKSE::log::error("RaceSex mouse compatibility could not find the live movie after {} attempts", a_attempt);
+			}
+			return;
+		}
+
+		auto* movie = menu->uiMovie.get();
+		const auto yawApplied = SKEE::VR::ApplyRaceSexMenuWorldYaw();
+		const auto cursorCountBefore = movie->GetMouseCursorCount();
+		const auto controllerCount = movie->GetControllerCount();
+		const auto usedCursorBefore = menu->UsesCursor();
+		const auto updatedCursorBefore = menu->UpdateUsesCursor();
+
+		// RaceSexMenu normally asks RefreshPlatform() to remove mouse input while a
+		// gamepad is active.  Motion controllers keep that path permanently active
+		// in Skyrim VR, leaving the Scaleform movie with zero mouse endpoints even
+		// though OCU can map its laser onto the movie correctly.  Add the endpoint
+		// only to this movie.  UI_MENU_FLAGS participate in balanced open/close
+		// bookkeeping, so mutating them after the menu has opened can leave Skyrim's
+		// shared VR UI root in RaceSexMenu's world pose for later menus.
+		movie->SetMouseCursorCount(1);
+
+		const auto cursorCountAfter = movie->GetMouseCursorCount();
+		SKSE::log::info(
+			"RaceSex mouse compatibility attempt {}: cursor {}->{}, controllers {}, UsesCursor {} (unchanged), UpdateUsesCursor {} (unchanged), scene yaw {}",
+			a_attempt,
+			cursorCountBefore,
+			cursorCountAfter,
+			controllerCount,
+			usedCursorBefore,
+			updatedCursorBefore,
+			yawApplied ? "applied" : "pending");
+
+		if ((cursorCountAfter == 0 || !yawApplied) && a_attempt < kRaceSexCursorConfigureAttempts) {
+			QueueRaceSexMouseCursorConfiguration(a_attempt + 1);
+		}
+	}
+
+	void QueueRaceSexMouseCursorConfiguration(std::uint32_t a_attempt)
+	{
+		if (auto* tasks = SKSE::GetTaskInterface()) {
+			tasks->AddTask([a_attempt] { ConfigureRaceSexMouseCursor(a_attempt); });
+		}
+	}
+
+	class RaceSexMouseCursorSink final : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+	{
+	public:
+		RE::BSEventNotifyControl ProcessEvent(
+			const RE::MenuOpenCloseEvent* a_event,
+			RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
+		{
+			const auto* menuName = a_event ? a_event->menuName.c_str() : nullptr;
+			if (a_event && menuName && std::string_view{ menuName } == RE::RaceSexMenu::MENU_NAME) {
+				if (a_event->opening) {
+					if (g_enableRaceSexMouseCursor) QueueRaceSexMouseCursorConfiguration();
+				} else {
+					SKEE::VR::CancelRaceSexMenuKeyboard();
+					SKEE::VR::RestoreRaceSexMenuWorldTransform();
+				}
+			}
+			return RE::BSEventNotifyControl::kContinue;
+		}
+	};
+
+	RaceSexMouseCursorSink g_raceSexMouseCursorSink;
+#endif
+}
 
 
 // Plugin handle (legacy compatibility)
-std::uint32_t g_pluginHandle = SKSE::kInvalidPluginHandle;
+std::uint32_t g_pluginHandle = static_cast<std::uint32_t>(-1);
 
 // Versions of the actually-running SKSE/game, captured from the LoadInterface
 // in SKSE_PLUGIN_LOAD. Written into preset headers instead of compile-time constants.
@@ -104,6 +277,7 @@ OverrideInterface			g_overrideInterface;
 TintMaskInterface			g_tintMaskInterface;
 OverlayInterface			g_overlayInterface;
 BodyMorphInterface			g_bodyMorphInterface;
+CharacterCreationInterface	g_characterCreationInterface;
 ItemDataInterface			g_itemDataInterface;
 NiTransformInterface		g_transformInterface;
 FaceMorphInterface			g_morphInterface;
@@ -292,17 +466,20 @@ std::string SKEE64GetConfigOption(const char * section, const char * key)
 	const std::string & configPath = SKEE64GetConfigPath();
 	const std::string & configPathCustom = SKEE64GetConfigPath(true);
 
-	char	resultBuf[256];
+	// Reject an overlength player name instead of accepting a truncated name.
+	char	resultBuf[4096];
+	const auto bufferSize = std::strcmp(section, "VR") == 0 && std::strcmp(key, "sPlayerName") == 0 ?
+		static_cast<std::uint32_t>(sizeof(resultBuf)) : 256U;
 	resultBuf[0] = 0;
 
 	if (!configPath.empty())
 	{
-		std::uint32_t	resultLen = REX::W32::GetPrivateProfileStringA(section, key, NULL, resultBuf, sizeof(resultBuf), configPath.c_str());
+		std::uint32_t	resultLen = REX::W32::GetPrivateProfileStringA(section, key, NULL, resultBuf, bufferSize, configPath.c_str());
 		result = resultBuf;
 	}
 	if (!configPathCustom.empty())
 	{
-		std::uint32_t	resultLen = REX::W32::GetPrivateProfileStringA(section, key, NULL, resultBuf, sizeof(resultBuf), configPathCustom.c_str());
+		std::uint32_t	resultLen = REX::W32::GetPrivateProfileStringA(section, key, NULL, resultBuf, bufferSize, configPathCustom.c_str());
 		if (resultLen > 0) // Only take custom if we have it
 			result = resultBuf;
 	}
@@ -368,6 +545,7 @@ void SKEE64Serialization_Revert(SKSE::SerializationInterface* a_intfc)
 	g_transformInterface.Revert();
 	g_morphInterface.Revert();
 	g_attachmentInterface.Revert();
+	g_characterCreationInterface.Revert();
 	g_stringTable.Revert();
 }
 
@@ -546,6 +724,17 @@ bool RegisterCharGenScaleform(RE::GFxMovieView * view, RE::GFxValue * root)
 
 	RegisterBool(root, "bEnableSculpting", g_enableSculpting);
 	RegisterBool(root, "bEnableHeadExport", g_enableHeadExport);
+#if defined(ENABLE_SKYRIM_VR)
+	RegisterNumber(root, "vrCategoryMask", g_raceSexMenuCategoryMask);
+	SKEE::MenuAppearance::Register(view, root);
+	SKEE::MenuConfiguration::Register(view, root);
+	SKEE::MenuExtensions::Register(view, root);
+	g_characterCreationInterface.RegisterMovie(view, root);
+	SKEE::FaceView::Register(view, root);
+	SKEE::AvatarLighting::Register(view, root);
+	SKEE::VR::RegisterRaceSexMenuInputTrace(view, root);
+	SKEE::VR::RegisterRaceSexMenuKeyboard(view, root);
+#endif
 
 	SKEERegisterScaleformFunction<SKSEScaleform_ImportHead>(root, view, "ImportHead");
 	SKEERegisterScaleformFunction<SKSEScaleform_ExportHead>(root, view, "ExportHead");
@@ -556,6 +745,7 @@ bool RegisterCharGenScaleform(RE::GFxMovieView * view, RE::GFxValue * root)
 	SKEERegisterScaleformFunction<SKSEScaleform_GetSliderData>(root, view, "GetSliderData");
 	SKEERegisterScaleformFunction<SKSEScaleform_GetSliderPartData>(root, view, "GetSliderPartData");
 	SKEERegisterScaleformFunction<SKSEScaleform_GetModName>(root, view, "GetModName");
+	SKEERegisterScaleformFunction<SKSEScaleform_SetCharacterName>(root, view, "SetCharacterName");
 
 	SKEERegisterScaleformFunction<SKSEScaleform_GetPlayerPosition>(root, view, "GetPlayerPosition");
 	SKEERegisterScaleformFunction<SKSEScaleform_GetPlayerRotation>(root, view, "GetPlayerRotation");
@@ -584,6 +774,10 @@ bool RegisterCharGenScaleform(RE::GFxMovieView * view, RE::GFxValue * root)
 	SKEERegisterScaleformFunction<SKSEScaleform_EndPaintMesh>(root, view, "EndPaintMesh");
 
 	SKEERegisterScaleformFunction<SKSEScaleform_DoHoverMesh>(root, view, "DoHoverMesh");
+	SKEERegisterScaleformFunction<SKSEScaleform_BeginSculptTrace>(root, view, "BeginSculptTrace");
+	SKEERegisterScaleformFunction<SKSEScaleform_ReadSculptTrace>(root, view, "ReadSculptTrace");
+	RegisterNumber(root, "sculptTraceContractVersion", 2);
+	RegisterString(root, view, "sculptTraceJson", "");
 
 	SKEERegisterScaleformFunction<SKSEScaleform_GetCurrentBrush>(root, view, "GetCurrentBrush");
 	SKEERegisterScaleformFunction<SKSEScaleform_SetCurrentBrush>(root, view, "SetCurrentBrush");
@@ -642,6 +836,9 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 	{
 		case SKSE::MessagingInterface::kPostLoad:
 		{
+#if defined(ENABLE_SKYRIM_VR)
+			SKEE::VR::InstallNewGameIntentObserver();
+#endif
 			if (!g_enableEarlyRegistration)
 			{
 				if (auto* msg = SKSE::GetMessagingInterface()) {
@@ -659,20 +856,57 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 		}
 		break;
 		case SKSE::MessagingInterface::kPreLoadGame:
+			g_characterCreationInterface.OnSaveLoading();
 			g_enableBodyInit = false;
 			g_tintMaskInterface.ManageTints();
 			break;
 		case SKSE::MessagingInterface::kPostLoadGame:
+			if (!message->data) g_characterCreationInterface.CancelConfiguredName();
 			g_enableBodyInit = true;
 			g_tintMaskInterface.ReleaseTints();
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 		{
+			g_characterCreationInterface.BeginNewGame();
 			g_actorUpdateManager.setNewGame(true);
 			break;
 		}
 		case SKSE::MessagingInterface::kDataLoaded:
 		{
+			if (auto* ui = RE::UI::GetSingleton()) {
+				ui->AddEventSink(&g_characterCreationInterface);
+				g_characterCreationInterface.ObserveCurrentState();
+				SKSE::log::info("Registered character-creation automation observer");
+			} else {
+				SKSE::log::error("Could not register character-creation automation observer: UI singleton unavailable");
+			}
+
+#if defined(ENABLE_SKYRIM_VR)
+			if (g_applyRaceSexMenuPlacement) {
+				if (ApplyRaceSexMenuPlacement()) {
+					SKSE::log::info("Applied RaceSexMenu-local VR placement through Skyrim's native VRUI settings");
+				} else {
+					SKSE::log::error("Could not apply the complete RaceSexMenu-local VR placement setting set");
+				}
+			}
+
+			if (g_enableRaceSexMouseCursor) {
+				if (SKEE::VR::RegisterRaceSexMenuPointerInput()) {
+					SKSE::log::info("Installed RaceSexMenu VR movie-selection and Trigger/A pointer-input hooks");
+				} else {
+					SKSE::log::error("Could not install RaceSexMenu VR movie-selection and Trigger/A pointer-input hooks");
+				}
+
+			}
+			// Keyboard lifetime cleanup must not depend on pointer support being enabled.
+			if (auto* ui = RE::UI::GetSingleton()) {
+				ui->AddEventSink(&g_raceSexMouseCursorSink);
+				SKSE::log::info("Registered RaceSexMenu VR lifetime observer");
+			} else {
+				SKSE::log::error("Could not register RaceSexMenu VR lifetime observer: UI singleton unavailable");
+			}
+#endif
+
 			if (g_enableBodyGen) {
 				SKEERegisterEventSink<RE::TESInitScriptEvent>(&g_actorUpdateManager);
 
@@ -696,10 +930,20 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 {
 	REL::Module::get().reset(); // Static inited addresses fucko'd in CommonLibSSE-NG
 	SKSE::Init(a_intfc);
+	InitializeVR2Logging();
 
 	g_skseVersion = a_intfc->SKSEVersion();
 	g_runtimeVersion = a_intfc->RuntimeVersion().pack();
     g_task = SKSE::GetTaskInterface();
+
+	SKSE::log::info(
+		"RaceMenu NG VR 2 build identity: package={}, native={}, runtime={}, SKSE=0x{:08X}, CommonLibSSE-NG={}, VR Address Library={}",
+		SKEE_VR2_PACKAGE_VERSION_STRING,
+		SKEE_NATIVE_PLUGIN_VERSION_STRING,
+		a_intfc->RuntimeVersion().string("."),
+		g_skseVersion,
+		SKEE_COMMONLIB_VERSION,
+		SKEE_VR_ADDRESS_LIBRARY_VERSION);
 
 	SKSE::log::debug("NetImmerse Override Enabled");
 
@@ -718,6 +962,41 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	SKEE64GetConfigValue("Features", "bEnableFaceNormalRecalculate", &g_enableFaceNormalRecalculate);
 	SKEE64GetConfigValue("Features", "bEnableBodyNormalRecalculate", &g_enableBodyNormalRecalculate);
 	SKEE64GetConfigValue("Features", "bEnableEarlyRegistration", &g_enableEarlyRegistration);
+#if defined(ENABLE_SKYRIM_VR)
+	SKEE64GetConfigValue("VR", "bEnableRaceSexMouseCursor", &g_enableRaceSexMouseCursor);
+	SKEE64GetConfigValue("VR", "bApplyRaceSexMenuPlacement", &g_applyRaceSexMenuPlacement);
+	SKEE64GetConfigValue("VR", "fRaceSexMenuOffsetX", &g_raceSexMenuOffsetX);
+	SKEE64GetConfigValue("VR", "fRaceSexMenuOffsetY", &g_raceSexMenuOffsetY);
+	SKEE64GetConfigValue("VR", "fRaceSexMenuOffsetZ", &g_raceSexMenuOffsetZ);
+	if (!SKEE64GetConfigValue("VR", "fRaceSexMenuWorldYaw", &g_raceSexMenuWorldYaw)) {
+		// Compatibility with the short-lived 0.1.25 setting name. The value now
+		// controls the actual projected UI quad rather than the inert HMD offset.
+		SKEE64GetConfigValue("VR", "fRaceSexMenuHMDYaw", &g_raceSexMenuWorldYaw);
+	}
+	SKEE64GetConfigValue("VR", "fRaceSexMenuWorldScale", &g_raceSexMenuWorldScale);
+	SKEE64GetConfigValue("VR Categories", "uVisibleMask", &g_raceSexMenuCategoryMask);
+	SKEE::MenuConfiguration::Configure(SKEE64GetConfigOption);
+	SKEE::AvatarLighting::Configure(SKEE64GetConfigOption);
+	bool enableFaceView = true;
+	float faceDistance = 45;
+	SKEE64GetConfigValue("VR", "bEnableFaceView", &enableFaceView);
+	SKEE64GetConfigValue("Menu Profile VR Face", "fFaceDistance", &faceDistance);
+	float faceEyeHeight = 5;
+	SKEE64GetConfigValue("Menu Profile VR Face", "fFaceEyeHeight", &faceEyeHeight);
+	SKEE::FaceView::Configure(enableFaceView, faceDistance, faceEyeHeight);
+	SKEE::MenuAppearance::Configure(SKEE64GetConfigOption("Menu Appearance", "sBackgroundColor"),
+		SKEE64GetConfigOption("Menu Appearance", "sTextColor"), F4EEGetRuntimeDirectory());
+	SKEE::VR::SetRaceSexMenuWorldTransform(g_raceSexMenuWorldScale, g_raceSexMenuWorldYaw, g_applyRaceSexMenuPlacement);
+	SKSE::log::info("RaceSexMenu VR mouse compatibility: {}", g_enableRaceSexMouseCursor ? "enabled" : "disabled");
+	SKSE::log::info(
+		"RaceSexMenu VR native placement: {} (X={:.4f}, Y={:.4f}, Z={:.4f}, world yaw={:.4f}, scale={:.3f})",
+		g_applyRaceSexMenuPlacement ? "enabled" : "disabled",
+		g_raceSexMenuOffsetX,
+		g_raceSexMenuOffsetY,
+		g_raceSexMenuOffsetZ,
+		g_raceSexMenuWorldYaw,
+		g_raceSexMenuWorldScale);
+#endif
 
 	// Toggle Specific Hooks which interact with game code
 	SKEE64GetConfigValue("Hooks", "bBipedAttach", &g_hookBipedAttach);
@@ -867,6 +1146,13 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		}
 	}
 
+	// SKSE unloads a plugin that returns false; do not publish external owners before this point.
+	const auto hookResult = InstallSKEEHooks();
+	if (!hookResult.success) {
+		SKSE::log::critical("RaceMenu hook qualification failed; rejecting skee64.dll before external registration");
+		return false;
+	}
+
 	g_commandInterface.RegisterCommands();
 
 	if (auto* ser = SKSE::GetSerializationInterface()) {
@@ -915,6 +1201,8 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	g_interfaceMap.AddInterface("Command", &g_commandInterface);
 	g_interfaceMap.AddInterface("FormTag", &g_formTagInterface);
     g_interfaceMap.AddInterface("Preset", &g_presetInterface);
+	g_interfaceMap.AddInterface("CharacterCreation", &g_characterCreationInterface);
+	g_interfaceMap.AddInterface("MenuExtensions", SKEE::MenuExtensions::GetInterface());
 
 	if (g_enableTangentSpaceCorrection)
 	{
@@ -932,5 +1220,5 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		g_actorUpdateManager.AddInterface(&g_tintMaskInterface);
 	}
 
-	return InstallSKEEHooks();
+	return true;
 }
