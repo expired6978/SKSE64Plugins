@@ -169,7 +169,7 @@ namespace
 	using UpdateNPCMorphsVRFn = void (*)(RE::TESNPC*, void*, RE::BSFaceGenNiNode*);
 	using UpdateNPCMorphVRFn = void (*)(RE::TESNPC*, RE::BGSHeadPart*, RE::BSFaceGenNiNode*);
 	using UpdateHeadStateVRFn = std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t);
-	using SetNewInventoryItemModelVRFn = void (*)(RE::Inventory3DManager*, RE::TESForm*, RE::TESForm*, RE::NiNode**);
+	using InitializeDisplayObjectVRFn = void (*)(RE::Inventory3DManager*, RE::TESForm*, RE::TESForm*, RE::NiNode*);
 
 	GetHeadPartsVRFn             g_getHeadPartsVROriginal{ nullptr };
 	AddRaceMenuSliderVRFn        g_addRaceMenuSliderVROriginal{ nullptr };
@@ -178,7 +178,7 @@ namespace
 	UpdateNPCMorphsVRFn          g_updateNPCMorphsVROriginal{ nullptr };
 	UpdateNPCMorphVRFn           g_updateNPCMorphVROriginal{ nullptr };
 	UpdateHeadStateVRFn          g_updateHeadStateVROriginal{ nullptr };
-	SetNewInventoryItemModelVRFn g_setNewInventoryItemModelVROriginal{ nullptr };
+	InitializeDisplayObjectVRFn g_initializeDisplayObjectVROriginal{ nullptr };
 }
 #endif
 
@@ -1419,9 +1419,9 @@ void SetInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE:
 	SetInventoryItemModel_Original(inventoryManager, baseForm, baseExtraList);
 }
 
-void SetNewInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, RE::TESForm * form1, RE::TESForm * form2, RE::NiNode ** node)
+void InitializeDisplayObject_Hooked(RE::Inventory3DManager* inventoryManager, RE::TESForm* form1, RE::TESForm* form2, RE::NiNode* node)
 {
-	if (inventoryManager && form1 && form1->IsArmor() && node && *node) {
+	if (inventoryManager && form1 && form1->IsArmor() && node) {
 		RE::TESObjectARMO* armor = form1 ? form1->As<RE::TESObjectARMO>() : nullptr;
 		if (armor) {
 			RE::ExtraDataList& baseExtraList = inventoryManager->originalExtra;
@@ -1432,19 +1432,19 @@ void SetNewInventoryItemModel_Hooked(RE::Inventory3DManager * inventoryManager, 
 				rankId = rankData->rank;
 			}
 
-			g_itemDataInterface.UpdateInventoryItemDye(rankId, armor, *node);
+			g_itemDataInterface.UpdateInventoryItemDye(rankId, armor, node);
 		}
 	}
 
 #if defined(ENABLE_SKYRIM_VR)
 	if (REL::Module::IsVR()) {
-		if (g_setNewInventoryItemModelVROriginal) {
-			g_setNewInventoryItemModelVROriginal(inventoryManager, form1, form2, node);
+		if (g_initializeDisplayObjectVROriginal) {
+			g_initializeDisplayObjectVROriginal(inventoryManager, form1, form2, node);
 		}
 		return;
 	}
 #endif
-	SKEE::SetNewInventoryItemModel(inventoryManager, form1, form2, node);
+	SKEE::InitializeDisplayObject(inventoryManager, form1, form2, node);
 }
 
 void TransferItemUID_Hooked(RE::InventoryChanges* extraContainerChangeData, RE::ExtraDataList* extraList, RE::TESForm* oldForm, RE::TESForm* newForm, std::uint32_t unk1)
@@ -2046,7 +2046,7 @@ namespace
 		const VRCallPatch newModel{
 			"new-inventory-model",
 			0x008B6220 + 0x1B0,
-			reinterpret_cast<std::uintptr_t>(SetNewInventoryItemModel_Hooked),
+			reinterpret_cast<std::uintptr_t>(InitializeDisplayObject_Hooked),
 			0x008B5B40
 		};
 		std::uintptr_t newModelOriginal = 0;
@@ -2107,7 +2107,7 @@ namespace
 		}
 		if (installInventory) {
 			SetInventoryItemModel_Original = reinterpret_cast<SetInventoryItemModelFn>(setModelEntry);
-			g_setNewInventoryItemModelVROriginal = reinterpret_cast<SetNewInventoryItemModelVRFn>(newModelOriginal);
+			g_initializeDisplayObjectVROriginal = reinterpret_cast<InitializeDisplayObjectVRFn>(newModelOriginal);
 			// The displaced instruction is exactly five bytes; resuming at +6 would
 			// enter the middle of the following mov [rsp+0x20],rsi instruction.
 			g_branchTrampoline.write_branch<5>(setModel, reinterpret_cast<std::uintptr_t>(SetInventoryItemModel_Hooked));
@@ -2149,7 +2149,7 @@ static bool InstallFlatSKEEHooks()
 	}
 
 	constexpr size_t kSliderFuncScanRange = 0x5000; // this function is ~0x3A00 bytes in both known builds
-	const uint8_t* sliderFuncBase = reinterpret_cast<const uint8_t*>(REL::RelocationID(0, kID_LoadSliders).address());
+	const uint8_t* sliderFuncBase = reinterpret_cast<const uint8_t*>(kReloc_LoadSliders.address());
 
 	// Front-load all pattern scans so failures can be reported together before any game code is patched
 	const char * failedPatterns[5] = { nullptr };
@@ -2442,7 +2442,7 @@ static bool InstallFlatSKEEHooks()
 
 		g_branchTrampoline.write_branch<6>(SetInventoryItemModel_Address, (uintptr_t)SetInventoryItemModel_Hooked);
 
-		g_branchTrampoline.write_call<5>(SetNewInventoryItemModel_Target, (uintptr_t)SetNewInventoryItemModel_Hooked);
+		g_branchTrampoline.write_call<5>(SetNewInventoryItemModel_Target, (uintptr_t)InitializeDisplayObject_Hooked);
 	}
 
 	{

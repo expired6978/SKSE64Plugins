@@ -72,20 +72,17 @@ inline constexpr std::uint32_t kID_ApplyRaceMorph_Target           = 26836;
 inline constexpr std::uint32_t kID_RegenerateHead                  = 26838;
 inline constexpr std::uint32_t kID_BSFaceGenModel_ApplyRaceMorph   = 26882;
 inline constexpr std::uint32_t kID_BSFaceGenModel_ApplyMorph       = 26883;
-inline constexpr std::uint32_t kID_UpdateModelFace                 = 27044;
 inline constexpr std::uint32_t kID_UpdateMorph_Target              = 27061;
 inline constexpr std::uint32_t kID_ChangeActorHeadPart             = 27063;
 inline constexpr std::uint32_t kID_UpdateModelSkin                 = 27066;
 inline constexpr std::uint32_t kID_UpdateModelHair                 = 27067;
 inline constexpr std::uint32_t kID_SetNiGeometryTexture            = 36987;
-inline constexpr std::uint32_t kID_SetNewInventoryItemModel        = 51772;
 inline constexpr std::uint32_t kID_SetInventoryItemModel           = 51775;
 inline constexpr std::uint32_t kID_SetNewInventoryItemModel_Target = 51776;
 inline constexpr std::uint32_t kID_DoubleMorphCallback2_Target     = 52356;
 inline constexpr std::uint32_t kID_CachePartsTarget_Target         = 52369;
 inline constexpr std::uint32_t kID_DoubleMorphCallback             = 52401;
 inline constexpr std::uint32_t kID_InvokeCategoriesList_Target     = 52407;
-inline constexpr std::uint32_t kID_LoadSliders                     = 52409;
 inline constexpr std::uint32_t kID_AddRaceMenuSlider               = 52453;
 inline constexpr std::uint32_t kID_NiStreamCtor                    = 70324;
 inline constexpr std::uint32_t kID_NiStreamDtor                    = 70325;
@@ -112,6 +109,9 @@ inline constexpr std::uint32_t kReloc_SetUniqueIDSEVR = 15907;
 inline constexpr std::uint32_t kReloc_UpdateHeadStateSEVR = 24220;
 inline constexpr std::uint32_t kReloc_NiStreamCtorSEVR = 68971;
 inline constexpr std::uint32_t kReloc_NiStreamDtorSEVR = 68972;
+inline constexpr REL::RelocationID kReloc_UpdateModelFace{ 26458, 27044, 26458 };
+inline constexpr REL::RelocationID kReloc_InitializeDisplayObject{ 50896, 51772, 50896 };
+inline constexpr REL::RelocationID kReloc_LoadSliders{ 51534, 52409, 51534 };
 
 // Function-pointer types for the hooked functions whose unpatched originals
 // are kept in code-cave trampolines (see the *_Original holders below).
@@ -291,16 +291,13 @@ namespace SKEE
 		func(a_this, a_oldPart, a_newPart);
 	}
 
-	inline std::uint32_t UpdateModelFace(RE::NiAVObject* a_object)
+	inline void UpdateModelFace(RE::NiAVObject* a_object)
 	{
-		if (REL::Module::IsVR()) {
-			return VRFunction<std::uint32_t (*)(RE::NiAVObject*)>(0x003EB710)(a_object);
-		}
 		if (!HasQualifiedCustomAddresses()) {
-			return 0;
+			return;
 		}
-		static REL::Relocation<std::uint32_t (*)(RE::NiAVObject*)> func{ REL::RelocationID(0, kID_UpdateModelFace) };
-		return func(a_object);
+		static REL::Relocation<void (*)(RE::NiAVObject*)> func{ kReloc_UpdateModelFace };
+		func(a_object);
 	}
 
 	inline std::uint32_t UpdateModelSkin(RE::NiAVObject* a_object, RE::NiColorA** a_color)
@@ -354,16 +351,13 @@ namespace SKEE
 		func(a_menu, a_newValue, a_sliderId);
 	}
 
-	inline void* LoadSliders(RE::RaceSexMenu* a_menu, std::uint64_t a_unk1, std::uint8_t a_unk2)
+	inline void LoadSliders(RE::RaceSexMenu* a_menu, RE::TESActorBase* a_actorOverride, std::uint8_t a_unk2)
 	{
-		if (REL::Module::IsVR()) {
-			return VRFunction<void* (*)(RE::RaceSexMenu*, std::uint64_t, std::uint8_t)>(0x008E39B0)(a_menu, a_unk1, a_unk2);
-		}
 		if (!HasQualifiedCustomAddresses()) {
-			return nullptr;
+			return;
 		}
-		static REL::Relocation<void* (*)(RE::RaceSexMenu*, std::uint64_t, std::uint8_t)> func{ REL::RelocationID(0, kID_LoadSliders) };
-		return func(a_menu, a_unk1, a_unk2);
+		static REL::Relocation<void (*)(RE::RaceSexMenu*, RE::TESActorBase*, std::uint8_t)> func{ kReloc_LoadSliders };
+		func(a_menu, a_actorOverride, a_unk2);
 	}
 
 	// --- Geometry / NiStream creation -------------------------------------------
@@ -467,17 +461,15 @@ namespace SKEE
 
 	// --- Inventory / tinting ------------------------------------------------------
 
-	inline void SetNewInventoryItemModel(void* a_unk1, RE::TESForm* a_form1, RE::TESForm* a_form2, RE::NiNode** a_node)
+	inline void InitializeDisplayObject(RE::Inventory3DManager* a_manager, RE::TESForm* a_form1, RE::TESForm* a_form2, RE::NiNode* a_node)
 	{
-		if (REL::Module::IsVR()) {
-			VRFunction<void (*)(void*, RE::TESForm*, RE::TESForm*, RE::NiNode**)>(0x008B5B40)(a_unk1, a_form1, a_form2, a_node);
-			return;
-		}
 		if (!HasQualifiedCustomAddresses()) {
 			return;
 		}
-		static REL::Relocation<void (*)(void*, RE::TESForm*, RE::TESForm*, RE::NiNode**)> func{ REL::RelocationID(0, kID_SetNewInventoryItemModel) };
-		func(a_unk1, a_form1, a_form2, a_node);
+		static REL::Relocation<void (*)(RE::Inventory3DManager*, RE::TESForm*, RE::TESForm*, RE::NiNode*)> func{
+			kReloc_InitializeDisplayObject
+		};
+		func(a_manager, a_form1, a_form2, a_node);
 	}
 
 	inline void InventoryChanges_SetUniqueID(RE::InventoryChanges* a_this, RE::ExtraDataList* a_extraList, RE::TESForm* a_oldForm, RE::TESForm* a_newForm)

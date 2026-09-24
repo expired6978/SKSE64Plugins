@@ -196,7 +196,7 @@ target_include_directories(skee64 PRIVATE
 )
 target_compile_definitions(skee64 PRIVATE
     SKEE_COMMONLIB_VERSION="8.2.0"
-    SKEE_VR_ADDRESS_LIBRARY_VERSION="0.264.0"
+    SKEE_VR_ADDRESS_LIBRARY_VERSION="0.270.0"
     XBYAK_NO_OP_NAMES
 )
 target_compile_options(skee64 PRIVATE /permissive- /bigobj)

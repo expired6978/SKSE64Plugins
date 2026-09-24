@@ -342,7 +342,7 @@ void SKSEScaleform_ReloadSliders::Call(RE::GFxFunctionHandler::Params& a_params)
 		auto raceMenu = mm->GetMenu<RE::RaceSexMenu>();
 		if(raceMenu) {
 			RE::PlayerCharacter * player = RE::PlayerCharacter::GetSingleton();
-			SKEE::LoadSliders(raceMenu.get(), (std::uint64_t)player->GetBaseObject(), 0);
+			SKEE::LoadSliders(raceMenu.get(), player->GetActorBase(), 0);
 			player->DoReset3D(true);
 		}
 	}
