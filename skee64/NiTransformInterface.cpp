@@ -183,7 +183,7 @@ bool NodeTransformRegistrationMapHolder::Load(SKSE::SerializationInterface* intf
 	return error;
 }
 
-class NIOVTaskUpdateReference : public SKSE::detail::TaskDelegate
+class NIOVTaskUpdateReference : public SKSE::Impl::TaskDelegate
 {
 public:
 	NIOVTaskUpdateReference(std::uint32_t formId, NiTransformInterface * xFormInterface)

@@ -30,7 +30,7 @@ class InventoryEntryData;
 class TESObjectARMO;
 class TESObjectARMA;
 
-class SKSETaskExportHead : public SKSE::detail::TaskDelegate
+class SKSETaskExportHead : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -43,7 +43,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSETaskExportTintMask : public SKSE::detail::TaskDelegate
+class SKSETaskExportTintMask : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -55,7 +55,7 @@ public:
 	RE::BSFixedString		m_fileName;
 };
 
-class SKSETaskRefreshTintMask : public SKSE::detail::TaskDelegate
+class SKSETaskRefreshTintMask : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -67,7 +67,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSEUpdateFaceModel : public SKSE::detail::TaskDelegate
+class SKSEUpdateFaceModel : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -132,6 +132,12 @@ inline RE::BSFaceGenNiNode* GetFaceGenNiNode(RE::Actor* a_actor)
 		return nullptr;
 	return a_actor->GetFaceNodeSkinned();
 }
+
+// Port of legacy skse64 NiSkinInstance::Clone() (skse64/NiGeometry.cpp:96) — a detached
+// copy on the game heap: fresh instance from the engine factory, shared
+// skinData/skinPartition/rootParent pointers, copied bone array. Returns nullptr for
+// a null input.
+RE::NiSkinInstance* DetachedCopy(RE::NiSkinInstance* a_skinInstance);
 
 class GeometryVisitor
 {

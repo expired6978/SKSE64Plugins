@@ -18,6 +18,9 @@
 #include "RE/V/Variable.h"       // RE::BSScript::Variable (== legacy VMValue)
 #include "SKSE/Interfaces.h"     // SKSE::SerializationInterface, ObjectInterface
 
+namespace SKSE
+{
+
 // Tag type for the serialization constructor (legacy PapyrusObjects.h:17).
 struct SerializationTag {};
 
@@ -55,7 +58,6 @@ public:
 // (SKSE/Impl/PCH.h:648-657). These types live at global scope (to match SKSE's),
 // so make those names visible here for the macro expansion.
 using namespace std::literals;
-namespace stl = SKSE::stl;
 
 // A delay functor that resumes a latent Papyrus stack. Declared as a full class
 // (not vtable-only) so concrete functors can inherit from it and use StackId().
@@ -139,3 +141,4 @@ public:
 	virtual void RegisterFactory(ISKSEObjectFactory* a_factory) const = 0;
 	virtual const ISKSEObjectFactory* GetFactoryByName(const char* a_name) const = 0;
 };
+}
