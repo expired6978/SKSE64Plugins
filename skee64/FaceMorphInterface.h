@@ -387,7 +387,7 @@ protected:
 #endif
 };
 
-class SKSETaskApplyMorphs : public SKEETaskDelegate
+class SKSETaskApplyMorphs : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -399,7 +399,7 @@ private:
 	std::uint32_t m_formId;
 };
 
-class SKSETaskApplyMorphNormals : public SKEETaskDelegate
+class SKSETaskApplyMorphNormals : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run();

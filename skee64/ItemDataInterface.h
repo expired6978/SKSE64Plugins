@@ -236,7 +236,7 @@ public:
 	void Revert();
 };
 
-class NIOVTaskUpdateItemDye : public SKEETaskDelegate
+class NIOVTaskUpdateItemDye : public SKSE::Impl::TaskDelegate
 {
 public:
 	NIOVTaskUpdateItemDye(RE::Actor* actor, IItemDataInterface::Identifier& identifier, std::uint32_t flags, bool forced, LayerFunctor layerFunctor = LayerFunctor());

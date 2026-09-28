@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <cstdint>
-class SKSEAttachSkinnedMesh : public SKEETaskDelegate
+class SKSEAttachSkinnedMesh : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run() override;
@@ -26,7 +26,7 @@ protected:
 	std::vector<RE::BSFixedString>		m_filter;
 };
 
-class SKSEDetachSkinnedMesh : public SKEETaskDelegate
+class SKSEDetachSkinnedMesh : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run() override;
@@ -40,7 +40,7 @@ protected:
 	bool							m_firstPerson;
 };
 
-class SKSEDetachAllSkinnedMeshes : public SKEETaskDelegate
+class SKSEDetachAllSkinnedMeshes : public SKSE::Impl::TaskDelegate
 {
 public:
 	virtual void Run() override;

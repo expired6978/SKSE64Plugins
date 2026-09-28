@@ -9,8 +9,9 @@
 
 #include "RE/N/NiRTTI.h"
 #include "RE/N/NiGeometry.h"
+#include "RE/N/NiSkinInstance.h"
+#include "RE/B/BSDismemberSkinInstance.h"
 #include "RE/N/NiTriShape.h"
-#include "RE/N/NiCloningProcess.h"
 #include "RE/B/BSGeometry.h"
 #include "RE/N/NiExtraData.h"
 #include "RE/E/ExtraContainerChanges.h"
@@ -22,7 +23,6 @@
 #include <unordered_set>
 #include <cstdint>
 #include "NiRTTIUtils.h"
-#include "ExportSkinClonePolicy.h"
 
 
 
@@ -62,23 +62,7 @@ namespace {
 		if (!a_skinInstance)
 			return nullptr;
 
-		// NiSkinInstance::CreateClone deliberately returns this when none of its
-		// root/bones are in the cloning map. NiObject::Clone() supplies an empty
-		// map here, so treating its result as writable corrupts the live actor.
-		// Seed the remapped root to request a genuinely independent instance,
-		// preserving derived skin-instance types through the game's virtual clone.
-		RE::NiCloningProcess cloning{};
-		cloning.scale = RE::NiPoint3(1.0f, 1.0f, 1.0f);
-		cloning.cloneMap.insert({ a_skinInstance->rootParent, a_skinnedNode });
-		auto newSkinInstance = SKEE::RequestIndependentExportSkin(a_skinInstance,
-			[&](RE::NiSkinInstance* source) {
-				return RE::NiPointer<RE::NiSkinInstance>(
-					static_cast<RE::NiSkinInstance*>(source->CreateClone(cloning)));
-			});
-		if (!newSkinInstance) {
-			SKSE::log::error("Head export: skin clone is missing or aliases the live actor; refusing mutation");
-			return nullptr;
-		}
+		auto newSkinInstance = RE::NiPointer<RE::NiSkinInstance>(DetachedCopy(a_skinInstance));
 		newSkinInstance->rootParent = a_skinnedNode;
 
 		std::uint32_t numBones = 0;
@@ -147,6 +131,82 @@ namespace {
 		return newSkinInstance;
 	}
 
+}
+
+// Port of legacy skse64 NiSkinInstance::Clone() (skse64/NiGeometry.cpp:96). Legacy
+// member names mapped to CommonLib equivalents:
+//   m_spSkinData->skinData, m_spSkinPartition->skinPartition, m_pkRootParent->rootParent,
+//   m_ppkBones->bones, m_worldTransforms->boneWorldTransforms, unk38->frameID,
+//   m_uiBoneNodes->numMatrices, numFlags->numRegisters, unk44->allocatedSize,
+//   flags->boneMatrices, unk50->prevBoneMatrices;
+//   BSDismemberSkinInstance::partitionFlags->partitions (Data* vs UInt32*, same 4-byte stride).
+RE::NiSkinInstance* DetachedCopy(RE::NiSkinInstance* a_skinInstance)
+{
+	if (!a_skinInstance)
+		return nullptr;
+
+	RE::NiSkinInstance* newSkinInstance = nullptr;
+
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
+	REX::W32::EnterCriticalSection(&a_skinInstance->lock);
+#endif
+
+	auto* srcSkin = netimmerse_cast<RE::BSDismemberSkinInstance*>(a_skinInstance);
+	if (srcSkin)
+	{
+		newSkinInstance = SKEE::CreateBSDismemberSkinInstance();
+		auto* dstSkin = static_cast<RE::BSDismemberSkinInstance*>(newSkinInstance);
+		dstSkin->numPartitions = srcSkin->numPartitions;
+		if (srcSkin->partitions && srcSkin->numPartitions > 0)
+		{
+			dstSkin->partitions = static_cast<RE::BSDismemberSkinInstance::Data*>(RE::malloc(sizeof(RE::BSDismemberSkinInstance::Data) * srcSkin->numPartitions));
+			std::memcpy(dstSkin->partitions, srcSkin->partitions, sizeof(RE::BSDismemberSkinInstance::Data) * srcSkin->numPartitions);
+		}
+		dstSkin->unk98 = srcSkin->unk98;
+		std::memcpy(&dstSkin->pad99, &srcSkin->pad99, 7);
+	}
+	else
+	{
+		newSkinInstance = RE::NiSkinInstance::Create();
+	}
+
+	newSkinInstance->skinData = a_skinInstance->skinData;
+	newSkinInstance->skinPartition = a_skinInstance->skinPartition;
+	newSkinInstance->rootParent = a_skinInstance->rootParent;
+
+	const std::uint32_t numBones = a_skinInstance->numMatrices;
+	if (numBones > 0)
+	{
+		newSkinInstance->bones = static_cast<RE::NiAVObject**>(RE::malloc(sizeof(RE::NiAVObject*) * numBones));
+		std::memcpy(newSkinInstance->bones, a_skinInstance->bones, sizeof(RE::NiAVObject*) * numBones);
+	}
+
+	newSkinInstance->frameID = a_skinInstance->frameID;
+	newSkinInstance->numMatrices = numBones;
+	newSkinInstance->numRegisters = a_skinInstance->numRegisters;
+	if (a_skinInstance->boneMatrices)
+	{
+		newSkinInstance->boneMatrices = RE::malloc(sizeof(std::uint32_t) * a_skinInstance->numRegisters);
+		std::memcpy(newSkinInstance->boneMatrices, a_skinInstance->boneMatrices, sizeof(std::uint32_t) * a_skinInstance->numRegisters);
+	}
+	newSkinInstance->allocatedSize = a_skinInstance->allocatedSize;
+	if (a_skinInstance->prevBoneMatrices)
+	{
+		newSkinInstance->prevBoneMatrices = RE::malloc(sizeof(std::uint32_t) * a_skinInstance->numRegisters);
+		std::memcpy(newSkinInstance->prevBoneMatrices, a_skinInstance->prevBoneMatrices, sizeof(std::uint32_t) * a_skinInstance->numRegisters);
+	}
+
+	if (auto* skinData = newSkinInstance->skinData.get())
+	{
+		const std::uint32_t boneCount = skinData->GetBoneCount();
+		newSkinInstance->boneWorldTransforms = static_cast<const RE::NiTransform**>(RE::malloc(sizeof(RE::NiTransform*) * boneCount));
+		std::memcpy(const_cast<RE::NiTransform**>(newSkinInstance->boneWorldTransforms), a_skinInstance->boneWorldTransforms, sizeof(RE::NiTransform*) * boneCount);
+	}
+
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
+	REX::W32::LeaveCriticalSection(&a_skinInstance->lock);
+#endif
+	return newSkinInstance;
 }
 
 bool SaveRenderedDDS(RE::NiTexture * pkTexture, const char * pcFileName)

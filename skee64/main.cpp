@@ -256,7 +256,7 @@ namespace
 
 
 // Plugin handle (legacy compatibility)
-std::uint32_t g_pluginHandle = static_cast<std::uint32_t>(-1);
+std::uint32_t g_pluginHandle = std::uint32_t(-1);
 
 // Versions of the actually-running SKSE/game, captured from the LoadInterface
 // in SKSE_PLUGIN_LOAD. Written into preset headers instead of compile-time constants.

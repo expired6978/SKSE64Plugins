@@ -91,6 +91,7 @@ inline constexpr std::uint32_t kID_NiStreamDtor                    = 70325;
 inline constexpr std::uint32_t kID_NiStreamAddObject               = 70326;
 inline constexpr std::uint32_t kID_CreateBSTriShape                = 70655;
 inline constexpr std::uint32_t kID_CreateSourceTexture             = 70717;
+inline constexpr std::uint32_t kID_CreateBSDismemberSkinInstance   = 70772;
 inline constexpr std::uint32_t kID_NiAllocate_Geom                 = 70939;
 inline constexpr std::uint32_t kID_CreateBSDynamicTriShape         = 70946;
 inline constexpr std::uint32_t kID_NiAllocate_Geom2_Target         = 70947;
@@ -397,6 +398,12 @@ namespace SKEE
 			return nullptr;
 		}
 		static REL::Relocation<RE::BSDynamicTriShape* (*)()> func{ REL::RelocationID(0, kID_CreateBSDynamicTriShape) };
+		return func();
+	}
+
+	inline RE::BSDismemberSkinInstance* CreateBSDismemberSkinInstance()
+	{
+		static REL::Relocation<RE::BSDismemberSkinInstance* (*)()> func{ REL::RelocationID(0, kID_CreateBSDismemberSkinInstance) };
 		return func();
 	}
 

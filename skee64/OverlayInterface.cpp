@@ -350,7 +350,7 @@ void OverlayInterface::RelinkOverlay(const char * nodeName, RE::TESObjectREFR * 
 		foundGeometry->vertexDesc = source->vertexDesc;
 		auto sourceSkin = source->GetGeometryRuntimeData().skinInstance;
 		if (sourceSkin) {
-			auto* clonedSkin = static_cast<RE::NiSkinInstance*>(sourceSkin->Clone());
+			auto* clonedSkin = DetachedCopy(sourceSkin.get());
 			foundGeometry->GetGeometryRuntimeData().skinInstance.reset(clonedSkin);
 		}
 	}

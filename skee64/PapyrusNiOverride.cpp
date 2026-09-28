@@ -1566,13 +1566,13 @@ namespace papyrusNiOverride
 		return value;
 	}
 
-	class AttachMeshLatentFunctor : public LatentSKSEDelayFunctor
+	class AttachMeshLatentFunctor : public SKSE::LatentSKSEDelayFunctor
 	{
 	public:
 		virtual const char* ClassName() const override { return "AttachMeshLatentFunctor"; }
 		virtual std::uint32_t		ClassVersion() const override { return 1; }
 
-		explicit AttachMeshLatentFunctor(SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
+		explicit AttachMeshLatentFunctor(SKSE::SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
 		explicit AttachMeshLatentFunctor(std::uint32_t stackId, RE::TESObjectREFR* refr, bool isFirstPerson, const RE::BSFixedString& filePath, const RE::BSFixedString& name, bool replace, const std::vector<RE::BSFixedString>& filter)
 			: LatentSKSEDelayFunctor(stackId)
 			, m_ref(refr)
@@ -1713,13 +1713,13 @@ namespace papyrusNiOverride
 		return RE::BSScript::LatentStatus::kStarted;
 	}
 
-	class DetachMeshLatentFunctor : public LatentSKSEDelayFunctor
+	class DetachMeshLatentFunctor : public SKSE::LatentSKSEDelayFunctor
 	{
 	public:
 		virtual const char* ClassName() const override { return "DetachMeshLatentFunctor"; }
 		virtual std::uint32_t		ClassVersion() const override { return 1; }
 
-		explicit DetachMeshLatentFunctor(SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
+		explicit DetachMeshLatentFunctor(SKSE::SerializationTag tag) : LatentSKSEDelayFunctor(tag) { }
 		explicit DetachMeshLatentFunctor(std::uint32_t stackId, RE::TESObjectREFR* refr, bool isFirstPerson, const RE::BSFixedString& name)
 			: LatentSKSEDelayFunctor(stackId)
 			, m_ref(refr)
@@ -2012,8 +2012,8 @@ void papyrusNiOverride::RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 
 	// Legacy g_objectInterface->GetObjectRegistry().RegisterClass<T>() — the SKSE object
 	// registry maps ClassName() to a factory so co-saved latent functors can be rebuilt.
-	SKSE::GetObjectInterface()->GetObjectRegistry().RegisterFactory(new ConcreteSKSEObjectFactory<AttachMeshLatentFunctor>());
-	SKSE::GetObjectInterface()->GetObjectRegistry().RegisterFactory(new ConcreteSKSEObjectFactory<DetachMeshLatentFunctor>());
+	SKSE::GetObjectInterface()->GetObjectRegistry().RegisterFactory(new SKSE::ConcreteSKSEObjectFactory<AttachMeshLatentFunctor>());
+	SKSE::GetObjectInterface()->GetObjectRegistry().RegisterFactory(new SKSE::ConcreteSKSEObjectFactory<DetachMeshLatentFunctor>());
 	// Extra data manipulation
 	a_vm->SetCallableFromTasklets("NiOverride", "GetBooleanExtraData", true);
 	a_vm->SetCallableFromTasklets("NiOverride", "GetIntegerExtraData", true);
