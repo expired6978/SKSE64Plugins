@@ -10,7 +10,9 @@
 #include <nlohmann/json.hpp>
 #include <cmath>
 #include "CharacterNameUpdate.h"
+#if defined(ENABLE_SKYRIM_VR)
 #include "RaceSexMenuFaceView.h"
+#endif
 #include "RaceSexCameraPolicy.h"
 #include "ScaleformUtils.h"
 
@@ -971,6 +973,7 @@ namespace
     }
     bool RaceSexCameraTransform(RE::NiPoint3& position, RE::NiMatrix3& rotation)
     {
+#if defined(ENABLE_SKYRIM_VR)
         return SKEE::CameraPolicy::Select(REL::Module::IsVR(),
             [&] { return SKEE::FaceView::GetCameraTransform(position, rotation); },
             [&] {
@@ -979,6 +982,13 @@ namespace
                 position = camera->local.translate; rotation = camera->local.rotate;
                 return true;
             });
+#else
+        auto camera = FlatRaceSexCamera();
+        if (!camera || !SKEE::CameraPolicy::Valid(camera->local)) return false;
+        position = camera->local.translate;
+        rotation = camera->local.rotate;
+        return true;
+#endif
     }
 }
 
@@ -1040,6 +1050,7 @@ void SKSEScaleform_SetRaceSexCameraPos::Call(RE::GFxFunctionHandler::Params& a_p
         changed = true;
     }
     if (!changed) return;
+#if defined(ENABLE_SKYRIM_VR)
     const bool accepted = SKEE::CameraPolicy::Select(REL::Module::IsVR(),
         [&] { return SKEE::FaceView::RequestCameraPosition(position); },
         [&] {
@@ -1050,6 +1061,16 @@ void SKSEScaleform_SetRaceSexCameraPos::Call(RE::GFxFunctionHandler::Params& a_p
             camera->UpdateWorldData(&ctx);
             return true;
         });
+#else
+    const bool accepted = [&] {
+        auto camera = FlatRaceSexCamera();
+        if (!camera) return false;
+        camera->local.translate = position;
+        RE::NiUpdateData ctx{0, RE::NiUpdateData::Flag::kDirty};
+        camera->UpdateWorldData(&ctx);
+        return true;
+    }();
+#endif
     if (a_params.retVal) a_params.retVal->SetBoolean(accepted);
 }
 

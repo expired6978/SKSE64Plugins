@@ -1,4 +1,4 @@
-#include "../skee64/MenuAppearancePolicy.h"
+#include "MenuAppearancePolicy.h"
 #include <array>
 #include <cassert>
 int main()

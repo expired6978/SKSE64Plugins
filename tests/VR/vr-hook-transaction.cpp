@@ -1,5 +1,5 @@
-#include "../skee64/VRHookQualificationPolicy.h"
-#include "../skee64/VRHookTransactionPolicy.h"
+#include "VRHookQualificationPolicy.h"
+#include "VRHookTransactionPolicy.h"
 
 #include <array>
 #include <cassert>

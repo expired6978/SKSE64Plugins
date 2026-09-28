@@ -3,7 +3,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const zlib = require('node:zlib');
-const {unpack,make,apply,auditPatch} = require('../tools/swf-byte-patch.cjs');
+const {unpack,make,apply,auditPatch} = require('../../tools/swf-byte-patch.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -18,8 +18,8 @@ const valid = make(original,wanted).patch;
 function changed(at,value) { const b=Buffer.from(valid); b.writeUInt32LE(value,at); return b; }
 
 test('release payload, review manifest and independent native pin agree',()=> {
-  const manifest=require('../packaging/runtime-patches/racesex-menu.manifest.json');
-  const patch=fs.readFileSync(path.join(__dirname,'../packaging/runtime-patches/racesex-menu.rmp'));
+  const manifest=require('../../packaging/runtime-patches/racesex-menu.manifest.json');
+  const patch=fs.readFileSync(path.join(__dirname,'../../packaging/runtime-patches/racesex-menu.rmp'));
   assert.equal(crypto.createHash('sha256').update(patch).digest('hex'),manifest.patchSha256);
   assert.equal(patch.length,manifest.patchBytes);
   assert.equal(patch.toString('ascii',0,8),manifest.format);
@@ -27,7 +27,7 @@ test('release payload, review manifest and independent native pin agree',()=> {
     assert.equal(patch.readUInt32LE(at),manifest[key]);
   for(const [at,key] of [[24,'originalFileSha256'],[56,'canonicalOriginalSha256'],[88,'canonicalOutputSha256']])
     assert.equal(patch.subarray(at,at+32).toString('hex'),manifest[key]);
-  const native=fs.readFileSync(path.join(__dirname,'../skee64/SwfBytePatch.cpp'),'utf8');
+  const native=fs.readFileSync(path.join(__dirname,'../../skee64/VR/SwfBytePatch.cpp'),'utf8');
   const pin=native.match(/constexpr Hash patchHash\{([\s\S]*?)\};/)[1];
   assert.equal(Buffer.from(pin.match(/0x[0-9a-f]{2}/g).map(n=>Number(n))).toString('hex'),manifest.patchSha256);
   let p=120,copied=0,inserted=0,longest=0;
@@ -83,5 +83,5 @@ if (process.env.VR2_ORIGINAL_SWF && process.env.VR2_TARGET_SWF) test('private ac
   assert.deepEqual(apply(source,patch),unpack(target));
   assert.equal(audit.literalBytes,8397);
   assert.equal(audit.canonicalOutputSha256,'56f8bce4204bab5c466c9c9cb6b9f1a1e5a49b7cadf4b40a504e46a8aeda638b');
-  assert.deepEqual(patch,fs.readFileSync(require('node:path').join(__dirname,'../packaging/runtime-patches/racesex-menu.rmp')));
+  assert.deepEqual(patch,fs.readFileSync(require('node:path').join(__dirname,'../../packaging/runtime-patches/racesex-menu.rmp')));
 });

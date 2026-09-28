@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 const test=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), path=require('node:path');
-const text=fs.readFileSync(path.join(__dirname,'..','packaging','skee64_custom.ini'),'utf8');
+const text=fs.readFileSync(path.join(__dirname,'..','..','packaging','skee64_custom.ini'),'utf8');
 function parse(source){
   let section='', result={};
   for(const raw of source.split(/\r?\n/)){

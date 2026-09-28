@@ -113,8 +113,6 @@ set(SKEE_SOURCES
     skee64/ActorUpdateManager.cpp
     skee64/AttachmentInterface.cpp
     skee64/BodyMorphInterface.cpp
-    skee64/CharacterCreationInterface.cpp
-    skee64/VRNewGameIntent.cpp
     skee64/CommandInterface.cpp
     skee64/FaceMorphInterface.cpp
     skee64/FileUtils.cpp
@@ -132,21 +130,10 @@ set(SKEE_SOURCES
     skee64/PartHandler.cpp
     skee64/PluginInterface.cpp
     skee64/PresetInterface.cpp
-	skee64/RaceSexMenuVRInput.cpp
-	skee64/RaceSexMenuVRKeyboard.cpp
-	skee64/VRRuntime.cpp
-	skee64/MenuAppearance.cpp
-	skee64/MenuConfiguration.cpp
-	skee64/MenuExtensions.cpp
-	skee64/RaceSexMenuFaceView.cpp
-	skee64/AvatarLighting.cpp
-	skee64/SwfBytePatch.cpp
-	skee64/RaceSexMenuSwfPatch.cpp
     skee64/ScaleformCharGenFunctions.cpp
     skee64/ScaleformFunctions.cpp
     skee64/ScaleformUtils.cpp
     skee64/ShaderUtilities.cpp
-    skee64/SKEEHooks.cpp
     skee64/SkeletonExtender.cpp
     skee64/SkinLayerInterface.cpp
     skee64/StringTable.cpp
@@ -182,6 +169,31 @@ set(SKEE_SOURCES
     "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildVersion.rc"
 )
 
+# Keep the runtime-neutral RaceMenu implementation above independent of the VR
+# adapter.  Only a VR target compiles the controller, keyboard, placement,
+# lighting and runtime-menu patch implementation kept under skee64/VR.
+if(SKEE_GAME_RUNTIME STREQUAL "VR")
+    list(APPEND SKEE_SOURCES
+        skee64/VR/SKEEHooks.cpp
+        skee64/VR/AvatarLighting.cpp
+        skee64/VR/CharacterCreationInterface.cpp
+        skee64/VR/MenuAppearance.cpp
+        skee64/VR/MenuConfiguration.cpp
+        skee64/VR/MenuExtensions.cpp
+        skee64/VR/RaceSexMenuFaceView.cpp
+        skee64/VR/RaceSexMenuSwfPatch.cpp
+        skee64/VR/RaceSexMenuVRInput.cpp
+        skee64/VR/RaceSexMenuVRKeyboard.cpp
+        skee64/VR/SwfBytePatch.cpp
+        skee64/VR/VRNewGameIntent.cpp
+        skee64/VR/VRRuntime.cpp
+    )
+else()
+    list(APPEND SKEE_SOURCES
+        skee64/SKEEHooks.cpp
+    )
+endif()
+
 add_commonlibsse_plugin(skee64
     NAME "skee"
     AUTHOR "Expired6978"
@@ -192,6 +204,7 @@ add_commonlibsse_plugin(skee64
 )
 target_include_directories(skee64 PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/skee64"
+    "${CMAKE_CURRENT_SOURCE_DIR}/skee64/VR"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 target_compile_definitions(skee64 PRIVATE
@@ -306,14 +319,18 @@ if(DEFINED ENV{Skyrim64Path})
 endif()
 
 if(SKEE_GAME_RUNTIME STREQUAL "VR")
-    add_executable(vr2_avatar_lighting_tests tests/avatar-lighting-policy.cpp)
-    target_include_directories(vr2_avatar_lighting_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    set(SKEE_VR_TEST_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/skee64"
+        "${CMAKE_CURRENT_SOURCE_DIR}/skee64/VR"
+    )
+    add_executable(vr2_avatar_lighting_tests tests/VR/avatar-lighting-policy.cpp)
+    target_include_directories(vr2_avatar_lighting_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_avatar_lighting_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_avatar_lighting_tests>"
         COMMENT "Checking avatar-relative front lighting policy")
     add_dependencies(skee64 vr2_avatar_lighting_tests)
-    add_executable(vr2_inventory_preview_tests tests/inventory-preview.cpp)
-    target_include_directories(vr2_inventory_preview_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_inventory_preview_tests tests/VR/inventory-preview.cpp)
+    target_include_directories(vr2_inventory_preview_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_inventory_preview_tests PRIVATE CommonLibSSE xbyak::xbyak)
     target_compile_definitions(vr2_inventory_preview_tests PRIVATE XBYAK_NO_OP_NAMES)
     target_precompile_headers(vr2_inventory_preview_tests PRIVATE skee64/pch.h)
@@ -322,26 +339,26 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
         COMMENT "Checking VR inventory preview stride, count location and bounded lookup")
     add_dependencies(skee64 vr2_inventory_preview_tests)
     add_executable(vr2_sculpt_trace_tests tests/sculpt-trace.cpp)
-    target_include_directories(vr2_sculpt_trace_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_include_directories(vr2_sculpt_trace_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_sculpt_trace_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_sculpt_trace_tests>"
         COMMENT "Checking bounded Sculpt commit-to-history diagnostics")
     add_dependencies(skee64 vr2_sculpt_trace_tests)
 
     add_executable(vr2_export_skin_clone_tests tests/export-skin-clone.cpp)
-    target_include_directories(vr2_export_skin_clone_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_include_directories(vr2_export_skin_clone_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_export_skin_clone_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_export_skin_clone_tests>"
         VERBATIM)
     add_dependencies(skee64 vr2_export_skin_clone_tests)
     add_executable(vr2_sculpt_session_tests tests/sculpt-stroke-session.cpp)
-    target_include_directories(vr2_sculpt_session_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_include_directories(vr2_sculpt_session_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_sculpt_session_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_sculpt_session_tests>"
         COMMENT "Checking Sculpt stroke lifecycle ownership")
     add_dependencies(skee64 vr2_sculpt_session_tests)
     add_executable(vr2_sculpt_mesh_tests tests/sculpt-mesh.cpp skee64/CDXMesh.cpp)
-    target_include_directories(vr2_sculpt_mesh_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_include_directories(vr2_sculpt_mesh_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_sculpt_mesh_tests PRIVATE CommonLibSSE xbyak::xbyak Microsoft::DirectXTK)
     target_compile_definitions(vr2_sculpt_mesh_tests PRIVATE XBYAK_NO_OP_NAMES)
     target_precompile_headers(vr2_sculpt_mesh_tests PRIVATE skee64/pch.h)
@@ -349,14 +366,15 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
         COMMAND "$<TARGET_FILE:vr2_sculpt_mesh_tests>"
         COMMENT "Checking production Sculpt CPU picking and batched WARP GPU upload")
     add_dependencies(skee64 vr2_sculpt_mesh_tests)
-    add_executable(vr2_polar_placement_tests tests/menu-polar-placement.test.cpp)
+    add_executable(vr2_polar_placement_tests tests/VR/menu-polar-placement.test.cpp)
+    target_include_directories(vr2_polar_placement_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_compile_options(vr2_polar_placement_tests PRIVATE /UNDEBUG)
     add_custom_command(TARGET vr2_polar_placement_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_polar_placement_tests>"
         COMMENT "Qualifying menu height offsets and viewer-facing placement")
     add_dependencies(skee64 vr2_polar_placement_tests)
-    add_executable(vr2_camera_policy_tests tests/vr-camera-policy.cpp)
-    target_include_directories(vr2_camera_policy_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_camera_policy_tests tests/VR/vr-camera-policy.cpp)
+    target_include_directories(vr2_camera_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_camera_policy_tests PRIVATE CommonLibSSE xbyak::xbyak)
     target_compile_definitions(vr2_camera_policy_tests PRIVATE XBYAK_NO_OP_NAMES)
     target_precompile_headers(vr2_camera_policy_tests PRIVATE skee64/pch.h)
@@ -367,7 +385,7 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
     # Exercise the production DLL-export lookup and compiler, not just fxc or
     # a duplicated test implementation. No Skyrim process or GPU is required.
     add_executable(vr2_shader_compile_tests tests/shader-compile.cpp skee64/CDXShaderCompile.cpp)
-    target_include_directories(vr2_shader_compile_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_include_directories(vr2_shader_compile_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_shader_compile_tests PRIVATE CommonLibSSE xbyak::xbyak Microsoft::DirectXTK)
     target_compile_definitions(vr2_shader_compile_tests PRIVATE XBYAK_NO_OP_NAMES)
     target_compile_options(vr2_shader_compile_tests PRIVATE /permissive- /bigobj)
@@ -376,40 +394,40 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
         COMMAND "$<TARGET_FILE:vr2_shader_compile_tests>" "${SKEE_SHADER_SRC_ROOT}"
         COMMENT "Checking production runtime shader compilation and error handling")
     add_dependencies(skee64 vr2_shader_compile_tests)
-    add_executable(vr2_swf_patch_tests tests/swf-byte-patch.cpp skee64/SwfBytePatch.cpp)
-    target_include_directories(vr2_swf_patch_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_swf_patch_tests tests/VR/swf-byte-patch.cpp skee64/VR/SwfBytePatch.cpp)
+    target_include_directories(vr2_swf_patch_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_swf_patch_tests PRIVATE bcrypt.lib ZLIB::ZLIB)
     add_custom_command(TARGET vr2_swf_patch_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_swf_patch_tests>"
         COMMENT "Checking fail-closed native SWF patch parser")
     add_dependencies(skee64 vr2_swf_patch_tests)
     # Pure native policy tests run as part of a VR build; never ship/install them.
-    add_executable(vr2_keyboard_policy_tests tests/vr-keyboard-policy.cpp)
-    target_include_directories(vr2_keyboard_policy_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_keyboard_policy_tests tests/VR/vr-keyboard-policy.cpp)
+    target_include_directories(vr2_keyboard_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_keyboard_policy_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_keyboard_policy_tests>"
         COMMENT "Checking native VR keyboard UTF-8 policy")
     add_dependencies(skee64 vr2_keyboard_policy_tests)
-    add_executable(vr2_menu_options_policy_tests tests/vr-menu-options-policy.cpp)
-    target_include_directories(vr2_menu_options_policy_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_menu_options_policy_tests tests/VR/vr-menu-options-policy.cpp)
+    target_include_directories(vr2_menu_options_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_menu_options_policy_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_menu_options_policy_tests>"
         COMMENT "Checking VR configured-name and constructor quill policy")
     add_dependencies(skee64 vr2_menu_options_policy_tests)
-    add_executable(vr2_hook_transaction_tests tests/vr-hook-transaction.cpp)
-    target_include_directories(vr2_hook_transaction_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_hook_transaction_tests tests/VR/vr-hook-transaction.cpp)
+    target_include_directories(vr2_hook_transaction_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_hook_transaction_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_hook_transaction_tests>"
         COMMENT "Checking transactional VR hook installation and rollback")
     add_dependencies(skee64 vr2_hook_transaction_tests)
-    add_executable(vr2_character_session_tests tests/character-creation-session.cpp)
-    target_include_directories(vr2_character_session_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_character_session_tests tests/VR/character-creation-session.cpp)
+    target_include_directories(vr2_character_session_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_character_session_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_character_session_tests>"
         COMMENT "Checking queued character-creation session leases")
     add_dependencies(skee64 vr2_character_session_tests)
-    add_executable(vr2_cooperative_restore_tests tests/cooperative-restore.cpp)
-    target_include_directories(vr2_cooperative_restore_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    add_executable(vr2_cooperative_restore_tests tests/VR/cooperative-restore.cpp)
+    target_include_directories(vr2_cooperative_restore_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     add_custom_command(TARGET vr2_cooperative_restore_tests POST_BUILD
         COMMAND "$<TARGET_FILE:vr2_cooperative_restore_tests>"
         COMMENT "Checking cooperative VR placement restoration")

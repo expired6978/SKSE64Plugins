@@ -1,4 +1,4 @@
-#include "../skee64/VRSessionLeasePolicy.h"
+#include "VRSessionLeasePolicy.h"
 
 #include <cassert>
 #include <cstdint>

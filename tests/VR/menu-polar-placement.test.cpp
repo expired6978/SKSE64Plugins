@@ -1,4 +1,4 @@
-#include "../skee64/MenuPolarPlacementPolicy.h"
+#include "MenuPolarPlacementPolicy.h"
 #include <cassert>
 #include <cstdio>
 using V=std::array<float,3>;

@@ -46,13 +46,16 @@
 #include "OverrideInterface.h"
 #include "OverlayInterface.h"
 #include "BodyMorphInterface.h"
+#if defined(ENABLE_SKYRIM_VR)
 #include "CharacterCreationInterface.h"
 #include "VRNewGameIntent.h"
+#endif
 #include "ItemDataInterface.h"
 #include "TintMaskInterface.h"
 #include "NiTransformInterface.h"
 #include "SkinLayerInterface.h"
 #include "PresetInterface.h"
+#if defined(ENABLE_SKYRIM_VR)
 #include "RaceSexMenuVRInput.h"
 #include "RaceSexMenuVRKeyboard.h"
 #include "MenuAppearance.h"
@@ -60,6 +63,7 @@
 #include "MenuExtensions.h"
 #include "RaceSexMenuFaceView.h"
 #include "AvatarLighting.h"
+#endif
 #include "SkeletonExtender.h"
 #include "AttachmentInterface.h"
 #include "ActorUpdateManager.h"
@@ -277,7 +281,9 @@ OverrideInterface			g_overrideInterface;
 TintMaskInterface			g_tintMaskInterface;
 OverlayInterface			g_overlayInterface;
 BodyMorphInterface			g_bodyMorphInterface;
+#if defined(ENABLE_SKYRIM_VR)
 CharacterCreationInterface	g_characterCreationInterface;
+#endif
 ItemDataInterface			g_itemDataInterface;
 NiTransformInterface		g_transformInterface;
 FaceMorphInterface			g_morphInterface;
@@ -545,7 +551,9 @@ void SKEE64Serialization_Revert(SKSE::SerializationInterface* a_intfc)
 	g_transformInterface.Revert();
 	g_morphInterface.Revert();
 	g_attachmentInterface.Revert();
+#if defined(ENABLE_SKYRIM_VR)
 	g_characterCreationInterface.Revert();
+#endif
 	g_stringTable.Revert();
 }
 
@@ -856,23 +864,30 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 		}
 		break;
 		case SKSE::MessagingInterface::kPreLoadGame:
+#if defined(ENABLE_SKYRIM_VR)
 			g_characterCreationInterface.OnSaveLoading();
+#endif
 			g_enableBodyInit = false;
 			g_tintMaskInterface.ManageTints();
 			break;
 		case SKSE::MessagingInterface::kPostLoadGame:
+#if defined(ENABLE_SKYRIM_VR)
 			if (!message->data) g_characterCreationInterface.CancelConfiguredName();
+#endif
 			g_enableBodyInit = true;
 			g_tintMaskInterface.ReleaseTints();
 			break;
 		case SKSE::MessagingInterface::kNewGame:
 		{
+#if defined(ENABLE_SKYRIM_VR)
 			g_characterCreationInterface.BeginNewGame();
+#endif
 			g_actorUpdateManager.setNewGame(true);
 			break;
 		}
 		case SKSE::MessagingInterface::kDataLoaded:
 		{
+#if defined(ENABLE_SKYRIM_VR)
 			if (auto* ui = RE::UI::GetSingleton()) {
 				ui->AddEventSink(&g_characterCreationInterface);
 				g_characterCreationInterface.ObserveCurrentState();
@@ -881,7 +896,6 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 				SKSE::log::error("Could not register character-creation automation observer: UI singleton unavailable");
 			}
 
-#if defined(ENABLE_SKYRIM_VR)
 			if (g_applyRaceSexMenuPlacement) {
 				if (ApplyRaceSexMenuPlacement()) {
 					SKSE::log::info("Applied RaceSexMenu-local VR placement through Skyrim's native VRUI settings");
@@ -1146,12 +1160,14 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		}
 	}
 
-	// SKSE unloads a plugin that returns false; do not publish external owners before this point.
+	// SKSE unloads a VR plugin that returns false; do not publish external owners before this point.
+#if defined(ENABLE_SKYRIM_VR)
 	const auto hookResult = InstallSKEEHooks();
 	if (!hookResult.success) {
 		SKSE::log::critical("RaceMenu hook qualification failed; rejecting skee64.dll before external registration");
 		return false;
 	}
+#endif
 
 	g_commandInterface.RegisterCommands();
 
@@ -1201,8 +1217,10 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	g_interfaceMap.AddInterface("Command", &g_commandInterface);
 	g_interfaceMap.AddInterface("FormTag", &g_formTagInterface);
     g_interfaceMap.AddInterface("Preset", &g_presetInterface);
+#if defined(ENABLE_SKYRIM_VR)
 	g_interfaceMap.AddInterface("CharacterCreation", &g_characterCreationInterface);
 	g_interfaceMap.AddInterface("MenuExtensions", SKEE::MenuExtensions::GetInterface());
+#endif
 
 	if (g_enableTangentSpaceCorrection)
 	{
@@ -1220,5 +1238,9 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 		g_actorUpdateManager.AddInterface(&g_tintMaskInterface);
 	}
 
+#if defined(ENABLE_SKYRIM_VR)
 	return true;
+#else
+	return InstallSKEEHooks();
+#endif
 }

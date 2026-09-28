@@ -3,9 +3,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '../tools/vr-racesex-patches/InputTrace.as.inc'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../../tools/vr-racesex-patches/InputTrace.as.inc'), 'utf8');
 // Structural guardrail only; this is not a native/runtime re-entrancy assay.
-const nativeSource = fs.readFileSync(path.join(__dirname, '../skee64/RaceSexMenuVRInput.cpp'), 'utf8');
+const nativeSource = fs.readFileSync(path.join(__dirname, '../../skee64/VR/RaceSexMenuVRInput.cpp'), 'utf8');
 const nativeRead = nativeSource.slice(nativeSource.indexOf('} else if (action == kRead) {'), nativeSource.indexOf('if (p.retVal) p.retVal->SetBoolean(true);'));
 assert.ok(nativeRead.indexOf('guard.unlock();') < nativeRead.indexOf('movie->Invoke('));
 const copying = nativeRead.slice(nativeRead.indexOf('guard.lock();'), nativeRead.lastIndexOf('guard.unlock();'));

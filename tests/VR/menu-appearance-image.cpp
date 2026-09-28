@@ -1,6 +1,6 @@
 #include <windows.h>
 #include <wincodec.h>
-#include "../skee64/MenuAppearanceImage.h"
+#include "MenuAppearanceImage.h"
 #include <cassert>
 #include <cstring>
 #include <filesystem>

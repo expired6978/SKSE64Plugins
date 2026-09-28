@@ -77,12 +77,14 @@ inline constexpr std::uint32_t kID_ChangeActorHeadPart             = 27063;
 inline constexpr std::uint32_t kID_UpdateModelSkin                 = 27066;
 inline constexpr std::uint32_t kID_UpdateModelHair                 = 27067;
 inline constexpr std::uint32_t kID_SetNiGeometryTexture            = 36987;
+inline constexpr std::uint32_t kID_SetNewInventoryItemModel        = 51772;
 inline constexpr std::uint32_t kID_SetInventoryItemModel           = 51775;
 inline constexpr std::uint32_t kID_SetNewInventoryItemModel_Target = 51776;
 inline constexpr std::uint32_t kID_DoubleMorphCallback2_Target     = 52356;
 inline constexpr std::uint32_t kID_CachePartsTarget_Target         = 52369;
 inline constexpr std::uint32_t kID_DoubleMorphCallback             = 52401;
 inline constexpr std::uint32_t kID_InvokeCategoriesList_Target     = 52407;
+inline constexpr std::uint32_t kID_LoadSliders                     = 52409;
 inline constexpr std::uint32_t kID_AddRaceMenuSlider               = 52453;
 inline constexpr std::uint32_t kID_NiStreamCtor                    = 70324;
 inline constexpr std::uint32_t kID_NiStreamDtor                    = 70325;
@@ -105,8 +107,6 @@ inline constexpr std::uint32_t kID_useFaceGenPreProcessedHeads     = 378620; // 
 // The Skyrim VR Address Library identifies these SSE IDs as bit-for-bit
 // identical in Skyrim VR 1.4.15. They deliberately do not use the kID_ prefix:
 // that prefix denotes the AE-keyed inventory above.
-inline constexpr std::uint32_t kReloc_SetUniqueIDSEVR = 15907;
-inline constexpr std::uint32_t kReloc_UpdateHeadStateSEVR = 24220;
 inline constexpr std::uint32_t kReloc_NiStreamCtorSEVR = 68971;
 inline constexpr std::uint32_t kReloc_NiStreamDtorSEVR = 68972;
 inline constexpr REL::RelocationID kReloc_UpdateModelFace{ 26458, 27044, 26458 };
@@ -269,12 +269,13 @@ namespace SKEE
 
 	inline std::int32_t UpdateHeadState(RE::TESNPC* a_npc, RE::Actor* a_actor, std::uint32_t a_unk1)
 	{
+		if (REL::Module::IsVR()) {
+			return VRFunction<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)>(0x003727B0)(a_npc, a_actor, a_unk1);
+		}
 		if (!HasQualifiedCustomAddresses()) {
 			return 0;
 		}
-		static REL::Relocation<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)> func{
-			REL::RelocationID(kReloc_UpdateHeadStateSEVR, kID_UpdateHeadState, kReloc_UpdateHeadStateSEVR)
-		};
+		static REL::Relocation<std::int32_t (*)(RE::TESNPC*, RE::Actor*, std::uint32_t)> func{ REL::RelocationID(0, kID_UpdateHeadState) };
 		return func(a_npc, a_actor, a_unk1);
 	}
 
@@ -461,6 +462,12 @@ namespace SKEE
 
 	// --- Inventory / tinting ------------------------------------------------------
 
+	inline void SetNewInventoryItemModel(void* a_unk1, RE::TESForm* a_form1, RE::TESForm* a_form2, RE::NiNode** a_node)
+	{
+		static REL::Relocation<void (*)(void*, RE::TESForm*, RE::TESForm*, RE::NiNode**)> func{ REL::RelocationID(0, kID_SetNewInventoryItemModel) };
+		func(a_unk1, a_form1, a_form2, a_node);
+	}
+
 	inline void InitializeDisplayObject(RE::Inventory3DManager* a_manager, RE::TESForm* a_form1, RE::TESForm* a_form2, RE::NiNode* a_node)
 	{
 		if (!HasQualifiedCustomAddresses()) {
@@ -474,12 +481,14 @@ namespace SKEE
 
 	inline void InventoryChanges_SetUniqueID(RE::InventoryChanges* a_this, RE::ExtraDataList* a_extraList, RE::TESForm* a_oldForm, RE::TESForm* a_newForm)
 	{
+		if (REL::Module::IsVR()) {
+			VRFunction<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)>(0x001FD7D0)(a_this, a_extraList, a_oldForm, a_newForm);
+			return;
+		}
 		if (!HasQualifiedCustomAddresses()) {
 			return;
 		}
-		static REL::Relocation<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)> func{
-			REL::RelocationID(kReloc_SetUniqueIDSEVR, kID_InventoryChanges_SetUniqueID, kReloc_SetUniqueIDSEVR)
-		};
+		static REL::Relocation<void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*)> func{ REL::RelocationID(0, kID_InventoryChanges_SetUniqueID) };
 		func(a_this, a_extraList, a_oldForm, a_newForm);
 	}
 
@@ -522,4 +531,8 @@ struct SKEEHookInstallResult
 	std::array<SKEEHookGroupResult, 9> groups;
 };
 
+#if defined(ENABLE_SKYRIM_VR)
 SKEEHookInstallResult InstallSKEEHooks();
+#else
+bool InstallSKEEHooks();
+#endif

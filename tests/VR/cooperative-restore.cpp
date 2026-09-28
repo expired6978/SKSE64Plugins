@@ -1,4 +1,4 @@
-#include "../skee64/CooperativeRestorePolicy.h"
+#include "CooperativeRestorePolicy.h"
 
 #include <cassert>
 #include <cstdio>

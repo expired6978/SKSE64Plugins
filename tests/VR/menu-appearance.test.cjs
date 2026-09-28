@@ -2,7 +2,7 @@
 // not qualify Skyrim's texture loader or physical headset projection.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const source = fs.readFileSync(require('node:path').join(__dirname,'../tools/vr-racesex-patches/Appearance.as.inc'),'utf8');
+const source = fs.readFileSync(require('node:path').join(__dirname,'../../tools/vr-racesex-patches/Appearance.as.inc'),'utf8');
 const objectSource = source.replace(/^   function (\w+)\(/gm,'$1(').replace(/^   }[ \t]*$/gm,'},');
 const prototype = Function('return ({'+objectSource+'\n})')();
 let colours=[], timers=[], cleared=[], unloads=0, loader;

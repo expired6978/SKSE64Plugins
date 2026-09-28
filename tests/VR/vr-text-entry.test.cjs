@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '../tools/vr-racesex-patches/TextEntry.as.inc'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../../tools/vr-racesex-patches/TextEntry.as.inc'), 'utf8');
 const objectSource = source.replace(/^   function (\w+)\(/gm, '$1(').replace(/^   }[ \t]*$/gm, '},');
 const prototype = Function('return ({' + objectSource + '\n})')();
 if(process.env.SKEE_REBUILT_RACEMENU_AS) {
@@ -153,10 +153,10 @@ assert.equal(exiting.FinishVRCharacterCreation(),false); assert.equal(completion
 exiting.vrTextInputActive=false; exiting.bottomBar.playerInfo.PlayerName.text='   ';
 assert.equal(exiting.FinishVRCharacterCreation(),false); assert.equal(completionCalls.length,1);
 assert.match(exiting.status,/enter a character name/);
-const patcher=fs.readFileSync(path.join(__dirname,'../tools/patch-vr-racesex-swf.ps1'),'utf8');
+const patcher=fs.readFileSync(path.join(__dirname,'../../tools/patch-vr-racesex-swf.ps1'),'utf8');
 assert.match(patcher,/if\(_global\.skse\.IsVR\(\)\).*FinishVRCharacterCreation/s);
 // Source guardrails supplement, but do not substitute for native/runtime tests.
-const native=fs.readFileSync(path.join(__dirname,'../skee64/RaceSexMenuVRKeyboard.cpp'),'utf8');
+const native=fs.readFileSync(path.join(__dirname,'../../skee64/VR/RaceSexMenuVRKeyboard.cpp'),'utf8');
 assert.doesNotMatch(native,/std::async|std::thread|\.wait\(|\.get\(\).*future/);
 assert.match(native,/i < 32/); assert.match(native,/kKeyboardTimeout/);
 assert.match(native,/ReadBufferedDraft\(g_session\.streamed, g_session\.text/);
@@ -166,12 +166,12 @@ assert.match(native,/g_session.owner != a_params.movie/);
 assert.match(native,/if \(g_session.ownsKeyboard\) g_session.overlay->HideKeyboard/);
 // Rename and creation completion must not share the final naming routine.
 // These source checks would catch the regression missed by the API mock.
-const rename=fs.readFileSync(path.join(__dirname,'../skee64/ScaleformCharGenFunctions.cpp'),'utf8');
+const rename=fs.readFileSync(path.join(__dirname,'../../skee64/ScaleformCharGenFunctions.cpp'),'utf8');
 const renameBody=rename.slice(rename.indexOf('void SKSEScaleform_SetCharacterName::Call'),rename.indexOf('extern float\tg_sculptOffsetX'));
 assert.match(renameBody,/UpdateCharacterNameWithoutFinishing/);
 assert.doesNotMatch(renameBody,/ChangeName|kHide|AddMessage/);
 assert.match(renameBody,/menu->uiMovie.get\(\) == a_params.movie/);
-const creation=fs.readFileSync(path.join(__dirname,'../skee64/CharacterCreationInterface.cpp'),'utf8');
+const creation=fs.readFileSync(path.join(__dirname,'../../skee64/VR/CharacterCreationInterface.cpp'),'utf8');
 assert.match(creation,/#if defined\(ENABLE_SKYRIM_VR\)[\s\S]*GetSetting\("sRSMConfirm"\)[\s\S]*GetType\(\) == RE::Setting::Type::kString[\s\S]*DispatchStaticCall\("Game", "SetGameSettingString"[\s\S]*BSFixedString\("Exit Character Creation\?"\)[\s\S]*#endif/);
 assert.doesNotMatch(creation,/confirmation->SetString/);
 const queuedRename=creation.slice(creation.indexOf('CharacterCreationInterface::QueueName'),creation.indexOf('void CharacterCreationInterface::FinishOnGameThread'));
@@ -184,11 +184,11 @@ const queuedFinish=creation.slice(creation.indexOf('CharacterCreationInterface::
 assert.match(queuedFinish,/const auto generation = sessionGeneration_\.load\(\)/);
 assert.match(queuedFinish,/SessionLease::IsCurrent\([\s\S]*generation[\s\S]*kFinishing/);
 assert.match(queuedFinish,/\[this, generation, name = std::move\(a_name\), a_useCurrentName\]/);
-const main=fs.readFileSync(path.join(__dirname,'../skee64/main.cpp'),'utf8');
+const main=fs.readFileSync(path.join(__dirname,'../../skee64/main.cpp'),'utf8');
 assert.match(main,/case SKSE::MessagingInterface::kNewGame:[\s\S]*?g_characterCreationInterface.BeginNewGame\(\)/);
 assert.match(main,/case SKSE::MessagingInterface::kPreLoadGame:[\s\S]*?g_characterCreationInterface.OnSaveLoading\(\)/);
 assert.match(main,/case SKSE::MessagingInterface::kPostLoadGame:[\s\S]*?if \(!message->data\) g_characterCreationInterface.CancelConfiguredName\(\)/);
-const startObserver=fs.readFileSync(path.join(__dirname,'../skee64/VRNewGameIntent.cpp'),'utf8');
+const startObserver=fs.readFileSync(path.join(__dirname,'../../skee64/VR/VRNewGameIntent.cpp'),'utf8');
 assert.match(startObserver,/"StartNewGame"/);
 assert.doesNotMatch(startObserver,/"NEW"|ChangeName|SetFullName/);
 assert.match(startObserver,/menu->uiMovie.get\(\) == args.GetMovie\(\)/);
@@ -196,7 +196,7 @@ assert.match(startObserver,/original\(args\)/);
 assert.match(startObserver,/originalAccept\(menu, &observer\)/);
 assert.match(startObserver,/target != module.base\(\) \+ 0x8CFC00/);
 assert.match(creation,/state_\.store\(kReady\);\s*ApplyConfiguredName\(\)/);
-const pointer=fs.readFileSync(path.join(__dirname,'../skee64/RaceSexMenuVRInput.cpp'),'utf8');
+const pointer=fs.readFileSync(path.join(__dirname,'../../skee64/VR/RaceSexMenuVRInput.cpp'),'utf8');
 const constructor=pointer.slice(pointer.indexOf('bool RaceSexMenuLoadMovieHook'),pointer.indexOf('bool RaceSexMenuCanProcessHook'));
 assert.ok(constructor.indexOf('ConfigureQuill') < constructor.indexOf('auto loaded ='));
 assert.match(constructor,/ConfigureQuill\(a_menu->menuFlags,[\s\S]*?UseQuill\(\)/);
@@ -207,11 +207,11 @@ assert.match(creation.slice(creation.indexOf('CharacterCreationInterface::Proces
 const finish=creation.slice(creation.indexOf('void CharacterCreationInterface::FinishOnGameThread'));
 assert.match(finish,/menu->ChangeName/);
 assert.match(finish,/UI_MESSAGE_TYPE::kHide/);
-const nameUpdate=fs.readFileSync(path.join(__dirname,'../skee64/CharacterNameUpdate.h'),'utf8');
+const nameUpdate=fs.readFileSync(path.join(__dirname,'../../skee64/CharacterNameUpdate.h'),'utf8');
 assert.match(nameUpdate,/SetFullName\(a_name\)/);
 assert.match(nameUpdate,/AddChange\(RE::TESNPC::ChangeFlags::kFullName\)/);
 assert.doesNotMatch(nameUpdate,/menu->ChangeName|kHide|AddMessage/);
-const privateSearchWidget=path.join(__dirname,'../tools/vr-racesex-patches/SearchWidget.as');
+const privateSearchWidget=path.join(__dirname,'../../tools/vr-racesex-patches/SearchWidget.as');
 if(fs.existsSync(privateSearchWidget)) {
   const search=fs.readFileSync(privateSearchWidget,'utf8');
   assert.doesNotMatch(search,/ShowVirtualKeyboard/);

@@ -2,7 +2,7 @@
 // Skyrim scene ownership, camera behavior or headset comfort.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../tools/vr-racesex-patches/Appearance.as.inc'),'utf8');
+const source=fs.readFileSync(require('node:path').join(__dirname,'../../tools/vr-racesex-patches/Appearance.as.inc'),'utf8');
 const prototype=Function('return ({'+source.replace(/^   function (\w+)\(/gm,'$1(').replace(/^   }[ \t]*$/gm,'},')+'})')();
 global.RaceMenuDefines={ENTRY_TYPE_CAT:1,ENTRY_TYPE_SLIDER:2};
 const calls=[];
@@ -29,7 +29,7 @@ sections=[];revision++;o.RefreshVRMenuExtensions();assert.equal(o.itemList.entry
 const filter={_width:150},name={_width:150};
 const layout=Object.assign({},prototype,{vrMenuProfile:{consolidate:1},vrFilterButton:filter,vrNameButton:name,ITEMLIST_HEIGHT_FULL:825,ITEMLIST_HEIGHT_SHARED:639,BOTTOMBAR_SHOWN_Y:949,raceDescription:{_visible:false},racePanel:{ListBackground:{getBounds:()=>({xMin:0,xMax:430,yMin:0,yMax:1024})},slidingCategoryList:{_y:40},categoryButtons:{_y:40}},searchWidget:{_y:10},itemList:{_y:100,listHeight:825,_height:999},bottomBar:{_x:0,_y:949,background:{_visible:true},playerInfo:{_x:900,_y:0,PlayerRace:{_x:70}}},modeSelect:{_x:1000,_y:0,_width:200,_xscale:100,_yscale:100,getBounds(){return {xMin:this._x-this._width,xMax:this._x,yMin:this._y,yMax:this._y+20};}},navPanel:{buttons:[{_width:100},{_width:100},{_width:100},name,filter]}});
 layout.racePanel.ListBackground._y=0;layout.racePanel.ListBackground._height=1024;
-const patchSource=fs.readFileSync(require('node:path').join(__dirname,'../tools/patch-vr-racesex-swf.ps1'),'utf8');
+const patchSource=fs.readFileSync(require('node:path').join(__dirname,'../../tools/patch-vr-racesex-swf.ps1'),'utf8');
 assert.match(patchSource,/categoryDivider\.ParentNode\.RemoveChild\(\$categoryDivider\)/,'remove non-addressable double-rule shape at build time');
 const makeField=size=>({format:{size},future:{size},getTextFormat(){return {...this.format};},getNewTextFormat(){return {...this.future};},setTextFormat(f){this.format={...f};},setNewTextFormat(f){this.future={...f};}});
 layout.bottomBar.playerInfo.PlayerRace=Object.assign(makeField(24),{_x:70,_y:2});

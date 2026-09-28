@@ -1,4 +1,4 @@
-#include "../skee64/MenuBackgroundProjection.h"
+#include "MenuBackgroundProjection.h"
 #include <cassert>
 #include <limits>
 #include <algorithm>
