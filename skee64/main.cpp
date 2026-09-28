@@ -53,6 +53,7 @@
 #include "ActorArmorTangentUpdater.h"
 #include "CommandInterface.h"
 #include "FormTagInterface.h"
+#include "VisualEquipmentInterface.h"
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
@@ -114,6 +115,7 @@ AttachmentInterface			g_attachmentInterface;
 CommandInterface			g_commandInterface;
 PresetInterface				g_presetInterface;
 FormTagInterface			g_formTagInterface;
+VisualEquipmentInterface	g_visualEquipmentInterface;
 
 PartSet	g_partSet;
 
@@ -914,6 +916,7 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	g_interfaceMap.AddInterface("Attachment", &g_attachmentInterface);
 	g_interfaceMap.AddInterface("Command", &g_commandInterface);
 	g_interfaceMap.AddInterface("FormTag", &g_formTagInterface);
+	g_interfaceMap.AddInterface("VisualEquipment", &g_visualEquipmentInterface);
     g_interfaceMap.AddInterface("Preset", &g_presetInterface);
 
 	if (g_enableTangentSpaceCorrection)

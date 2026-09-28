@@ -926,7 +926,7 @@ void OverrideInterface::Impl_SetSkinProperties(OverrideHandle formId, bool immed
 						for (std::uint32_t i = 0; i < armor->armorAddons.size(); i++) {
 							RE::TESObjectARMA* arma = armor->armorAddons[i];
 							if (arma) {
-								if (!IsSlotMatch(arma, overridePair.first)) {
+								if (!IsSlotMatch(actor, armor, arma, overridePair.first)) {
 									continue;
 								}
 								VisitArmorAddon(actor, armor, arma, [&](bool isFirstPerson, RE::NiAVObject * rootNode, RE::NiAVObject * parent)
