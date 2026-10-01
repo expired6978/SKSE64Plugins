@@ -104,8 +104,10 @@ void CDXEditableMesh::BuildFacemap()
 void CDXEditableMesh::BuildNormals()
 {
 	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
-	if (!pVertices)
+	if (!pVertices) {
+		UnlockVertices(LockMode::WRITE);
 		return;
+	}
 
 	for (std::uint16_t i = 0; i < GetVertexCount(); i++) {
 		 XMStoreFloat3(&pVertices[i].Normal, CalculateVertexNormal(i));
@@ -144,11 +146,13 @@ void CDXEditableMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 
 CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 {
-	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
+	CDXMeshVert* pVertices = LockVertices(LockMode::READ);
 
 	CDXVec vNormal = XMVectorZero();
-	if (!pVertices)
+	if (!pVertices) {
+		UnlockVertices(LockMode::READ);
 		return vNormal;
+	}
 
 	auto it = m_adjacency.find(i);
 	if (it != m_adjacency.end()) {
@@ -167,7 +171,7 @@ CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 		vNormal = XMVector3Normalize(vNormal);
 	}
 
-	UnlockVertices(LockMode::WRITE);
+	UnlockVertices(LockMode::READ);
 	return vNormal;
 }
 
