@@ -6,6 +6,7 @@
 
 
 #include "ScaleformCharGenFunctions.h"
+#include <cmath>
 #include "ScaleformUtils.h"
 
 #include "FaceMorphInterface.h"
@@ -799,6 +800,7 @@ void SKSEScaleform_LoadImportedHead::Call(RE::GFxFunctionHandler::Params& a_para
 
 void SKSEScaleform_ClearSculptData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kArray);
 
@@ -1197,6 +1199,7 @@ void SKSEScaleform_ReleaseMorphEditor::Call(RE::GFxFunctionHandler::Params& a_pa
 
 void SKSEScaleform_BeginRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1220,6 +1223,7 @@ void SKSEScaleform_EndRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_BeginPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1241,64 +1245,48 @@ void SKSEScaleform_EndPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 	g_Camera.OnMoveEnd();
 };
 
+namespace
+{
+	bool SculptPointer(RE::GFxFunctionHandler::Params& args, std::int32_t& x, std::int32_t& y)
+	{
+		if (args.argCount < 2 || !args.args[0].IsNumber() || !args.args[1].IsNumber()) return false;
+		const double px = args.args[0].GetNumber(), py = args.args[1].GetNumber();
+		if (!std::isfinite(px) || !std::isfinite(py) || px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX) return false;
+		x = static_cast<std::int32_t>(px); y = static_cast<std::int32_t>(py); return true;
+	}
+}
+
 void SKSEScaleform_BeginPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
-
-	bool hitMesh = false;
-
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if (brush) {
-		CDXBrushPickerBegin brushStroke(brush);
-		brushStroke.SetMirror(brush->IsMirror());
-		if (g_World.Pick(&g_Camera, x, y, brushStroke))
-			hitMesh = true;
-	}
-
-	a_params.retVal->SetBoolean(hitMesh);
+	std::int32_t x{}, y{};
+	if (!SculptPointer(a_params, x, y)) { g_World.EndPaint(); if (a_params.retVal) a_params.retVal->SetBoolean(false); return; }
+	const auto hit = g_World.BeginPaint(&g_Camera, x, y);
+	if (a_params.retVal) a_params.retVal->SetBoolean(hit);
 };
 
 void SKSEScaleform_DoPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
-
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if (brush) {
-		CDXBrushPickerUpdate brushStroke(brush);
-		brushStroke.SetMirror(brush->IsMirror());
-		g_World.Pick(&g_Camera, x, y, brushStroke);
-	}
+	std::int32_t x{}, y{};
+	if (SculptPointer(a_params, x, y)) g_World.UpdatePaint(&g_Camera, x, y);
 };
 
 void SKSEScaleform_EndPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	CDXBrush * brush = g_World.GetCurrentBrush();
-	if(brush)
-		brush->EndStroke();
+	g_World.EndPaint();
 };
 
 void SKSEScaleform_DoHoverMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 2);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
-
-	std::int32_t x = a_params.args[0].GetNumber();
-	std::int32_t y = a_params.args[1].GetNumber();
+	std::int32_t x{}, y{};
+	if (!SculptPointer(a_params, x, y) || g_World.GetNumMeshes() < 2) return;
+	auto cursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(0));
+	auto mirrorCursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(1));
+	if (!cursor || !mirrorCursor) return; // Partial brush resource creation must not become an invalid cast.
 
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush) {
-		CDXBrushTranslator translator(brush, static_cast<CDXBrushMesh*>(g_World.GetNthMesh(0)), static_cast<CDXBrushMesh*>(g_World.GetNthMesh(1)));
+		if (!brush->IsMirror()) mirrorCursor->SetVisible(false);
+		CDXBrushTranslator translator(brush, cursor, mirrorCursor);
 		g_World.Pick(&g_Camera, x, y, translator);
 	}
 };
@@ -1415,6 +1403,7 @@ void SKSEScaleform_GetMeshes::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_SetMeshData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kObject);
@@ -1455,16 +1444,19 @@ void SKSEScaleform_GetActionLimit::Call(RE::GFxFunctionHandler::Params& a_params
 
 void SKSEScaleform_UndoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Undo(true));
 }
 
 void SKSEScaleform_RedoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Redo(true));
 }
 
 void SKSEScaleform_GoToAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
+	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 

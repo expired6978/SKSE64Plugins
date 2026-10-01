@@ -137,7 +137,9 @@ public:
 	virtual void Dispose();
 
 private:
-	CDXStroke * m_stroke;
+	std::uint64_t m_editorGeneration;
+	std::uint32_t m_undoType, m_strokeType, m_vertices;
+	bool m_mirror;
 	std::int32_t	m_id;
 	RE::NiPointer<RE::BSTriShape> m_geometry;
 };
@@ -151,7 +153,8 @@ public:
 	virtual void Dispose();
 
 private:
-	CDXUndoCommand * m_cmd;
+	std::uint64_t m_editorGeneration;
+	std::uint32_t m_undoType;
 	std::int32_t	m_id;
 	RE::NiPointer<RE::BSTriShape> m_geometry;
 };
