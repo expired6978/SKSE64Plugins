@@ -63,6 +63,7 @@ namespace {
 			return nullptr;
 
 		auto newSkinInstance = RE::NiPointer<RE::NiSkinInstance>(DetachedCopy(a_skinInstance));
+		if (!newSkinInstance || newSkinInstance.get() == a_skinInstance) return nullptr;
 		newSkinInstance->rootParent = a_skinnedNode;
 
 		std::uint32_t numBones = 0;
@@ -78,13 +79,27 @@ namespace {
 		RE::NiPointer<RE::NiObject> newSpObj;
 		RE::NiSkinPartition* newSkinPartition = nullptr;
 		if (skinPartition) { skinPartition->CreateDeepCopy(newSpObj); newSkinPartition = netimmerse_cast<RE::NiSkinPartition*>(newSpObj.get()); }
+		if ((skinData && (!newSkinData || newSkinData.get() == skinData)) ||
+			(skinPartition && (!newSkinPartition || newSkinPartition == skinPartition))) {
+			SKSE::log::error("Head export: skin-data deep copy failed or aliases its source");
+			return nullptr;
+		}
 
 		newSkinInstance->skinData = newSkinData;
 		newSkinInstance->skinPartition = RE::NiPointer<RE::NiSkinPartition>(newSkinPartition);
 
 		if (numBones > 0)
 		{
-			newSkinInstance->bones = static_cast<RE::NiAVObject**>(RE::malloc(numBones * sizeof(RE::NiAVObject*)));
+			// The game clone already owns correctly sized bone/transform arrays.
+			// Do not replace (and leak) them, or touch the source arrays.
+			if (numBones > newSkinInstance->numMatrices ||
+				!a_skinInstance->bones || !newSkinInstance->bones ||
+				newSkinInstance->bones == a_skinInstance->bones ||
+				!newSkinInstance->boneWorldTransforms ||
+				newSkinInstance->boneWorldTransforms == a_skinInstance->boneWorldTransforms) {
+				SKSE::log::error("Head export: skin clone has missing/shared bone arrays");
+				return nullptr;
+			}
 			for (std::uint32_t i = 0; i < numBones; i++)
 			{
 				RE::NiAVObject* bone = a_skinInstance->bones[i];
@@ -104,6 +119,8 @@ namespace {
 				}
 				else
 					newSkinInstance->bones[i] = nullptr;
+				newSkinInstance->boneWorldTransforms[i] = newSkinInstance->bones[i] ?
+					&newSkinInstance->bones[i]->world : nullptr;
 			}
 
 			if (a_resetSkinToBone && newSkinData)
@@ -406,6 +423,20 @@ void SKSETaskExportHead::Run()
 		return;
 
 	RE::BSFaceGenAnimationData * animationData = actor->GetFaceGenAnimationData();
+	std::map<RE::NiAVObject*, RE::NiAVObject*> boneMap;
+	auto restoreExportState = [&](RE::BSFaceGenNiNode*) {
+		for (auto& bones : boneMap)
+			bones.second->DecRefCount();  // release the map's temporary references
+		if (animationData) {
+			animationData->exprOverride = 0;
+			animationData->Reset(1.0, 1, 1, 0, 0);
+			RE::BSFaceGenManager::GetSingleton()->isReset = 1;
+			SKEE::UpdateModelFace(faceNode);
+		}
+	};
+	// Own no scene node: this guard only restores temporary export state,
+	// including on a rejected clone or other early return.
+	std::unique_ptr<RE::BSFaceGenNiNode, decltype(restoreExportState)> exportState(faceNode, restoreExportState);
 	if (animationData) {
 		RE::BSFaceGenManager::GetSingleton()->isReset = 0;
 		animationData->Reset(0.0f, true, true, true, false);
@@ -425,9 +456,11 @@ void SKSETaskExportHead::Run()
 		rootNode.reset(rootNodeRaw);
 	}
 	RE::NiPointer<RE::NiNode> skinnedNode(RE::NiNode::Create(0));
+	if (!rootNode || !skinnedNode) {
+		SKSE::log::error("Head export: unable to allocate export scene");
+		return;
+	}
 	skinnedNode->name = "BSFaceGenNiNodeSkinned";
-
-	std::map<RE::NiAVObject*, RE::NiAVObject*> boneMap;
 
 	for (std::uint32_t i = 0; i < faceNode->children.size(); i++)
 	{
@@ -452,6 +485,8 @@ void SKSETaskExportHead::Run()
 			if (trishapeProperty) { trishapeProperty->CreateDeepCopy(newTpObj); newTrishapeProperty = niptr_cast<RE::NiProperty>(newTpObj); }
 
 			RE::NiPointer<RE::NiSkinInstance> newSkinInstance = BuildRemappedSkinInstance(geometry->spSkinInstance.get(), skinnedNode.get(), boneMap, false);
+			if (geometry->spSkinInstance && !newSkinInstance)
+				return;  // Do not write an incomplete, unskinned head on clone failure.
 
 			RE::NiPointer<RE::NiGeometry> newGeometry;
 			if (auto * trishape = geometry ? geometry->AsNiTriShape() : nullptr) {
@@ -523,6 +558,8 @@ void SKSETaskExportHead::Run()
 				if (propProperty) { propProperty->CreateDeepCopy(newTpObj); newTrishapeProperty = niptr_cast<RE::NiProperty>(newTpObj); }
 
 				RE::NiPointer<RE::NiSkinInstance> newSkinInstance = BuildRemappedSkinInstance(trishape->GetGeometryRuntimeData().skinInstance.get(), skinnedNode.get(), boneMap, !g_exportSkinToBone);
+				if (trishape->GetGeometryRuntimeData().skinInstance && !newSkinInstance)
+					return;
 
 				RE::BSTriShape * newTrishape = nullptr;
 				auto * dynamicShape = trishape ? trishape->AsDynamicTriShape() : nullptr;
@@ -606,23 +643,17 @@ void SKSETaskExportHead::Run()
 
 	for (auto & bones : boneMap) {
 		rootNode.get()->AttachChild(bones.second, true);
-		bones.second->DecRefCount();
 	}
 
 	rootNode.get()->AttachChild(skinnedNode.get(), true);
 
 	{
 		NifStreamWrapper niStream;
-		SKEE::NiStreamAddObject(niStream.get(), rootNode.get());
-		niStream->Save3(m_nifPath.c_str());
+		if (niStream.AddObject(rootNode.get())) {
+			niStream.SaveStream(m_nifPath.c_str());
+		}
 	}
 
-	if (animationData) {
-		animationData->exprOverride = 0;
-		animationData->Reset(1.0, 1, 1, 0, 0);
-		RE::BSFaceGenManager::GetSingleton()->isReset = 1;
-		SKEE::UpdateModelFace(faceNode);
-	}
 }
 
 bool VisitObjects(RE::NiAVObject * parent, std::function<bool(RE::NiAVObject*)> functor)
