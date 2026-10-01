@@ -10,6 +10,9 @@
 #include "FileUtils.h"
 #include "NifUtils.h"
 #include "SKEEHooks.h"
+#if defined(ENABLE_SKYRIM_VR)
+#include "VR/SculptHistoryDispatch.h"
+#endif
 
 
 #include <cstdint>
@@ -261,7 +264,13 @@ void CRGNUITaskAddStroke::Run()
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
 		RE::GFxValue args[1] = { obj };
+#if defined(ENABLE_SKYRIM_VR)
+		SKEE::DispatchSculptHistory(true, obj, [&](const char* path, const RE::GFxValue* values, std::uint32_t count) {
+			return menu->uiMovie->Invoke(path, nullptr, values, count);
+		});
+#else
 		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+#endif
 	}
 }
 
@@ -293,7 +302,13 @@ void CRGNUITaskStandardCommand::Run()
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
 		RE::GFxValue args[1] = { obj };
+#if defined(ENABLE_SKYRIM_VR)
+		SKEE::DispatchSculptHistory(true, obj, [&](const char* path, RE::GFxValue* values, std::uint32_t count) {
+			return menu->uiMovie->Invoke(path, nullptr, values, count);
+		});
+#else
 		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+#endif
 	}
 }
 

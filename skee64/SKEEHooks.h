@@ -1,7 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <string_view>
 
 #include <RE/B/BSFixedString.h>
 #include <REL/Relocation.h>
@@ -29,6 +32,7 @@ namespace RE
 	class ExtraDataList;
 	class FxResponseArgsBase;
 	class GFxMovieView;
+	class Inventory3DManager;
 	class InventoryChanges;
 	class NiAVObject;
 	class NiColorA;
@@ -46,9 +50,10 @@ namespace RE
 }
 
 // ============================================================================
-// Relocation IDs — single source of truth for every game address SKEE uses,
-// sorted by ID. Resolve with REL::RelocationID(0, kID_...).
-// (AE-only build: the first argument is the unused SE id.)
+// Relocation IDs — single source of truth for every qualified flat-runtime
+// game address SKEE uses, sorted by AE ID. Skyrim VR uses fixed 1.4.15 RVAs
+// independently qualified against the exact executable, full-memory dump,
+// CommonLib contracts, and VR Address Library mappings.
 // ============================================================================
 inline constexpr std::uint32_t kID_LookupREFRByHandle              = 12331;
 inline constexpr std::uint32_t kID_AttachBipedObject               = 15711;
@@ -101,12 +106,21 @@ inline constexpr std::uint32_t kID_CopyFrom                        = 106713;
 inline constexpr std::uint32_t kID_RaceSexMenu_Vtable              = 215885; // ??_7RaceSexMenu@@6B@
 inline constexpr std::uint32_t kID_useFaceGenPreProcessedHeads     = 378620; // ini setting (data, not a function)
 
+// The Skyrim VR Address Library identifies these SSE IDs as bit-for-bit
+// identical in Skyrim VR 1.4.15. They deliberately do not use the kID_ prefix:
+// that prefix denotes the AE-keyed inventory above.
+inline constexpr std::uint32_t kReloc_NiStreamCtorSEVR = 68971;
+inline constexpr std::uint32_t kReloc_NiStreamDtorSEVR = 68972;
+inline constexpr REL::RelocationID kReloc_UpdateModelFace{ 26458, 27044, 26458 };
+inline constexpr REL::RelocationID kReloc_InitializeDisplayObject{ 50896, 51772, 50896 };
+inline constexpr REL::RelocationID kReloc_LoadSliders{ 51534, 52409, 51534 };
+
 // Function-pointer types for the hooked functions whose unpatched originals
 // are kept in code-cave trampolines (see the *_Original holders below).
 using AttachBipedObjectFn        = RE::NiNode* (*)(RE::BipedAnim*, RE::NiNode*, std::uint32_t, std::uint8_t, std::uint8_t, std::uint64_t);
 using RegenerateHeadFn           = void (*)(RE::BSFaceGenManager*, RE::BSFaceGenNiNode*, RE::BGSHeadPart*, RE::TESNPC*);
 using BSFaceGenModelApplyMorphFn = std::uint8_t (*)(RE::BSFaceGenModel*, RE::BSFixedString*, RE::TESModelTri*, RE::NiAVObject**, float, std::uint8_t);
-using SetInventoryItemModelFn    = void (*)(void*, void*, void*);
+using SetInventoryItemModelFn    = void (*)(RE::Inventory3DManager*, RE::TESForm*, RE::ExtraDataList*);
 using TransferItemUIDFn          = void (*)(RE::InventoryChanges*, RE::ExtraDataList*, RE::TESForm*, RE::TESForm*, std::uint32_t);
 
 // Originals of the hooked functions. InstallSKEEHooks() sets each to the entry
@@ -120,6 +134,9 @@ extern TransferItemUIDFn          TransferItemUID_Original;
 
 // Game functions SKEE calls directly (not exposed by CommonLibSSE-NG). Each
 // wrapper lazily resolves its own Relocation on first use.
+#if defined(ENABLE_SKYRIM_VR)
+#include "VR/RuntimeHelpers.h"
+#else
 namespace SKEE
 {
 	// --- BSLightingShaderProperty / material helpers --------------------------
@@ -315,4 +332,32 @@ namespace SKEE
 	}
 }
 
+#endif
+
+enum class SKEEHookStatus
+{
+	kEnabled,
+	kDisabledByPolicy,
+	kUnavailableAddress,
+	kSignatureMismatch,
+	kInitializationFailed
+};
+
+struct SKEEHookGroupResult
+{
+	std::string_view group;
+	SKEEHookStatus status;
+	std::string_view consequence;
+};
+
+struct SKEEHookInstallResult
+{
+	bool success;
+	std::array<SKEEHookGroupResult, 9> groups;
+};
+
+#if defined(ENABLE_SKYRIM_VR)
+SKEEHookInstallResult InstallSKEEHooks();
+#else
 bool InstallSKEEHooks();
+#endif

@@ -40,9 +40,45 @@ add_link_options($<$<CONFIG:Release>:/MAP>)
 set(COMMONLIB_PREBUILT OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
-set(ENABLE_SKYRIM_SE OFF CACHE BOOL "" FORCE)
-set(ENABLE_SKYRIM_AE ON CACHE BOOL "" FORCE)
-set(ENABLE_SKYRIM_VR OFF CACHE BOOL "" FORCE)
+set(SKEE_GAME_RUNTIME "AE" CACHE STRING "Skyrim runtime to target (AE or VR)")
+set_property(CACHE SKEE_GAME_RUNTIME PROPERTY STRINGS AE VR)
+string(TOUPPER "${SKEE_GAME_RUNTIME}" SKEE_GAME_RUNTIME)
+
+# These identities are deliberately independent of the source repository's
+# project version. The native version is exposed through both the SKSE plugin
+# declaration and the DLL VERSIONINFO resource; the package version identifies
+# the assembled VR distribution.
+set(SKEE_VR2_PACKAGE_VERSION "development" CACHE STRING "RaceMenu NG VR 2 baseline package version")
+set(SKEE_NATIVE_PLUGIN_VERSION "0.5.0.14" CACHE STRING "Native skee64 plugin version")
+if(NOT SKEE_NATIVE_PLUGIN_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+    message(FATAL_ERROR "SKEE_NATIVE_PLUGIN_VERSION must contain four numeric components")
+endif()
+set(SKEE_NATIVE_VERSION_MAJOR "${CMAKE_MATCH_1}")
+set(SKEE_NATIVE_VERSION_MINOR "${CMAKE_MATCH_2}")
+set(SKEE_NATIVE_VERSION_PATCH "${CMAKE_MATCH_3}")
+set(SKEE_NATIVE_VERSION_TWEAK "${CMAKE_MATCH_4}")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/skee64/BuildVersion.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildVersion.h"
+    @ONLY
+)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/skee64/BuildVersion.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildVersion.rc"
+    @ONLY
+)
+
+if(SKEE_GAME_RUNTIME STREQUAL "AE")
+    set(ENABLE_SKYRIM_SE OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SKYRIM_AE ON CACHE BOOL "" FORCE)
+    set(ENABLE_SKYRIM_VR OFF CACHE BOOL "" FORCE)
+elseif(SKEE_GAME_RUNTIME STREQUAL "VR")
+    set(ENABLE_SKYRIM_SE OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SKYRIM_AE OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SKYRIM_VR ON CACHE BOOL "" FORCE)
+else()
+    message(FATAL_ERROR "Unsupported SKEE_GAME_RUNTIME='${SKEE_GAME_RUNTIME}'; expected AE or VR")
+endif()
 set(SKSE_SUPPORT_XBYAK ON CACHE BOOL "" FORCE)
 set(SKSE_SUPPORT_PATCH_SAFETY ON CACHE BOOL "" FORCE)
 
@@ -56,10 +92,17 @@ find_package(directxtk CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(directxmath CONFIG REQUIRED)
+find_package(ZLIB REQUIRED)
 
-add_subdirectory(CommonLibSSE-NG EXCLUDE_FROM_ALL)
+set(SKEE_COMMONLIB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/CommonLibSSE-NG" CACHE PATH
+    "CommonLibSSE-NG source directory")
+if(NOT EXISTS "${SKEE_COMMONLIB_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "CommonLibSSE-NG source not found at '${SKEE_COMMONLIB_SOURCE_DIR}'")
+endif()
+
+add_subdirectory("${SKEE_COMMONLIB_SOURCE_DIR}" CommonLibSSE-NG EXCLUDE_FROM_ALL)
 # CommonLib's source-build path does not include this consumer helper itself.
-include("${CMAKE_CURRENT_SOURCE_DIR}/CommonLibSSE-NG/cmake/CommonLibSSE.cmake")
+include("${SKEE_COMMONLIB_SOURCE_DIR}/cmake/CommonLibSSE.cmake")
 # SKSE_SUPPORT_XBYAK is public API in CommonLib's trampoline header and SKEEHooks uses it too.
 target_link_libraries(CommonLibSSE PUBLIC xbyak::xbyak)
 
@@ -91,7 +134,6 @@ set(SKEE_SOURCES
     skee64/ScaleformFunctions.cpp
     skee64/ScaleformUtils.cpp
     skee64/ShaderUtilities.cpp
-    skee64/SKEEHooks.cpp
     skee64/SkeletonExtender.cpp
     skee64/SkinLayerInterface.cpp
     skee64/StringTable.cpp
@@ -124,19 +166,50 @@ set(SKEE_SOURCES
     skee64/CDXStroke.cpp
     skee64/CDXTextureRenderer.cpp
     skee64/CDXUndo.cpp
-    skee64/Resource.rc
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildVersion.rc"
 )
+
+# Keep the runtime-neutral RaceMenu implementation above independent of the VR
+# adapter.  Only a VR target compiles the controller, keyboard, placement,
+# lighting and runtime-menu patch implementation kept under skee64/VR.
+if(SKEE_GAME_RUNTIME STREQUAL "VR")
+    list(APPEND SKEE_SOURCES
+        skee64/VR/SKEEHooks.cpp
+        skee64/VR/AvatarLighting.cpp
+        skee64/VR/CharacterCreationInterface.cpp
+        skee64/VR/MenuAppearance.cpp
+        skee64/VR/MenuConfiguration.cpp
+        skee64/VR/MenuExtensions.cpp
+        skee64/VR/RaceSexMenuFaceView.cpp
+        skee64/VR/RaceSexMenuSwfPatch.cpp
+        skee64/VR/RaceSexMenuVRInput.cpp
+        skee64/VR/RaceSexMenuVRKeyboard.cpp
+        skee64/VR/SwfBytePatch.cpp
+        skee64/VR/VRNewGameIntent.cpp
+        skee64/VR/VRRuntime.cpp
+    )
+else()
+    list(APPEND SKEE_SOURCES
+        skee64/SKEEHooks.cpp
+    )
+endif()
 
 add_commonlibsse_plugin(skee64
     NAME "skee"
     AUTHOR "Expired6978"
     EMAIL "expired6978@gmail.com"
-    VERSION 0.5.0.0
+    VERSION ${SKEE_NATIVE_PLUGIN_VERSION}
     USE_ADDRESS_LIBRARY
     SOURCES ${SKEE_SOURCES}
 )
-target_include_directories(skee64 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+target_include_directories(skee64 PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/skee64"
+    "${CMAKE_CURRENT_SOURCE_DIR}/skee64/VR"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+)
 target_compile_definitions(skee64 PRIVATE
+    SKEE_COMMONLIB_VERSION="8.2.0"
+    SKEE_VR_ADDRESS_LIBRARY_VERSION="0.270.0"
     XBYAK_NO_OP_NAMES
 )
 target_compile_options(skee64 PRIVATE /permissive- /bigobj)
@@ -154,9 +227,12 @@ target_link_libraries(skee64 PRIVATE
     nlohmann_json::nlohmann_json
     JsonCpp::JsonCpp
     shlwapi.lib
+    ole32.lib
+    windowscodecs.lib
+    bcrypt.lib
+    ZLIB::ZLIB
 )
 set_target_properties(skee64 PROPERTIES OUTPUT_NAME "skee64")
-target_link_options(skee64 PRIVATE /FORCE:UNRESOLVED)
 
 # --- Precompiled shaders ---------------------------------------------------------
 # Compile the HLSL/.fx sources with fxc (Windows SDK) into .cso. The runtime
@@ -239,6 +315,88 @@ if(DEFINED ENV{Skyrim64Path})
         message(WARNING "Skyrim64Path is set but not an existing directory: '$ENV{Skyrim64Path}' - the install step will fail.")
     endif()
     set(CMAKE_INSTALL_PREFIX "$ENV{Skyrim64Path}" CACHE PATH "Install prefix" FORCE)
+endif()
+
+if(SKEE_GAME_RUNTIME STREQUAL "VR")
+    set(SKEE_VR_TEST_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/skee64"
+        "${CMAKE_CURRENT_SOURCE_DIR}/skee64/VR"
+    )
+    add_executable(vr2_avatar_lighting_tests tests/VR/avatar-lighting-policy.cpp)
+    target_include_directories(vr2_avatar_lighting_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_avatar_lighting_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_avatar_lighting_tests>"
+        COMMENT "Checking avatar-relative front lighting policy")
+    add_dependencies(skee64 vr2_avatar_lighting_tests)
+    add_executable(vr2_inventory_preview_tests tests/VR/inventory-preview.cpp)
+    target_include_directories(vr2_inventory_preview_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    target_link_libraries(vr2_inventory_preview_tests PRIVATE CommonLibSSE xbyak::xbyak)
+    target_compile_definitions(vr2_inventory_preview_tests PRIVATE XBYAK_NO_OP_NAMES)
+    target_precompile_headers(vr2_inventory_preview_tests PRIVATE skee64/pch.h)
+    add_custom_command(TARGET vr2_inventory_preview_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_inventory_preview_tests>"
+        COMMENT "Checking VR inventory preview stride, count location and bounded lookup")
+    add_dependencies(skee64 vr2_inventory_preview_tests)
+
+    add_executable(vr2_polar_placement_tests tests/VR/menu-polar-placement.test.cpp)
+    target_include_directories(vr2_polar_placement_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    target_compile_options(vr2_polar_placement_tests PRIVATE /UNDEBUG)
+    add_custom_command(TARGET vr2_polar_placement_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_polar_placement_tests>"
+        COMMENT "Qualifying menu height offsets and viewer-facing placement")
+    add_dependencies(skee64 vr2_polar_placement_tests)
+    add_executable(vr2_camera_policy_tests tests/VR/vr-camera-policy.cpp)
+    target_include_directories(vr2_camera_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    target_link_libraries(vr2_camera_policy_tests PRIVATE CommonLibSSE xbyak::xbyak)
+    target_compile_definitions(vr2_camera_policy_tests PRIVATE XBYAK_NO_OP_NAMES)
+    target_precompile_headers(vr2_camera_policy_tests PRIVATE skee64/pch.h)
+    add_custom_command(TARGET vr2_camera_policy_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_camera_policy_tests>"
+        COMMENT "Checking VR camera dispatch and tracking-origin coordinate policy")
+    add_dependencies(skee64 vr2_camera_policy_tests)
+    add_executable(vr2_swf_patch_tests tests/VR/swf-byte-patch.cpp skee64/VR/SwfBytePatch.cpp)
+    target_include_directories(vr2_swf_patch_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    target_link_libraries(vr2_swf_patch_tests PRIVATE bcrypt.lib ZLIB::ZLIB)
+    add_custom_command(TARGET vr2_swf_patch_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_swf_patch_tests>"
+        COMMENT "Checking fail-closed native SWF patch parser")
+    add_dependencies(skee64 vr2_swf_patch_tests)
+    # Pure native policy tests run as part of a VR build; never ship/install them.
+    add_executable(vr2_keyboard_policy_tests tests/VR/vr-keyboard-policy.cpp)
+    target_include_directories(vr2_keyboard_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_keyboard_policy_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_keyboard_policy_tests>"
+        COMMENT "Checking native VR keyboard UTF-8 policy")
+    add_dependencies(skee64 vr2_keyboard_policy_tests)
+    add_executable(vr2_menu_options_policy_tests tests/VR/vr-menu-options-policy.cpp)
+    target_include_directories(vr2_menu_options_policy_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_menu_options_policy_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_menu_options_policy_tests>"
+        COMMENT "Checking VR configured-name and constructor quill policy")
+    add_dependencies(skee64 vr2_menu_options_policy_tests)
+    add_executable(vr2_hook_transaction_tests tests/VR/vr-hook-transaction.cpp)
+    target_include_directories(vr2_hook_transaction_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_hook_transaction_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_hook_transaction_tests>"
+        COMMENT "Checking transactional VR hook installation and rollback")
+    add_dependencies(skee64 vr2_hook_transaction_tests)
+    add_executable(vr2_character_session_tests tests/VR/character-creation-session.cpp)
+    target_include_directories(vr2_character_session_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_character_session_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_character_session_tests>"
+        COMMENT "Checking queued character-creation session leases")
+    add_dependencies(skee64 vr2_character_session_tests)
+    add_executable(vr2_cooperative_restore_tests tests/VR/cooperative-restore.cpp)
+    target_include_directories(vr2_cooperative_restore_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
+    add_custom_command(TARGET vr2_cooperative_restore_tests POST_BUILD
+        COMMAND "$<TARGET_FILE:vr2_cooperative_restore_tests>"
+        COMMENT "Checking cooperative VR placement restoration")
+    add_dependencies(skee64 vr2_cooperative_restore_tests)
+endif()
+
+if(SKEE_GAME_RUNTIME STREQUAL "VR")
+    install(FILES packaging/runtime-patches/racesex-menu.rmp
+        DESTINATION "Data/SKSE/Plugins/RaceMenuVR2")
 endif()
 
 install(TARGETS skee64 RUNTIME DESTINATION "Data/SKSE/Plugins")

@@ -7,10 +7,10 @@
   },
   "configurePresets": [
     {
-      "name": "msvc-vcpkg-flatrim-base",
+      "name": "msvc-vcpkg-dynamic-base",
       "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "binaryDir": "$env{SKEE_BUILD_ROOT}/${presetName}",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_MANIFEST_DIR": "${sourceDir}",
@@ -22,7 +22,7 @@
     {
       "name": "msvc-vcpkg-static-base",
       "hidden": true,
-      "inherits": "msvc-vcpkg-flatrim-base",
+      "inherits": "msvc-vcpkg-dynamic-base",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "VCPKG_HOST_TRIPLET": "x64-windows-static",
@@ -30,50 +30,78 @@
       }
     },
     {
-      "name": "debug-msvc-vcpkg-flatrim",
-      "inherits": "msvc-vcpkg-flatrim-base",
+      "name": "debug-msvc-vcpkg-ae",
+      "inherits": "msvc-vcpkg-dynamic-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SKEE_GAME_RUNTIME": "AE"
       }
     },
     {
-      "name": "release-msvc-vcpkg-flatrim",
-      "inherits": "msvc-vcpkg-flatrim-base",
+      "name": "release-msvc-vcpkg-ae",
+      "inherits": "msvc-vcpkg-dynamic-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "SKEE_GAME_RUNTIME": "AE"
       }
     },
     {
-      "name": "debug-msvc-vcpkg-static",
+      "name": "debug-msvc-vcpkg-vr",
+      "inherits": "msvc-vcpkg-dynamic-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SKEE_GAME_RUNTIME": "VR"
+      }
+    },
+    {
+      "name": "release-msvc-vcpkg-vr",
+      "inherits": "msvc-vcpkg-dynamic-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SKEE_GAME_RUNTIME": "VR"
+      }
+    },
+    {
+      "name": "debug-msvc-vcpkg-static-ae",
       "inherits": "msvc-vcpkg-static-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SKEE_GAME_RUNTIME": "AE"
       }
     },
     {
-      "name": "release-msvc-vcpkg-static",
+      "name": "release-msvc-vcpkg-static-ae",
       "inherits": "msvc-vcpkg-static-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "SKEE_GAME_RUNTIME": "AE"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "debug-msvc-vcpkg-flatrim",
-      "configurePreset": "debug-msvc-vcpkg-flatrim"
+      "name": "debug-msvc-vcpkg-ae",
+      "configurePreset": "debug-msvc-vcpkg-ae"
     },
     {
-      "name": "release-msvc-vcpkg-flatrim",
-      "configurePreset": "release-msvc-vcpkg-flatrim"
+      "name": "release-msvc-vcpkg-ae",
+      "configurePreset": "release-msvc-vcpkg-ae"
     },
     {
-      "name": "debug-msvc-vcpkg-static",
-      "configurePreset": "debug-msvc-vcpkg-static"
+      "name": "debug-msvc-vcpkg-vr",
+      "configurePreset": "debug-msvc-vcpkg-vr"
     },
     {
-      "name": "release-msvc-vcpkg-static",
-      "configurePreset": "release-msvc-vcpkg-static"
+      "name": "release-msvc-vcpkg-vr",
+      "configurePreset": "release-msvc-vcpkg-vr"
+    },
+    {
+      "name": "debug-msvc-vcpkg-static-ae",
+      "configurePreset": "debug-msvc-vcpkg-static-ae"
+    },
+    {
+      "name": "release-msvc-vcpkg-static-ae",
+      "configurePreset": "release-msvc-vcpkg-static-ae"
     }
   ]
 }
