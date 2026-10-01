@@ -20,17 +20,22 @@ void CDXEditableScene::CreateBrushes()
 
 void CDXEditableScene::ReleaseBrushes()
 {
+	EndPaint();
 	m_brushes.clear();
 }
 
 bool CDXEditableScene::Setup(const CDXInitParams & initParams)
 {
+	++m_editorGeneration;
 	CreateBrushes();
 	return CDXScene::Setup(initParams);
 }
 
 void CDXEditableScene::Release()
 {
+	// End while stroke meshes still exist; undo data is then released as usual.
+	EndPaint();
+	++m_editorGeneration; // Pending history UI tasks belong to the previous editor.
 	CDXScene::Release();
 	ReleaseBrushes();
 	g_undoStack.Release();
@@ -53,5 +58,36 @@ CDXBrush * CDXEditableScene::GetCurrentBrush()
 
 void CDXEditableScene::SetCurrentBrush(CDXBrush::BrushType brushType)
 {
+	if (brushType != m_currentBrush) EndPaint();
 	m_currentBrush = brushType;
+}
+
+bool CDXEditableScene::BeginPaint(CDXCamera* camera, int x, int y)
+{
+	EndPaint(); // A missing release or duplicate press must not stack strokes.
+	auto brush = GetCurrentBrush();
+	if (!brush || m_meshes.empty()) return false;
+	m_paintSession.Begin(brush);
+	CDXBrushPickerBegin picker(brush);
+	picker.SetMirror(brush->IsMirror());
+	const auto hit = Pick(camera, x, y, picker);
+	if (!hit) EndPaint(); // A masked/no-op begin can still have created stroke objects.
+	return hit;
+}
+
+void CDXEditableScene::UpdatePaint(CDXCamera* camera, int x, int y)
+{
+	auto brush = m_paintSession.Get();
+	if (!brush) {
+		return;
+	}
+	CDXBrushPickerUpdate picker(brush);
+	picker.SetMirror(brush->IsMirror());
+	Pick(camera, x, y, picker); // Move brush needs off-mesh rays during an active drag.
+}
+
+void CDXEditableScene::EndPaint()
+{
+	if (!m_paintSession.Get()) return;
+	m_paintSession.End();
 }
