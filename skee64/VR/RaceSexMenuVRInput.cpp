@@ -1,5 +1,4 @@
 #include "RaceSexMenuVRInput.h"
-#include "SculptTrace.h"
 
 #if defined(ENABLE_SKYRIM_VR)
 
@@ -797,10 +796,8 @@ namespace
 		}
 
 		if (button->IsDown()) {
-			SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::PointerDown);
 			DispatchMouseButton(RE::GFxEvent::EventType::kMouseDown, *button);
 		} else if (button->IsUp()) {
-			SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::PointerUp);
 			DispatchMouseButton(RE::GFxEvent::EventType::kMouseUp, *button);
 		}
 		return true;

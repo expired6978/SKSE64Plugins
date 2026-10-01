@@ -782,8 +782,6 @@ bool RegisterCharGenScaleform(RE::GFxMovieView * view, RE::GFxValue * root)
 	SKEERegisterScaleformFunction<SKSEScaleform_EndPaintMesh>(root, view, "EndPaintMesh");
 
 	SKEERegisterScaleformFunction<SKSEScaleform_DoHoverMesh>(root, view, "DoHoverMesh");
-	SKEERegisterScaleformFunction<SKSEScaleform_BeginSculptTrace>(root, view, "BeginSculptTrace");
-	SKEERegisterScaleformFunction<SKSEScaleform_ReadSculptTrace>(root, view, "ReadSculptTrace");
 	RegisterNumber(root, "sculptTraceContractVersion", 2);
 	RegisterString(root, view, "sculptTraceJson", "");
 

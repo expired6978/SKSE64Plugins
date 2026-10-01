@@ -1,5 +1,4 @@
 #include "CDXUndo.h"
-#include "SculptTrace.h"
 #include <cstdint>
 
 CDXUndoStack	g_undoStack;
@@ -29,7 +28,6 @@ std::int32_t CDXUndoStack::Push(CDXUndoCommandPtr action)
 		m_index++;
 
 	push_back(action);
-	SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::UndoPush);
 	return m_index;
 }
 

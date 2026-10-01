@@ -21,6 +21,7 @@
 #undef InterlockedIncrement
 #endif
 
+#include <unordered_set>
 #include <format>
 #include <cstdint>
 #include "NiRTTIUtils.h"
@@ -51,6 +52,8 @@ extern std::uint16_t	g_overlayAlphaThreshold;
 extern bool		g_overlayForceDecal;
 
 extern bool		g_immediateArmor;
+
+extern std::unordered_set<void*> g_adjustedBlocks;
 
 skee_u32 OverlayInterface::GetVersion()
 {
@@ -162,16 +165,16 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 		if (alphaProperty && alphaProperty.get())
 			targetShape->GetGeometryRuntimeData().alphaProperty.reset(static_cast<RE::NiAlphaProperty*>(alphaProperty.get()));
 
-		// Dynamic shape data copy: retain a RaceMenu-adjusted buffer when possible,
-		// otherwise make an independent copy.  The helper performs the tracked-set
-		// lookup and retain under the same lock used by the free hooks.
+		// Dynamic shape data copy: share the buffer when in g_adjustedBlocks, else memcpy.
 		if (auto * newDynShape = targetShape ? targetShape->AsDynamicTriShape() : nullptr) {
 			if (auto * sourceShape = source ? source->AsDynamicTriShape() : nullptr) {
 				auto & srcRT = sourceShape->GetDynamicTrishapeRuntimeData();
 				auto & dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
 				dstRT.dataSize = srcRT.dataSize;
 				dstRT.frameCount = srcRT.frameCount;
-				if (g_enableFaceOverlays && RetainAdjustedDynamicData(srcRT.dynamicData)) {
+				if (g_enableFaceOverlays && g_adjustedBlocks.find(srcRT.dynamicData) != g_adjustedBlocks.end()) {
+					void * ptr = reinterpret_cast<void*>((uintptr_t)srcRT.dynamicData - 0x10);
+					REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(ptr));
 					dstRT.dynamicData = srcRT.dynamicData;  // shared buffer
 				} else {
 					dstRT.dynamicData = RE::NiMalloc(srcRT.dataSize);

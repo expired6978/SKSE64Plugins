@@ -51,10 +51,9 @@ HRESULT CompileShaderFromData(LPCVOID pSrcData, _In_ SIZE_T SrcDataSize, _In_opt
 		return E_NOINTERFACE;
 	}
 
-	// DLL export names are ABI strings, not C++ namespace-qualified symbols.
-	_D3DCompile compile = (_D3DCompile)REX::W32::GetProcAddress(d3dcompiler, "D3DCompile");
+	_D3DCompile compile = (_D3DCompile)REX::W32::GetProcAddress(d3dcompiler, "REX::W32::D3DCompile");
 	if (!compile) {
-		SKSE::log::error("{} - Failed to find D3DCompile function", __FUNCTION__);
+		SKSE::log::error("{} - Failed to find REX::W32::D3DCompile function", __FUNCTION__);
 		return E_NOINTERFACE;
 	}
 

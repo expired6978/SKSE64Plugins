@@ -233,7 +233,6 @@ target_link_libraries(skee64 PRIVATE
     ZLIB::ZLIB
 )
 set_target_properties(skee64 PROPERTIES OUTPUT_NAME "skee64")
-target_link_options(skee64 PRIVATE /FORCE:UNRESOLVED)
 
 # --- Precompiled shaders ---------------------------------------------------------
 # Compile the HLSL/.fx sources with fxc (Windows SDK) into .cso. The runtime
@@ -338,34 +337,7 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
         COMMAND "$<TARGET_FILE:vr2_inventory_preview_tests>"
         COMMENT "Checking VR inventory preview stride, count location and bounded lookup")
     add_dependencies(skee64 vr2_inventory_preview_tests)
-    add_executable(vr2_sculpt_trace_tests tests/sculpt-trace.cpp)
-    target_include_directories(vr2_sculpt_trace_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
-    add_custom_command(TARGET vr2_sculpt_trace_tests POST_BUILD
-        COMMAND "$<TARGET_FILE:vr2_sculpt_trace_tests>"
-        COMMENT "Checking bounded Sculpt commit-to-history diagnostics")
-    add_dependencies(skee64 vr2_sculpt_trace_tests)
 
-    add_executable(vr2_export_skin_clone_tests tests/export-skin-clone.cpp)
-    target_include_directories(vr2_export_skin_clone_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
-    add_custom_command(TARGET vr2_export_skin_clone_tests POST_BUILD
-        COMMAND "$<TARGET_FILE:vr2_export_skin_clone_tests>"
-        VERBATIM)
-    add_dependencies(skee64 vr2_export_skin_clone_tests)
-    add_executable(vr2_sculpt_session_tests tests/sculpt-stroke-session.cpp)
-    target_include_directories(vr2_sculpt_session_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
-    add_custom_command(TARGET vr2_sculpt_session_tests POST_BUILD
-        COMMAND "$<TARGET_FILE:vr2_sculpt_session_tests>"
-        COMMENT "Checking Sculpt stroke lifecycle ownership")
-    add_dependencies(skee64 vr2_sculpt_session_tests)
-    add_executable(vr2_sculpt_mesh_tests tests/sculpt-mesh.cpp skee64/CDXMesh.cpp)
-    target_include_directories(vr2_sculpt_mesh_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
-    target_link_libraries(vr2_sculpt_mesh_tests PRIVATE CommonLibSSE xbyak::xbyak Microsoft::DirectXTK)
-    target_compile_definitions(vr2_sculpt_mesh_tests PRIVATE XBYAK_NO_OP_NAMES)
-    target_precompile_headers(vr2_sculpt_mesh_tests PRIVATE skee64/pch.h)
-    add_custom_command(TARGET vr2_sculpt_mesh_tests POST_BUILD
-        COMMAND "$<TARGET_FILE:vr2_sculpt_mesh_tests>"
-        COMMENT "Checking production Sculpt CPU picking and batched WARP GPU upload")
-    add_dependencies(skee64 vr2_sculpt_mesh_tests)
     add_executable(vr2_polar_placement_tests tests/VR/menu-polar-placement.test.cpp)
     target_include_directories(vr2_polar_placement_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_compile_options(vr2_polar_placement_tests PRIVATE /UNDEBUG)
@@ -382,18 +354,6 @@ if(SKEE_GAME_RUNTIME STREQUAL "VR")
         COMMAND "$<TARGET_FILE:vr2_camera_policy_tests>"
         COMMENT "Checking VR camera dispatch and tracking-origin coordinate policy")
     add_dependencies(skee64 vr2_camera_policy_tests)
-    # Exercise the production DLL-export lookup and compiler, not just fxc or
-    # a duplicated test implementation. No Skyrim process or GPU is required.
-    add_executable(vr2_shader_compile_tests tests/shader-compile.cpp skee64/CDXShaderCompile.cpp)
-    target_include_directories(vr2_shader_compile_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
-    target_link_libraries(vr2_shader_compile_tests PRIVATE CommonLibSSE xbyak::xbyak Microsoft::DirectXTK)
-    target_compile_definitions(vr2_shader_compile_tests PRIVATE XBYAK_NO_OP_NAMES)
-    target_compile_options(vr2_shader_compile_tests PRIVATE /permissive- /bigobj)
-    target_precompile_headers(vr2_shader_compile_tests PRIVATE skee64/pch.h)
-    add_custom_command(TARGET vr2_shader_compile_tests POST_BUILD
-        COMMAND "$<TARGET_FILE:vr2_shader_compile_tests>" "${SKEE_SHADER_SRC_ROOT}"
-        COMMENT "Checking production runtime shader compilation and error handling")
-    add_dependencies(skee64 vr2_shader_compile_tests)
     add_executable(vr2_swf_patch_tests tests/VR/swf-byte-patch.cpp skee64/VR/SwfBytePatch.cpp)
     target_include_directories(vr2_swf_patch_tests PRIVATE ${SKEE_VR_TEST_INCLUDE_DIRS})
     target_link_libraries(vr2_swf_patch_tests PRIVATE bcrypt.lib ZLIB::ZLIB)

@@ -1,7 +1,5 @@
 #include "CDXNifCommands.h"
 #include "SKEETasks.h"
-#include "SculptTrace.h"
-#include "SculptHistoryDispatch.h"
 #include "CDXNifMesh.h"
 #include "CDXNifScene.h"
 
@@ -12,6 +10,9 @@
 #include "FileUtils.h"
 #include "NifUtils.h"
 #include "SKEEHooks.h"
+#if defined(ENABLE_SKYRIM_VR)
+#include "VR/SculptHistoryDispatch.h"
+#endif
 
 
 #include <cstdint>
@@ -59,10 +60,8 @@ void ApplyMorphData(RE::BSTriShape * geometry, CDXVectorMap & vectorMap, float m
 
 void AddStrokeCommand(CDXStroke * stroke, RE::BSTriShape * geometry, std::int32_t id)
 {
-	if (g_task) {
-		SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryQueued);
+	if (g_task)
 		SKEE_AddUITask(g_task, new CRGNUITaskAddStroke(stroke, geometry, id));
-	} else SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryNoTask);
 }
 
 void CDXNifInflateStroke::Undo()
@@ -231,11 +230,7 @@ void CRGNTaskUpdateModel::Dispose()
 CRGNUITaskAddStroke::CRGNUITaskAddStroke(CDXStroke * stroke, RE::BSTriShape * geometry, std::int32_t id)
 {
 	m_id = id;
-	m_editorGeneration = g_World.GetEditorGeneration();
-	m_undoType = stroke->GetUndoType();
-	m_strokeType = stroke->GetStrokeType();
-	m_vertices = stroke->Length();
-	m_mirror = stroke->IsMirror();
+	m_stroke = stroke;
 	m_geometry.reset(geometry);
 }
 
@@ -246,11 +241,6 @@ void CRGNUITaskAddStroke::Dispose()
 
 void CRGNUITaskAddStroke::Run()
 {
-	SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryRun);
-	if (m_editorGeneration != g_World.GetEditorGeneration() || !g_World.GetNumMeshes()) {
-		SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryStale);
-		return;
-	}
 	RE::IMenu * menu = RE::UI::GetSingleton()->GetMenu(RE::InterfaceStrings::GetSingleton()->raceSexMenu).get();
 	if (menu && menu->uiMovie) {
 		RE::GFxValue obj{};
@@ -259,34 +249,35 @@ void CRGNUITaskAddStroke::Run()
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", commandId);
 		RE::GFxValue type{};
-		type.SetNumber(m_undoType);
+		type.SetNumber(m_stroke->GetUndoType());
 		obj.SetMember("type", type);
 		RE::GFxValue strokeType{};
-		strokeType.SetNumber(m_strokeType);
+		strokeType.SetNumber(m_stroke->GetStrokeType());
 		obj.SetMember("stroke", strokeType);
 		RE::GFxValue vertices{};
-		vertices.SetNumber(m_vertices);
+		vertices.SetNumber(m_stroke->Length());
 		obj.SetMember("vertices", vertices);
 		RE::GFxValue mirror{};
-		mirror.SetBoolean(m_mirror);
+		mirror.SetBoolean(m_stroke->IsMirror());
 		obj.SetMember("mirror", mirror);
 		RE::GFxValue partName{};
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
-		const bool invoked = SKEE::DispatchSculptHistory(REL::Module::IsVR(), obj,
-			[&](const char* method, const RE::GFxValue* args, std::uint32_t count) {
-				return menu->uiMovie->Invoke(method, nullptr, args, count);
-			});
-		SKEE::SculptTrace::Count(invoked ? SKEE::SculptTrace::Event::HistoryInvoked : SKEE::SculptTrace::Event::HistoryInvokeFailed);
+		RE::GFxValue args[1] = { obj };
+#if defined(ENABLE_SKYRIM_VR)
+		SKEE::DispatchSculptHistory(true, obj, [&](const char* path, const RE::GFxValue* values, std::uint32_t count) {
+			return menu->uiMovie->Invoke(path, nullptr, values, count);
+		});
+#else
+		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+#endif
 	}
-	else SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::HistoryNoMovie);
 }
 
 CRGNUITaskStandardCommand::CRGNUITaskStandardCommand(CDXUndoCommand * cmd, RE::BSTriShape * geometry, std::int32_t id)
 {
 	m_id = id;
-	m_editorGeneration = g_World.GetEditorGeneration();
-	m_undoType = cmd->GetUndoType();
+	m_cmd = cmd;
 	m_geometry.reset(geometry);
 }
 
@@ -297,7 +288,6 @@ void CRGNUITaskStandardCommand::Dispose()
 
 void CRGNUITaskStandardCommand::Run()
 {
-	if (m_editorGeneration != g_World.GetEditorGeneration() || !g_World.GetNumMeshes()) return;
 	RE::IMenu * menu = RE::UI::GetSingleton()->GetMenu(RE::InterfaceStrings::GetSingleton()->raceSexMenu).get();
 	if (menu && menu->uiMovie) {
 		RE::GFxValue obj;
@@ -306,15 +296,19 @@ void CRGNUITaskStandardCommand::Run()
 		commandId.SetNumber(m_id);
 		obj.SetMember("id", commandId);
 		RE::GFxValue type;
-		type.SetNumber(m_undoType);
+		type.SetNumber(m_cmd->GetUndoType());
 		obj.SetMember("type", type);
 		RE::GFxValue partName;
 		partName.SetString(m_geometry->name.c_str());
 		obj.SetMember("part", partName);
-		SKEE::DispatchSculptHistory(REL::Module::IsVR(), obj,
-			[&](const char* method, const RE::GFxValue* args, std::uint32_t count) {
-				return menu->uiMovie->Invoke(method, nullptr, args, count);
-			});
+		RE::GFxValue args[1] = { obj };
+#if defined(ENABLE_SKYRIM_VR)
+		SKEE::DispatchSculptHistory(true, obj, [&](const char* path, RE::GFxValue* values, std::uint32_t count) {
+			return menu->uiMovie->Invoke(path, nullptr, values, count);
+		});
+#else
+		menu->uiMovie->InvokeNoReturn("AddAction", args, 1);
+#endif
 	}
 }
 

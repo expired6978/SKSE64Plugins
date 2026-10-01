@@ -270,18 +270,6 @@ public:
 	void Call(RE::GFxFunctionHandler::Params& a_params) override;
 };
 
-class SKSEScaleform_BeginSculptTrace : public RE::GFxFunctionHandler
-{
-public:
-	void Call(RE::GFxFunctionHandler::Params& a_params) override;
-};
-
-class SKSEScaleform_ReadSculptTrace : public RE::GFxFunctionHandler
-{
-public:
-	void Call(RE::GFxFunctionHandler::Params& a_params) override;
-};
-
 class SKSEScaleform_GetExternalFiles : public RE::GFxFunctionHandler
 {
 public:

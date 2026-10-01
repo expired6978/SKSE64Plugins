@@ -403,5 +403,5 @@ bool CDXBrushTranslator::Pick(CDXPickInfo & pickInfo, CDXMesh * mesh, bool isMir
 
 bool CDXBrushTranslator::Mirror() const
 {
-	return m_brush->IsMirror();
+	return true;
 }

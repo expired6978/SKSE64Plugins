@@ -6,8 +6,6 @@
 
 
 #include "ScaleformCharGenFunctions.h"
-#include "SculptTrace.h"
-#include <nlohmann/json.hpp>
 #include <cmath>
 #include "CharacterNameUpdate.h"
 #if defined(ENABLE_SKYRIM_VR)
@@ -344,7 +342,11 @@ void SKSEScaleform_ReloadSliders::Call(RE::GFxFunctionHandler::Params& a_params)
 		auto raceMenu = mm->GetMenu<RE::RaceSexMenu>();
 		if(raceMenu) {
 			RE::PlayerCharacter * player = RE::PlayerCharacter::GetSingleton();
+#if defined(ENABLE_SKYRIM_VR)
 			SKEE::LoadSliders(raceMenu.get(), player->GetActorBase(), 0);
+#else
+			SKEE::LoadSliders(raceMenu.get(), (std::uint64_t)player->GetBaseObject(), 0);
+#endif
 			player->DoReset3D(true);
 		}
 	}
@@ -819,7 +821,6 @@ void SKSEScaleform_LoadImportedHead::Call(RE::GFxFunctionHandler::Params& a_para
 
 void SKSEScaleform_ClearSculptData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kArray);
 
@@ -1272,7 +1273,6 @@ void SKSEScaleform_ReleaseMorphEditor::Call(RE::GFxFunctionHandler::Params& a_pa
 
 void SKSEScaleform_BeginRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1296,7 +1296,6 @@ void SKSEScaleform_EndRotateMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_BeginPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
@@ -1318,112 +1317,64 @@ void SKSEScaleform_EndPanMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 	g_Camera.OnMoveEnd();
 };
 
-namespace
-{
-	void PublishSculptTrace(RE::GFxMovie* movie, const SKEE::SculptTrace::Snapshot& snapshot)
-	{
-		// Papyrus UI.Invoke discards GFx return values. Publish a bounded scalar
-		// readout independently, readable via the existing native UI.GetString.
-		nlohmann::json report{
-			{"contractVersion", 2}, {"active", snapshot.active}, {"generation", snapshot.generation},
-			{"editorGeneration", g_World.GetEditorGeneration()}, {"meshCount", g_World.GetNumMeshes()},
-			{"activePaint", g_World.HasActivePaint()}, {"nativeUndoCount", g_undoStack.size()},
-			{"nativeUndoIndex", g_undoStack.GetIndex()}, {"taskInterfaceAvailable", g_task != nullptr},
-			{"brushType", g_World.GetCurrentBrush() ? static_cast<int>(g_World.GetCurrentBrush()->GetType()) : -1}
-		};
-		for (unsigned i = 0; i < snapshot.samples.size(); ++i) {
-			const auto& sample = snapshot.samples[i];
-			report[SKEE::SculptTrace::names[i]] = {{"calls", sample.calls}, {"units", sample.units},
-				{"totalUs", sample.nanoseconds / 1000.0}, {"maxUs", sample.maximumNanoseconds / 1000.0}};
-		}
-		for (const char* path : {"AddAction", "_root.AddAction",
-			"_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance.AddAction"}) {
-			RE::GFxValue callback;
-			const bool found = movie->GetVariable(&callback, path);
-			report["movieCallbacks"][path] = {{"found", found},
-				{"valueType", found ? nlohmann::json(static_cast<unsigned>(callback.GetType())) : nlohmann::json(nullptr)}};
-		}
-		RE::GFxValue plugin;
-		if (movie->GetVariable(&plugin, "_global.skse.plugins.CharGen") && plugin.IsObject()) {
-			const auto json = report.dump();
-			RE::GFxValue readout;
-			movie->CreateString(&readout, json.c_str());
-			plugin.SetMember("sculptTraceJson", readout);
-		}
-	}
-}
-
-void SKSEScaleform_BeginSculptTrace::Call(RE::GFxFunctionHandler::Params& a_params)
-{
-	SKEE::SculptTrace::Start();
-	PublishSculptTrace(a_params.movie, SKEE::SculptTrace::Read());
-	if (a_params.retVal) a_params.retVal->SetBoolean(true);
-}
-
-void SKSEScaleform_ReadSculptTrace::Call(RE::GFxFunctionHandler::Params& a_params)
-{
-	const auto snapshot = SKEE::SculptTrace::Read(a_params.argCount > 0 && a_params.args[0].IsBool() && a_params.args[0].GetBool());
-	PublishSculptTrace(a_params.movie, snapshot);
-	if (!a_params.retVal) return;
-	a_params.movie->CreateObject(a_params.retVal);
-	ScaleformUtils::RegisterNumber(a_params.retVal, "active", snapshot.active ? 1 : 0);
-	ScaleformUtils::RegisterNumber(a_params.retVal, "generation", static_cast<double>(snapshot.generation));
-	for (unsigned i = 0; i < snapshot.samples.size(); ++i) {
-		RE::GFxValue sample;
-		a_params.movie->CreateObject(&sample);
-		const auto& s = snapshot.samples[i];
-		ScaleformUtils::RegisterNumber(&sample, "calls", static_cast<double>(s.calls));
-		ScaleformUtils::RegisterNumber(&sample, "totalUs", s.nanoseconds / 1000.0);
-		ScaleformUtils::RegisterNumber(&sample, "maxUs", s.maximumNanoseconds / 1000.0);
-		ScaleformUtils::RegisterNumber(&sample, "units", static_cast<double>(s.units));
-		a_params.retVal->SetMember(SKEE::SculptTrace::names[i], sample);
-	}
-}
-
-namespace
-{
-	bool SculptPointer(RE::GFxFunctionHandler::Params& args, std::int32_t& x, std::int32_t& y)
-	{
-		if (args.argCount < 2 || !args.args[0].IsNumber() || !args.args[1].IsNumber()) return false;
-		const double px = args.args[0].GetNumber(), py = args.args[1].GetNumber();
-		if (!std::isfinite(px) || !std::isfinite(py) || px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX) return false;
-		x = static_cast<std::int32_t>(px); y = static_cast<std::int32_t>(py); return true;
-	}
-}
-
 void SKSEScaleform_BeginPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	std::int32_t x{}, y{};
-	if (!SculptPointer(a_params, x, y)) { g_World.EndPaint(); if (a_params.retVal) a_params.retVal->SetBoolean(false); return; }
-	const auto hit = g_World.BeginPaint(&g_Camera, x, y);
-	if (a_params.retVal) a_params.retVal->SetBoolean(hit);
+	assert(a_params.argCount >= 2);
+	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
+	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
+
+	std::int32_t x = a_params.args[0].GetNumber();
+	std::int32_t y = a_params.args[1].GetNumber();
+
+	bool hitMesh = false;
+
+	CDXBrush * brush = g_World.GetCurrentBrush();
+	if (brush) {
+		CDXBrushPickerBegin brushStroke(brush);
+		brushStroke.SetMirror(brush->IsMirror());
+		if (g_World.Pick(&g_Camera, x, y, brushStroke))
+			hitMesh = true;
+	}
+
+	a_params.retVal->SetBoolean(hitMesh);
 };
 
 void SKSEScaleform_DoPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	std::int32_t x{}, y{};
-	if (SculptPointer(a_params, x, y)) g_World.UpdatePaint(&g_Camera, x, y);
+	assert(a_params.argCount >= 2);
+	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
+	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
+
+	std::int32_t x = a_params.args[0].GetNumber();
+	std::int32_t y = a_params.args[1].GetNumber();
+
+	CDXBrush * brush = g_World.GetCurrentBrush();
+	if (brush) {
+		CDXBrushPickerUpdate brushStroke(brush);
+		brushStroke.SetMirror(brush->IsMirror());
+		g_World.Pick(&g_Camera, x, y, brushStroke);
+	}
 };
 
 void SKSEScaleform_EndPaintMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	SKEE::SculptTrace::Count(SKEE::SculptTrace::Event::EndCallback);
-	g_World.EndPaint();
+	CDXBrush * brush = g_World.GetCurrentBrush();
+	if(brush)
+		brush->EndStroke();
 };
 
 void SKSEScaleform_DoHoverMesh::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	SKEE::SculptTrace::Scope trace(SKEE::SculptTrace::Event::Hover);
-	std::int32_t x{}, y{};
-	if (!SculptPointer(a_params, x, y) || g_World.GetNumMeshes() < 2) return;
-	auto cursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(0));
-	auto mirrorCursor = dynamic_cast<CDXBrushMesh*>(g_World.GetNthMesh(1));
-	if (!cursor || !mirrorCursor) return; // Partial brush resource creation must not become an invalid cast.
+	assert(a_params.argCount >= 2);
+	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
+	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
+
+	std::int32_t x = a_params.args[0].GetNumber();
+	std::int32_t y = a_params.args[1].GetNumber();
 
 	CDXBrush * brush = g_World.GetCurrentBrush();
 	if (brush) {
-		if (!brush->IsMirror()) mirrorCursor->SetVisible(false);
-		CDXBrushTranslator translator(brush, cursor, mirrorCursor);
+		CDXBrushTranslator translator(brush, static_cast<CDXBrushMesh*>(g_World.GetNthMesh(0)), static_cast<CDXBrushMesh*>(g_World.GetNthMesh(1)));
 		g_World.Pick(&g_Camera, x, y, translator);
 	}
 };
@@ -1540,7 +1491,6 @@ void SKSEScaleform_GetMeshes::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_SetMeshData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	assert(a_params.argCount >= 2);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kObject);
@@ -1581,19 +1531,16 @@ void SKSEScaleform_GetActionLimit::Call(RE::GFxFunctionHandler::Params& a_params
 
 void SKSEScaleform_UndoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Undo(true));
 }
 
 void SKSEScaleform_RedoAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	a_params.retVal->SetNumber(g_undoStack.Redo(true));
 }
 
 void SKSEScaleform_GoToAction::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	g_World.EndPaint();
 	assert(a_params.argCount >= 1);
 	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
 
