@@ -649,9 +649,8 @@ void SKSETaskExportHead::Run()
 
 	{
 		NifStreamWrapper niStream;
-		if (niStream.AddObject(rootNode.get())) {
-			niStream.SaveStream(m_nifPath.c_str());
-		}
+		SKEE::NiStreamAddObject(niStream.get(), rootNode.get());
+		niStream->Save3(m_nifPath.c_str());
 	}
 
 }
