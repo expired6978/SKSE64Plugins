@@ -122,6 +122,10 @@ extern TransferItemUIDFn          TransferItemUID_Original;
 // wrapper lazily resolves its own Relocation on first use.
 namespace SKEE
 {
+    // Tracked-buffer lookup and retain share the free hook's lock.
+    // This does not acquire a reference to untracked engine allocations.
+    bool RetainAdjustedDynamicData(void* data);
+
 	// --- BSLightingShaderProperty / material helpers --------------------------
 
 	inline std::uint32_t InitializeShader(RE::BSLightingShaderProperty* a_this, RE::BSGeometry* a_geometry)

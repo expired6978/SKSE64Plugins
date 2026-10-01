@@ -41,6 +41,7 @@
 #include "RE/N/NiRTTI.h"
 
 #include "SKEEHooks.h"
+#include "AdjustedDynamicData.h"
 
 #include "ActorUpdateManager.h"
 #include "OverlayInterface.h"
@@ -892,11 +893,20 @@ void * NiAllocate_Hooked(size_t size)
 {
 	std::lock_guard<std::recursive_mutex> scs(g_cs);
 	void* ptr = RE::NiMalloc(size + 0x10);
+	if (!ptr) return nullptr;
 	*((uintptr_t*)ptr) = 1;
 	*((uintptr_t*)ptr+1) = 0;
 	void* adjusted = reinterpret_cast<void*>((uintptr_t)ptr + 0x10);
 	g_adjustedBlocks.emplace(adjusted);
 	return adjusted;
+}
+
+bool SKEE::RetainAdjustedDynamicData(void* data)
+{
+	return RetainTrackedDynamicData(data, g_cs, g_adjustedBlocks, [](void* adjusted) {
+		void* allocation = reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(adjusted) - 0x10);
+		REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(allocation));
+	});
 }
 
 void NiFree_Hooked(void* ptr)
