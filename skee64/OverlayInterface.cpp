@@ -83,6 +83,10 @@ void OverlayInterface::UninstallOverlay(const char * nodeName, RE::TESObjectREFR
 
 void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, RE::TESObjectREFR * refr, RE::BSGeometry * source, RE::NiNode * destination, RE::BGSTextureSet * textureSet)
 {
+	if (!source || !destination || !refr) return;
+	// Keep source destruction (and its final buffer release) out of the complete
+	// acquisition/installation interval. Inputs must already be live on entry.
+	RE::NiPointer<RE::BSGeometry> sourceOwner(source);
 	RE::NiPointer<RE::NiAVObject> newShape;
 	RE::NiPointer<RE::NiProperty> alphaProperty;
 	RE::NiPointer<RE::NiProperty> shaderProperty;
@@ -155,32 +159,28 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	auto * targetShape = newShape.get() ? newShape.get()->AsGeometry() : nullptr;
 	if(targetShape)
 	{
+		// Finish ownership acquisition before changing an existing target. A
+		// failed copy must not publish metadata, properties, callbacks or attach.
+		if (auto* newDynShape = targetShape->AsDynamicTriShape()) {
+			auto* sourceShape = sourceOwner->AsDynamicTriShape();
+			if (!sourceShape) return;
+			auto acquired = SKEE::AcquireOverlayDynamicData(sourceShape, g_enableFaceOverlays);
+			if (!acquired) {
+				SKSE::log::warn("{} - Could not acquire dynamic data for overlay {}", __FUNCTION__, nodeName);
+				return;
+			}
+			auto& dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
+			SKEE::DynamicDataMutex targetMutex{dstRT.lock};
+			std::scoped_lock targetLock(targetMutex);
+			SKEE::ReplaceDynamicData(dstRT, acquired, SKEE::ReleaseOverlayDynamicData);
+		}
+
 		targetShape->vertexDesc = source->vertexDesc;
 
 		if (shaderProperty && shaderProperty.get())
 			targetShape->GetGeometryRuntimeData().shaderProperty.reset(static_cast<RE::BSShaderProperty*>(shaderProperty.get()));
 		if (alphaProperty && alphaProperty.get())
 			targetShape->GetGeometryRuntimeData().alphaProperty.reset(static_cast<RE::NiAlphaProperty*>(alphaProperty.get()));
-
-		// Retain tracked buffers under the free hook's lock; copy untracked data.
-		if (auto * newDynShape = targetShape ? targetShape->AsDynamicTriShape() : nullptr) {
-			if (auto * sourceShape = source ? source->AsDynamicTriShape() : nullptr) {
-				auto & srcRT = sourceShape->GetDynamicTrishapeRuntimeData();
-				auto & dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
-				dstRT.dataSize = srcRT.dataSize;
-				dstRT.frameCount = srcRT.frameCount;
-				if (g_enableFaceOverlays && SKEE::RetainAdjustedDynamicData(srcRT.dynamicData)) {
-					dstRT.dynamicData = srcRT.dynamicData;  // shared buffer
-				} else {
-					dstRT.dynamicData = RE::NiMalloc(srcRT.dataSize);
-					if (dstRT.dynamicData) {
-						std::memcpy(dstRT.dynamicData, srcRT.dynamicData, srcRT.dataSize);
-					}
-				}
-				dstRT.unk178 = srcRT.unk178;
-				dstRT.unk17C = 0;
-			}
-		}
 
 		targetShape->local = source->local;  // m_localTransform
 		targetShape->GetGeometryRuntimeData().skinInstance = source->GetGeometryRuntimeData().skinInstance;

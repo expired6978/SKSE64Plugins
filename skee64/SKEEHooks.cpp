@@ -901,12 +901,19 @@ void * NiAllocate_Hooked(size_t size)
 	return adjusted;
 }
 
-bool SKEE::RetainAdjustedDynamicData(void* data)
+SKEE::DynamicDataLease SKEE::AcquireOverlayDynamicData(RE::BSDynamicTriShape* source, bool share)
 {
-	return RetainTrackedDynamicData(data, g_cs, g_adjustedBlocks, [](void* adjusted) {
-		void* allocation = reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(adjusted) - 0x10);
-		REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(allocation));
-	});
+	if (!source) return {};
+	RE::NiPointer<RE::BSDynamicTriShape> sourceOwner(source);
+	auto& runtime = sourceOwner->GetDynamicTrishapeRuntimeData();
+	DynamicDataMutex sourceMutex{runtime.lock};
+	return AcquireDynamicData(sourceMutex, g_cs, g_adjustedBlocks, share,
+		[&] { return DynamicDataSnapshot{runtime.dynamicData, runtime.dataSize, runtime.frameCount, runtime.unk178}; },
+		[](void* adjusted) {
+			void* allocation = reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(adjusted) - 0x10);
+			REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(allocation));
+		},
+		[](std::uint32_t size) { return RE::NiMalloc(size); }, ReleaseOverlayDynamicData);
 }
 
 void NiFree_Hooked(void* ptr)
@@ -926,6 +933,11 @@ void NiFree_Hooked(void* ptr)
 	{
 		RE::NiFree(ptr);
 	}
+}
+
+void SKEE::ReleaseOverlayDynamicData(void* data)
+{
+	NiFree_Hooked(data); // Both adjusted retained buffers and ordinary copies.
 }
 
 void UpdateModelColor_Recursive(RE::NiAVObject * object, RE::NiColorA *& color, RE::BSShaderMaterial::Feature shaderType)
