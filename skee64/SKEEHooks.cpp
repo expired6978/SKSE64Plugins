@@ -801,20 +801,28 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 				HeadPartList * partList = g_partSet.GetPartList(partType);
 				if (partList)
 				{
+					const auto readPart = [actorBase, partType]() {
+						return actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
+					};
+					const auto applyPart = [&](RE::BGSHeadPart* targetPart, float requestedValue) {
+						if (!SKEE::HeadPartSlider::ApplySelection(slider->value, requestedValue, targetPart, readPart,
+							[actorBase](RE::BGSHeadPart* part) { actorBase->ChangeHeadPart(part); },
+							[player](RE::BGSHeadPart* oldPart, RE::BGSHeadPart* part) { SKEE::ChangeActorHeadPart(player, oldPart, part); })) {
+							SKSE::log::warn("Custom head-part slider type {} did not apply requested value {}; retaining reported value {}",
+								partType, requestedValue, slider->value);
+						}
+					};
 					if (newValue == SKEE::HeadPartSlider::kNoPart) {
-						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
+						RE::BGSHeadPart * oldPart = readPart();
+						RE::BGSHeadPart * defaultPart = nullptr;
 						if (oldPart) {
-							RE::BGSHeadPart * defaultPart = g_partSet.GetDefaultPart(partType);
+							defaultPart = g_partSet.GetDefaultPart(partType);
 							if (!defaultPart) {
 								SKSE::log::warn("Cannot clear custom head-part slider type {}: no default part is registered", partType);
 								return;
 							}
-							if (oldPart != defaultPart) {
-								actorBase->ChangeHeadPart(defaultPart);
-								SKEE::ChangeActorHeadPart(player, oldPart, defaultPart);
-							}
 						}
-						slider->value = SKEE::HeadPartSlider::kNoPart;
+						applyPart(defaultPart, SKEE::HeadPartSlider::kNoPart);
 						return;
 					}
 					const auto partIndex = SKEE::HeadPartSlider::PartIndexForValue(newValue, partList->size());
@@ -823,12 +831,7 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 					}
 					RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, *partIndex);
 					if (targetPart) {
-						slider->value = static_cast<float>(*partIndex);
-						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
-						if (oldPart != targetPart) {
-							actorBase->ChangeHeadPart(targetPart);
-							SKEE::ChangeActorHeadPart(player, oldPart, targetPart);
-						}
+						applyPart(targetPart, static_cast<float>(*partIndex));
 					}
 				}
 

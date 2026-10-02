@@ -24,6 +24,38 @@ int main()
         check(!PartIndexForValue(1.5, 5), "fractional slider value accepted an index");
         check(!PartIndexForValue(std::numeric_limits<double>::quiet_NaN(), 5), "NaN accepted an index");
         check(!PartIndexForValue(std::numeric_limits<double>::infinity(), 5), "infinity accepted an index");
+        check(!PartIndexForValue(-2.0, 5), "non-sentinel negative value accepted an index");
+        check(!PartIndexForValue(-std::numeric_limits<double>::infinity(), 5), "negative infinity accepted an index");
+        check(!PartIndexForValue(4294967296.0, std::numeric_limits<std::size_t>::max()), "uint32 overflow accepted an index");
+
+        // Exercise the same mutation boundary used by DoubleMorphCallback_Hook,
+        // with injected base/read-back/rebuild operations rather than the game.
+        int oldPart = 0, selectedPart = 1, defaultPart = 2;
+        int* currentPart = &oldPart;
+        float reportedValue = 3.0f;
+        int rebuilds = 0;
+        const auto readPart = [&]() { return currentPart; };
+        const auto noChange = [](int*) {};
+        const auto rebuild = [&](int*, int*) { ++rebuilds; };
+        check(!ApplySelection(reportedValue, 0.0f, &selectedPart, readPart, noChange, rebuild), "no-op selection reported success");
+        check(reportedValue == 3.0f && rebuilds == 0, "failed selection changed value or rebuilt actor");
+        check(!ApplySelection(reportedValue, kNoPart, &defaultPart, readPart, noChange, rebuild), "no-op clear reported success");
+        check(reportedValue == 3.0f && rebuilds == 0, "failed clear changed value or rebuilt actor");
+        const auto change = [&](int* part) { currentPart = part; };
+        check(ApplySelection(reportedValue, 0.0f, &selectedPart, readPart, change, rebuild), "selection did not commit confirmed part");
+        check(reportedValue == 0.0f && currentPart == &selectedPart && rebuilds == 1, "selection state/rebuild mismatch");
+        check(ApplySelection(reportedValue, 0.0f, &selectedPart, readPart, noChange, rebuild), "existing selection did not commit");
+        check(rebuilds == 1, "existing selection unnecessarily rebuilt actor");
+        check(ApplySelection(reportedValue, kNoPart, &defaultPart, readPart, change, rebuild), "default clear did not commit");
+        check(reportedValue == kNoPart && currentPart == &defaultPart && rebuilds == 2, "clear state/rebuild mismatch");
+        check(ApplySelection(reportedValue, kNoPart, &defaultPart, readPart, noChange, rebuild), "reopened default did not remain clear");
+        check(rebuilds == 2, "reopened default unnecessarily rebuilt actor");
+        check(!ApplySelection(reportedValue, 0.0f, &selectedPart, readPart, change,
+            [&](int*, int*) { currentPart = &oldPart; }), "post-rebuild mismatch reported success");
+        check(reportedValue == kNoPart, "post-rebuild mismatch committed requested value");
+        currentPart = nullptr;
+        check(ApplySelection(reportedValue, kNoPart, static_cast<int*>(nullptr), readPart, noChange, rebuild), "already absent part did not clear");
+        check(reportedValue == kNoPart && rebuilds == 2, "absent part changed value or rebuilt actor");
         std::cout << "Head-part slider index policy passed\n";
         return 0;
     } catch (const std::exception& error) {

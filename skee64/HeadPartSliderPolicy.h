@@ -29,4 +29,27 @@ namespace SKEE::HeadPartSlider
         }
         return static_cast<std::uint32_t>(value);
     }
+
+    // The engine's mutation/rebuild calls return void. Commit the reported
+    // value only after authoritative part read-back agrees. Do not rebuild an
+    // actor from a base mutation that did not take effect. This verifies the
+    // NPC part, not completion of the engine's visual mesh rebuild.
+    template <class Part, class ReadPart, class ChangePart, class RebuildPart>
+    [[nodiscard]] bool ApplySelection(float& reportedValue, float requestedValue, Part* targetPart,
+        ReadPart readPart, ChangePart changePart, RebuildPart rebuildPart)
+    {
+        auto* oldPart = readPart();
+        if (oldPart != targetPart) {
+            changePart(targetPart);
+            if (readPart() != targetPart) {
+                return false;
+            }
+            rebuildPart(oldPart, targetPart);
+        }
+        if (readPart() != targetPart) {
+            return false;
+        }
+        reportedValue = requestedValue;
+        return true;
+    }
 }
