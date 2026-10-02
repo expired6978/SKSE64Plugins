@@ -67,6 +67,19 @@ int main(int argc, char** argv)
             bytecode.GetAddressOf(), errors.GetAddressOf())), "Malformed HLSL accepted");
         Check(!bytecode.Get() && errors.Get() && errors->GetBufferSize() > 0,
             "Malformed HLSL did not return compiler diagnostics");
+
+        // Reuse the production resolver after both successful and failing
+        // compiles. This exercises cached function/blob lifetime behaviour;
+        // it is not an OS loader-reference-count measurement.
+        for (int repeat = 0; repeat < 8; ++repeat) {
+            CompileFile(root/"CharGen/brush_ps.hlsl", "BrushPShader", "ps_5_0");
+            bytecode.Reset();
+            errors.Reset();
+            Check(FAILED(CompileShaderFromData(invalid, sizeof(invalid)-1, "invalid.hlsl", "main", "ps_5_0",
+                bytecode.GetAddressOf(), errors.GetAddressOf())), "Repeated malformed HLSL accepted");
+            Check(!bytecode.Get() && errors.Get() && errors->GetBufferSize() > 0,
+                "Repeated failed compile lost diagnostics");
+        }
         std::cout << "Production D3DCompile: " << count
             << " shader sources compiled; invalid input and malformed HLSL checks passed\n";
         return 0;

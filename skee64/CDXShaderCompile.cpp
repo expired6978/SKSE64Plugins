@@ -27,34 +27,35 @@ HRESULT CompileShaderFromData(LPCVOID pSrcData, _In_ SIZE_T SrcDataSize, _In_opt
 		NULL, NULL
 	};
 
-	char name[REX::W32::MAX_PATH];
-	const char * versions[] = {
-		"47",
-		"46e",
-		"45",
-		"44",
-		"43",
-		"42"
-	};
-
-	REX::W32::HMODULE d3dcompiler = 0;
-	for (std::uint32_t i = 0; i < sizeof(versions) / sizeof(const char*); ++i)
-	{
-		_snprintf_s(name, REX::W32::MAX_PATH, "d3dcompiler_%s.dll", versions[i]);
-		d3dcompiler = REX::W32::LoadLibraryA(name);
-		if (d3dcompiler)
-			break;
-	}
-
-	if (!d3dcompiler) {
-		SKSE::log::error("{} - Failed to find d3dcompiler module", __FUNCTION__);
-		return E_NOINTERFACE;
-	}
-
-	// DLL export names are ABI strings, not C++ namespace-qualified symbols.
-	_D3DCompile compile = (_D3DCompile)REX::W32::GetProcAddress(d3dcompiler, "D3DCompile");
+	// Thread-safe function-local initialisation performs one loader acquisition,
+	// not one per shader/reinitialisation. Retain the successful module reference
+	// for the process lifetime: returned code/diagnostic blobs may outlive this
+	// call and still need the DLL's implementation. Availability is fixed on first
+	// use; a failed lookup keeps the existing E_NOINTERFACE/precompiled fallback.
+	static const _D3DCompile compile = []() -> _D3DCompile {
+		constexpr const char* versions[] = {
+			"d3dcompiler_47.dll", "d3dcompiler_46e.dll", "d3dcompiler_45.dll",
+			"d3dcompiler_44.dll", "d3dcompiler_43.dll", "d3dcompiler_42.dll"
+		};
+		REX::W32::HMODULE d3dcompiler = nullptr;
+		for (const auto* name : versions) {
+			d3dcompiler = REX::W32::LoadLibraryA(name);
+			if (d3dcompiler)
+				break;
+		}
+		if (!d3dcompiler) {
+			SKSE::log::error("CompileShaderFromData - Failed to find d3dcompiler module");
+			return nullptr;
+		}
+		// DLL export names are ABI strings, not C++ namespace-qualified symbols.
+		const auto function = reinterpret_cast<_D3DCompile>(REX::W32::GetProcAddress(d3dcompiler, "D3DCompile"));
+		if (!function) {
+			SKSE::log::error("CompileShaderFromData - Failed to find D3DCompile function");
+			REX::W32::FreeLibrary(d3dcompiler);
+		}
+		return function;
+	}();
 	if (!compile) {
-		SKSE::log::error("{} - Failed to find D3DCompile function", __FUNCTION__);
 		return E_NOINTERFACE;
 	}
 
