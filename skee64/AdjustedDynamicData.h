@@ -1,12 +1,50 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <mutex>
+#include <type_traits>
 #include <utility>
 
 namespace SKEE
 {
+    inline constexpr std::size_t kAdjustedDataHeaderSize = 0x10;
+
+    // Gate the complete publication path, not just its dynamic-buffer branch.
+    inline constexpr bool OverlayGeometryKindsMatch(bool sourceDynamic, bool targetDynamic) noexcept
+    {
+        return sourceDynamic == targetDynamic;
+    }
+
+    // Call under the allocation-registry lock. The free callback must not throw;
+    // publication must either insert successfully or leave the registry unchanged.
+    // Neither integer overflow nor setup/insertion failure may escape the engine
+    // allocator boundary or leak the newly allocated base block.
+    template <class Allocate, class Initialize, class Publish, class Free>
+    void* AllocateAdjustedData(std::size_t size, Allocate allocate,
+        Initialize initialize, Publish publish, Free free) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Free&, void*>, "Allocation rollback must not throw");
+        if (size > (std::numeric_limits<std::size_t>::max)() - kAdjustedDataHeaderSize) {
+            return nullptr;
+        }
+        void* base = nullptr;
+        try {
+            base = allocate(size + kAdjustedDataHeaderSize);
+            if (!base) return nullptr;
+            initialize(base);
+            auto* adjusted = static_cast<std::byte*>(base) + kAdjustedDataHeaderSize;
+            if (publish(adjusted)) return adjusted;
+        } catch (...) {
+            // No provider/engine callback is invoked here. Roll back our own
+            // allocation if local allocation/setup/tracking failed.
+        }
+        if (base) free(base);
+        return nullptr;
+    }
+
     // Adapts the engine's Lock/Unlock interface for scope-bound guards.
     template <class Lock>
     struct DynamicDataMutex

@@ -892,13 +892,16 @@ std::unordered_set<void*> g_adjustedBlocks;
 void * NiAllocate_Hooked(size_t size)
 {
 	std::lock_guard<std::recursive_mutex> scs(g_cs);
-	void* ptr = RE::NiMalloc(size + 0x10);
-	if (!ptr) return nullptr;
-	*((uintptr_t*)ptr) = 1;
-	*((uintptr_t*)ptr+1) = 0;
-	void* adjusted = reinterpret_cast<void*>((uintptr_t)ptr + 0x10);
-	g_adjustedBlocks.emplace(adjusted);
-	return adjusted;
+	return SKEE::AllocateAdjustedData(size,
+		[](std::size_t total) { return RE::NiMalloc(total); },
+		[](void* base) {
+			static_assert(sizeof(std::uintptr_t) * 2 == SKEE::kAdjustedDataHeaderSize);
+			auto* header = static_cast<std::uintptr_t*>(base);
+			header[0] = 1;
+			header[1] = 0;
+		},
+		[](void* adjusted) { return g_adjustedBlocks.emplace(adjusted).second; },
+		[](void* base) noexcept { RE::NiFree(base); });
 }
 
 SKEE::DynamicDataLease SKEE::AcquireOverlayDynamicData(RE::BSDynamicTriShape* source, bool share)

@@ -159,17 +159,21 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	auto * targetShape = newShape.get() ? newShape.get()->AsGeometry() : nullptr;
 	if(targetShape)
 	{
+		auto* sourceDynamic = sourceOwner->AsDynamicTriShape();
+		auto* targetDynamic = targetShape->AsDynamicTriShape();
+		if (!SKEE::OverlayGeometryKindsMatch(sourceDynamic != nullptr, targetDynamic != nullptr)) {
+			SKSE::log::warn("{} - Geometry kind mismatch for overlay {}", __FUNCTION__, nodeName);
+			return; // Existing target, properties, callbacks and attachment untouched.
+		}
 		// Finish ownership acquisition before changing an existing target. A
 		// failed copy must not publish metadata, properties, callbacks or attach.
-		if (auto* newDynShape = targetShape->AsDynamicTriShape()) {
-			auto* sourceShape = sourceOwner->AsDynamicTriShape();
-			if (!sourceShape) return;
-			auto acquired = SKEE::AcquireOverlayDynamicData(sourceShape, g_enableFaceOverlays);
+		if (targetDynamic) {
+			auto acquired = SKEE::AcquireOverlayDynamicData(sourceDynamic, g_enableFaceOverlays);
 			if (!acquired) {
 				SKSE::log::warn("{} - Could not acquire dynamic data for overlay {}", __FUNCTION__, nodeName);
 				return;
 			}
-			auto& dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
+			auto& dstRT = targetDynamic->GetDynamicTrishapeRuntimeData();
 			SKEE::DynamicDataMutex targetMutex{dstRT.lock};
 			std::scoped_lock targetLock(targetMutex);
 			SKEE::ReplaceDynamicData(dstRT, acquired, SKEE::ReleaseOverlayDynamicData);

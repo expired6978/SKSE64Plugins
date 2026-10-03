@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdlib>
 #include <iostream>
+#include <new>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -40,6 +41,85 @@ namespace
 
 int main()
 {
+    // Both mismatch directions reject before common publication. This is the
+    // exact admission predicate wired ahead of fields/callbacks in InstallOverlay;
+    // mock counters are not execution of the native shader/attachment path.
+    for (bool sourceDynamic : {false, true}) {
+        for (bool targetDynamic : {false, true}) {
+            for (bool existing : {false, true}) {
+                unsigned callbacks = 0, attachments = 0;
+                Runtime target{nullptr, 5, 6, 7, 8};
+                if (SKEE::OverlayGeometryKindsMatch(sourceDynamic, targetDynamic)) {
+                    target.dataSize = 12;
+                    ++callbacks;
+                    if (!existing) ++attachments;
+                }
+                const bool matches = sourceDynamic == targetDynamic;
+                Check(target.dataSize == (matches ? 12u : 5u));
+                Check(target.frameCount == 6 && target.unk178 == 7 && target.unk17C == 8);
+                Check(callbacks == (matches ? 1u : 0u));
+                Check(attachments == (matches && !existing ? 1u : 0u));
+            }
+        }
+    }
+
+    // Fault injection calls the production allocation/registration transaction.
+    // The fake allocator returns a sufficiently sized local block even at the
+    // arithmetic boundary; no SIZE_MAX allocation is attempted.
+    alignas(std::uintptr_t) std::array<std::byte, 32> block{};
+    std::unordered_set<void*> allocationRegistry;
+    unsigned mallocCalls = 0, freeCalls = 0, publishCalls = 0;
+    std::size_t requested = 0;
+    enum class Failure { None, NullAllocate, ThrowAllocate, ThrowInitialize, ThrowPublish, RejectPublish };
+    Failure failure = Failure::None;
+    auto allocateAdjusted = [&](std::size_t size) {
+        return SKEE::AllocateAdjustedData(size,
+            [&](std::size_t total) -> void* {
+                ++mallocCalls; requested = total;
+                if (failure == Failure::ThrowAllocate) throw std::bad_alloc();
+                return failure == Failure::NullAllocate ? nullptr : block.data();
+            },
+            [&](void* base) {
+                if (failure == Failure::ThrowInitialize) throw std::bad_alloc();
+                const std::array<std::uintptr_t, 2> header{1, 0};
+                std::memcpy(base, header.data(), SKEE::kAdjustedDataHeaderSize);
+            },
+            [&](void* adjusted) {
+                ++publishCalls;
+                if (failure == Failure::ThrowPublish) throw std::bad_alloc();
+                if (failure == Failure::RejectPublish) return false;
+                return allocationRegistry.insert(adjusted).second;
+            },
+            [&](void* base) noexcept { if (base == block.data()) ++freeCalls; });
+    };
+    const auto maxSize = (std::numeric_limits<std::size_t>::max)();
+    Check(!allocateAdjusted(maxSize) && mallocCalls == 0 && publishCalls == 0 && freeCalls == 0);
+    Check(!allocateAdjusted(maxSize - SKEE::kAdjustedDataHeaderSize + 1) && mallocCalls == 0);
+    for (auto injected : {Failure::NullAllocate, Failure::ThrowAllocate, Failure::ThrowInitialize,
+             Failure::ThrowPublish, Failure::RejectPublish}) {
+        failure = injected;
+        auto beforeFree = freeCalls;
+        Check(!allocateAdjusted(4));
+        Check(allocationRegistry.empty());
+        Check(freeCalls == beforeFree + (injected == Failure::NullAllocate || injected == Failure::ThrowAllocate ? 0u : 1u));
+    }
+    failure = Failure::None;
+    void* adjusted = allocateAdjusted(maxSize - SKEE::kAdjustedDataHeaderSize);
+    Check(adjusted == block.data() + SKEE::kAdjustedDataHeaderSize && requested == maxSize);
+    Check(allocationRegistry.contains(adjusted));
+    std::array<std::uintptr_t, 2> header{};
+    std::memcpy(header.data(), block.data(), SKEE::kAdjustedDataHeaderSize);
+    Check(header[0] == 1 && header[1] == 0);
+    // Fake final tracked release. The native InterlockedDecrement/NiFree hook
+    // itself still needs separately qualified engine tests.
+    Check(allocationRegistry.erase(adjusted) == 1);
+    ++freeCalls;
+    Check(allocationRegistry.empty());
+    adjusted = allocateAdjusted(4);
+    Check(adjusted == block.data() + SKEE::kAdjustedDataHeaderSize && requested == 20);
+    Check(allocationRegistry.erase(adjusted) == 1);
+    ++freeCalls;
+
     std::array<unsigned char, 4> original{1, 2, 3, 4}, replacement{5, 6, 7, 8}, copy{};
     std::unordered_set<void*> tracked{original.data(), replacement.data()};
     CheckedMutex sourceLock, registryLock;
@@ -96,6 +176,20 @@ int main()
         Check(references.at(replacement.data()) == 2);
     } // Abandoned retained lease balances its reference.
     Check(references.at(replacement.data()) == 1);
+
+    // Same-pointer tracked reinstall retains once then releases the old target's
+    // reference, so the two live owners still have exactly two references.
+    {
+        ++references.at(replacement.data()); // Existing overlay owner.
+        Runtime target{replacement.data(), 4, 0, 0, 0};
+        auto acquired = acquire(true);
+        Check(references.at(replacement.data()) == 3);
+        Check(SKEE::ReplaceDynamicData(target, acquired, Release));
+        Check(!acquired && target.dynamicData == replacement.data());
+        Check(references.at(replacement.data()) == 2);
+        Release(target.dynamicData);
+        Check(references.at(replacement.data()) == 1);
+    }
 
     // Live untracked and disabled-sharing copies own distinct exact storage.
     for (bool share : {true, false}) {

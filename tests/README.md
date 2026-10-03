@@ -9,6 +9,16 @@ replacement of new/existing target buffers. It uses deterministic fake locks,
 allocator storage and reference counts; it does not execute native engine hooks
 or prove all third-party/engine writers obey the shape lock.
 
+It also exercises the production geometry-kind admission predicate for both
+mismatch directions and matching static/dynamic kinds, with new/existing mock
+publication counters; the actual InstallOverlay wiring is inspected separately.
+Production `AllocateAdjustedData` fault injections cover header overflow, the
+largest arithmetic-valid size without a real huge allocation, null/throwing
+allocation, initialization/insertion exceptions, rejected insertion, successful
+header/registry publication and fake final release. Same-pointer tracked
+reinstallation is covered directly. These tests do not execute native geometry
+callbacks, NiMalloc/NiFree, registry Interlocked operations or attachment.
+
 Compile through the registered Build Broker's separately qualified test lane.
 Execute the returned test binary separately only after compilation is verified.
 No broker lane for this standalone target is currently qualified, so the test
