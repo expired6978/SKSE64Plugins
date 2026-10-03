@@ -41,6 +41,7 @@
 #include "RE/N/NiRTTI.h"
 
 #include "SKEEHooks.h"
+#include "AdjustedDynamicData.h"
 
 #include "ActorUpdateManager.h"
 #include "OverlayInterface.h"
@@ -891,12 +892,31 @@ std::unordered_set<void*> g_adjustedBlocks;
 void * NiAllocate_Hooked(size_t size)
 {
 	std::lock_guard<std::recursive_mutex> scs(g_cs);
-	void* ptr = RE::NiMalloc(size + 0x10);
-	*((uintptr_t*)ptr) = 1;
-	*((uintptr_t*)ptr+1) = 0;
-	void* adjusted = reinterpret_cast<void*>((uintptr_t)ptr + 0x10);
-	g_adjustedBlocks.emplace(adjusted);
-	return adjusted;
+	return SKEE::AllocateAdjustedData(size,
+		[](std::size_t total) { return RE::NiMalloc(total); },
+		[](void* base) {
+			static_assert(sizeof(std::uintptr_t) * 2 == SKEE::kAdjustedDataHeaderSize);
+			auto* header = static_cast<std::uintptr_t*>(base);
+			header[0] = 1;
+			header[1] = 0;
+		},
+		[](void* adjusted) { return g_adjustedBlocks.emplace(adjusted).second; },
+		[](void* base) noexcept { RE::NiFree(base); });
+}
+
+SKEE::DynamicDataLease SKEE::AcquireOverlayDynamicData(RE::BSDynamicTriShape* source, bool share)
+{
+	if (!source) return {};
+	RE::NiPointer<RE::BSDynamicTriShape> sourceOwner(source);
+	auto& runtime = sourceOwner->GetDynamicTrishapeRuntimeData();
+	DynamicDataMutex sourceMutex{runtime.lock};
+	return AcquireDynamicData(sourceMutex, g_cs, g_adjustedBlocks, share,
+		[&] { return DynamicDataSnapshot{runtime.dynamicData, runtime.dataSize, runtime.frameCount, runtime.unk178}; },
+		[](void* adjusted) {
+			void* allocation = reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(adjusted) - 0x10);
+			REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(allocation));
+		},
+		[](std::uint32_t size) { return RE::NiMalloc(size); }, ReleaseOverlayDynamicData);
 }
 
 void NiFree_Hooked(void* ptr)
@@ -916,6 +936,11 @@ void NiFree_Hooked(void* ptr)
 	{
 		RE::NiFree(ptr);
 	}
+}
+
+void SKEE::ReleaseOverlayDynamicData(void* data)
+{
+	NiFree_Hooked(data); // Both adjusted retained buffers and ordinary copies.
 }
 
 void UpdateModelColor_Recursive(RE::NiAVObject * object, RE::NiColorA *& color, RE::BSShaderMaterial::Feature shaderType)
