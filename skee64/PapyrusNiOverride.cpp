@@ -1142,12 +1142,12 @@ namespace papyrusNiOverride
 		g_transformInterface.AddNodeTransformScaleMode(refr, isFirstPerson, isFemale, node.c_str(), name.c_str(), iScaleMode);
 	}
 
-	std::uint32_t GetNodeTransformScaleMode(StaticFunctionTag* base, RE::TESObjectREFR* refr, bool isFirstPerson, bool isFemale, RE::BSFixedString node, RE::BSFixedString name)
+	float GetNodeTransformScaleMode(StaticFunctionTag* base, RE::TESObjectREFR* refr, bool isFirstPerson, bool isFemale, RE::BSFixedString node, RE::BSFixedString name)
 	{
 		if (!refr)
 			return 0;
 
-		return g_transformInterface.GetNodeTransformScaleMode(refr, isFirstPerson, isFemale, node.c_str(), name.c_str());
+		return static_cast<float>(g_transformInterface.GetNodeTransformScaleMode(refr, isFirstPerson, isFemale, node.c_str(), name.c_str()));
 	}
 
 	bool RemoveNodeTransformScaleMode(StaticFunctionTag* base, RE::TESObjectREFR* refr, bool isFirstPerson, bool isFemale, RE::BSFixedString node, RE::BSFixedString name)
