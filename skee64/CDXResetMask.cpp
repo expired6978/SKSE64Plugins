@@ -7,7 +7,9 @@ CDXResetMask::CDXResetMask(CDXMesh * mesh)
 {
 	m_mesh = mesh;
 
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+
+	auto* pVertices = vertexAccess.Get();
 	if (pVertices)
 	{
 		for (CDXMeshIndex i = 0; i < m_mesh->GetVertexCount(); i++) {
@@ -18,7 +20,7 @@ CDXResetMask::CDXResetMask(CDXMesh * mesh)
 			}
 		}
 
-		m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+		vertexAccess.Release();
 	}
 }
 
@@ -35,7 +37,8 @@ CDXUndoCommand::UndoType CDXResetMask::GetUndoType()
 
 void CDXResetMask::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -43,12 +46,13 @@ void CDXResetMask::Redo()
 	for (auto it : m_current)
 		pVertices[it.first].Color = it.second;
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXResetMask::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -56,5 +60,5 @@ void CDXResetMask::Undo()
 	for (auto it : m_previous)
 		pVertices[it.first].Color = it.second;
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }

@@ -52,9 +52,6 @@ public:
 	CDXVec CalculateVertexNormal(CDXMeshIndex i);
 
 protected:
-#ifdef CDX_MUTEX
-	mutable std::mutex m_mutex;
-#endif
 	CDXAdjacencyMap		m_adjacency;
 	CDXVertexEdgeList	m_vertexEdges;
 	bool				m_wireframe;

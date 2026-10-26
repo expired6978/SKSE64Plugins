@@ -158,6 +158,25 @@ target_link_libraries(skee64 PRIVATE
 set_target_properties(skee64 PROPERTIES OUTPUT_NAME "skee64")
 target_link_options(skee64 PRIVATE /FORCE:UNRESOLVED)
 
+# Focused, opt-in native regression. The production plugin and dependency test
+# configuration are unchanged by default. Execution belongs to the requester,
+# not Build Broker; a successful compile alone is not a test pass.
+option(SKEE_BUILD_SCULPT_TESTS "Build the standalone sculpt-buffer WARP regression" OFF)
+if(SKEE_BUILD_SCULPT_TESTS)
+    enable_testing()
+    add_executable(sculpt-mesh
+        tests/sculpt-mesh.cpp
+        skee64/CDXMesh.cpp
+        skee64/CDXEditableMesh.cpp
+    )
+    target_include_directories(sculpt-mesh PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/skee64")
+    target_precompile_headers(sculpt-mesh PRIVATE skee64/pch.h)
+    target_compile_options(sculpt-mesh PRIVATE /permissive- /bigobj)
+    target_link_libraries(sculpt-mesh PRIVATE CommonLibSSE Microsoft::DirectXTK d3d11.lib)
+    add_test(NAME sculpt-mesh COMMAND sculpt-mesh)
+    set_tests_properties(sculpt-mesh PROPERTIES TIMEOUT 30)
+endif()
+
 # --- Precompiled shaders ---------------------------------------------------------
 # Compile the HLSL/.fx sources with fxc (Windows SDK) into .cso. The runtime
 # loads them from SKSE/Plugins/<Module>/Shaders/Compiled/ and falls back to

@@ -5,6 +5,9 @@
 #include "CDXMaterial.h"
 #include "CDXPicker.h"
 #include <cstdint>
+#include <cstring>
+#include <limits>
+#include <new>
 
 
 
@@ -29,63 +32,54 @@ CDXMesh::~CDXMesh()
 
 void CDXMesh::SetMaterial(const std::shared_ptr<CDXMaterial>& material)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	m_material = material;
 }
 
 std::shared_ptr<CDXMaterial> CDXMesh::GetMaterial()
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_material;
 }
 
 void CDXMesh::SetVisible(bool visible)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	m_visible = visible;
 }
 
 bool CDXMesh::IsVisible() const
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_visible;
 }
 
 REX::W32::ComPtr<REX::W32::ID3D11Buffer> CDXMesh::GetVertexBuffer()
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_vertexBuffer;
 }
 REX::W32::ComPtr<REX::W32::ID3D11Buffer> CDXMesh::GetIndexBuffer()
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_indexBuffer;
 }
 
 std::uint32_t CDXMesh::GetIndexCount()
 {
+	std::lock_guard guard(m_dataMutex);
 	return m_indexCount;
 }
 
 std::uint32_t CDXMesh::GetFaceCount()
 {
-	return m_indexCount / 3;
+	std::lock_guard guard(m_dataMutex);
+	return m_topology == REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST ? m_indexCount / 3 : 0;
 }
 
 std::uint32_t CDXMesh::GetVertexCount()
 {
+	std::lock_guard guard(m_dataMutex);
 	return m_vertCount;
 }
 
@@ -168,49 +162,83 @@ bool IntersectTriangle( const CDXVec& orig, const CDXVec& dir, CDXVec& v0, CDXVe
 
 CDXMeshVert * CDXMesh::LockVertices(const LockMode type)
 {
-	if (type == LockMode::WRITE)
-	{
-		REX::W32::D3D11_MAPPED_SUBRESOURCE vertResource;
-		CDXMeshVert* pVertices = nullptr;
-		HRESULT res = m_pDevice->GetDeviceContext()->Map(m_vertexBuffer.Get(), 0, (REX::W32::D3D11_MAP)type, 0, &vertResource);
-		if (res == S_OK)
-		{
-			return static_cast<CDXMeshVert*>(vertResource.data);
-		}
-	}
-
+	m_dataMutex.lock();
+	// CPU-owned authoritative copy. D3D write mappings can be write-combined:
+	// reading them during picking or read/modify/write strokes is very costly.
 	return m_vertices.get();
 }
 
 CDXMeshIndex * CDXMesh::LockIndices()
 {
+	m_dataMutex.lock();
 	return m_indices.get();
 }
 
 void CDXMesh::UnlockVertices(const LockMode type)
 {
-	if (type == LockMode::WRITE)
-	{
-		m_pDevice->GetDeviceContext()->Unmap(m_vertexBuffer.Get(), 0);
+	if (type == LockMode::WRITE && m_vertices) m_verticesDirty = true;
+	m_dataMutex.unlock();
+}
+
+bool CDXMesh::FlushVertices()
+{
+	std::lock_guard guard(m_dataMutex);
+	// Validate clean meshes too, before authorizing a draw.
+	if (!m_pDevice || !m_vertexBuffer.Get() || !m_indexBuffer.Get() ||
+		!m_vertices || !m_indices || !m_vertCount || !m_indexCount) return false;
+	auto context = m_pDevice->GetDeviceContext();
+	if (!context.Get()) return false;
+	if (!m_verticesDirty) return true;
+	REX::W32::D3D11_MAPPED_SUBRESOURCE resource{};
+	if (FAILED(MapVertexBuffer(context.Get(), resource)))
+		return false; // Keep dirty; retry on the next render, without losing edits.
+	if (!resource.data) {
+		context->Unmap(m_vertexBuffer.Get(), 0);
+		return false; // A malformed success cannot discard the authoritative edit.
 	}
+	std::memcpy(resource.data, m_vertices.get(), sizeof(CDXMeshVert) * m_vertCount);
+	context->Unmap(m_vertexBuffer.Get(), 0);
+	m_verticesDirty = false;
+	return true;
+}
+
+HRESULT CDXMesh::MapVertexBuffer(REX::W32::ID3D11DeviceContext* context,
+	REX::W32::D3D11_MAPPED_SUBRESOURCE& resource)
+{
+	return context->Map(m_vertexBuffer.Get(), 0, REX::W32::D3D11_MAP_WRITE_DISCARD, 0, &resource);
+}
+
+HRESULT CDXMesh::CreateMeshBuffer(REX::W32::ID3D11Device* device,
+	const REX::W32::D3D11_BUFFER_DESC& desc, const REX::W32::D3D11_SUBRESOURCE_DATA& data,
+	REX::W32::ID3D11Buffer** result)
+{
+	return device->CreateBuffer(&desc, &data, result);
 }
 
 void CDXMesh::UnlockIndices(bool write)
 {
-	if(write)
-		m_pDevice->GetDeviceContext()->UpdateSubresource(m_indexBuffer.Get(), 0, nullptr, m_indices.get(), 0, 0);
+	if (write && m_pDevice && m_indexBuffer.Get() && m_indices) {
+		auto context = m_pDevice->GetDeviceContext();
+		if (context.Get()) context->UpdateSubresource(m_indexBuffer.Get(), 0, nullptr, m_indices.get(), 0, 0);
+	}
+	m_dataMutex.unlock();
 }
 
 bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
-	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
-	CDXMeshIndex* pIndices = LockIndices();
+	std::lock_guard guard(m_dataMutex);
+	pickInfo.isHit = false;
+	if (m_topology != REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST || m_indexCount % 3) return false;
+	CDXMesh::VertexAccess vertexAccess(*this, LockMode::READ);
+	auto* pVertices = vertexAccess.Get();
+	CDXMesh::IndexAccess indexAccess(*this);
+	auto* pIndices = indexAccess.Get();
 
-	if (!pVertices || !pIndices)
+	if (!pVertices || !pIndices) {
+		vertexAccess.Release();
+		indexAccess.Release();
 		return false;
+	}
 
 	float hitDist = FLT_MAX;
 	CDXVec hitNormal = XMVectorZero();
@@ -218,6 +246,7 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 	// Edges = Face * 3
 	for(std::uint32_t e = 0; e < m_indexCount; e += 3)
 	{
+		if (pIndices[e] >= m_vertCount || pIndices[e + 1] >= m_vertCount || pIndices[e + 2] >= m_vertCount) return false;
 		CDXVec v0 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 0]].Position), m_transform);
 		CDXVec v1 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 1]].Position), m_transform);
 		CDXVec v2 = XMVector3Transform(XMLoadFloat3(&pVertices[pIndices[e + 2]].Position), m_transform);
@@ -249,8 +278,8 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 		}
 	}
 
-	UnlockVertices(LockMode::WRITE);
-	UnlockIndices();
+	vertexAccess.Release();
+	indexAccess.Release();
 
 	pickInfo.ray = rayInfo;
 	pickInfo.dist = hitDist;
@@ -273,18 +302,19 @@ bool CDXMesh::Pick(CDXRayInfo & rayInfo, CDXPickInfo & pickInfo)
 
 bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, std::uint32_t vertexCount, std::uint32_t indexCount, std::function<void(CDXMeshVert*, CDXMeshIndex*)> fillFunction)
 {
+	std::lock_guard guard(m_dataMutex);
 	REX::W32::D3D11_BUFFER_DESC vertexBufferDesc, indexBufferDesc;
 	REX::W32::D3D11_SUBRESOURCE_DATA vertexData, indexData;
 	HRESULT result;
 
-	m_pDevice = device;
-	if (!device) {
-		SKSE::log::error("{} - No device found to create brushes", __FUNCTION__);
+	if (!device || !fillFunction || !vertexCount || !indexCount || indexCount % 3 ||
+		// Existing stroke/mask iterators and engine vertex counts are 16-bit.
+		vertexCount > static_cast<std::uint32_t>((std::numeric_limits<CDXMeshIndex>::max)()) ||
+		vertexCount > (std::numeric_limits<std::uint32_t>::max)() / sizeof(CDXMeshVert) ||
+		indexCount > (std::numeric_limits<std::uint32_t>::max)() / sizeof(CDXMeshIndex)) {
+		SKSE::log::error("{} - Invalid device, fill callback or mesh counts", __FUNCTION__);
 		return false;
 	}
-
-	m_vertCount = vertexCount;
-	m_indexCount = indexCount;
 
 	auto pDevice = device->GetDevice();
 	if (!pDevice.Get()) {
@@ -293,82 +323,103 @@ bool CDXMesh::InitializeBuffers(CDXD3DDevice * device, std::uint32_t vertexCount
 	}
 
 	auto pDeviceContext = device->GetDeviceContext();
-	if (!pDevice.Get()) {
+	if (!pDeviceContext.Get()) {
 		SKSE::log::error("{} - No device deviceContext4 found", __FUNCTION__);
 		return false;
 	}
 
 	// Create the vertex array.
-	m_vertices = std::make_unique<CDXMeshVert[]>(m_vertCount);
-	if (!m_vertices)
+	auto vertices = std::unique_ptr<CDXMeshVert[]>(new (std::nothrow) CDXMeshVert[vertexCount]{});
+	if (!vertices)
 	{
 		SKSE::log::error("{} - Failed to create vertex array", __FUNCTION__);
 		return false;
 	}
 
 	// Create the index array.
-	m_indices = std::make_unique<CDXMeshIndex[]>(m_indexCount);
-	if (!m_indices)
+	auto indices = std::unique_ptr<CDXMeshIndex[]>(new (std::nothrow) CDXMeshIndex[indexCount]{});
+	if (!indices)
 	{
 		SKSE::log::error("{} - Failed to create index array", __FUNCTION__);
 		return false;
 	}
 
 	// Load the vertex array and index array with data.
-	fillFunction(m_vertices.get(), m_indices.get());
+	try { fillFunction(vertices.get(), indices.get()); }
+	catch (const std::exception& e) {
+		SKSE::log::error("{} - Mesh fill failed: {}", __FUNCTION__, e.what());
+		return false;
+	}
+	catch (...) {
+		SKSE::log::error("{} - Mesh fill failed with a non-standard exception", __FUNCTION__);
+		return false;
+	}
+	for (std::uint32_t i = 0; i < indexCount; ++i) {
+		if (indices[i] >= vertexCount) return false;
+	}
+	REX::W32::ComPtr<REX::W32::ID3D11Buffer> vertexBuffer, indexBuffer;
 	
 	// Set up the description of the static vertex buffer.
 	vertexBufferDesc.usage = REX::W32::D3D11_USAGE_DYNAMIC;
-	vertexBufferDesc.byteWidth = sizeof(CDXMeshVert) * m_vertCount;
+	vertexBufferDesc.byteWidth = static_cast<std::uint32_t>(sizeof(CDXMeshVert) * vertexCount);
 	vertexBufferDesc.bindFlags = REX::W32::D3D11_BIND_VERTEX_BUFFER;
 	vertexBufferDesc.cpuAccessFlags = REX::W32::D3D11_CPU_ACCESS_WRITE;
 	vertexBufferDesc.miscFlags = 0;
 	vertexBufferDesc.structureByteStride = 0;
 
 	// Give the subresource structure a pointer to the vertex data.
-	vertexData.sysMem = m_vertices.get();
+	vertexData.sysMem = vertices.get();
 	vertexData.sysMemPitch = 0;
 	vertexData.sysMemSlicePitch = 0;
 
 	// Now create the vertex buffer.
-	result = pDevice->CreateBuffer(&vertexBufferDesc, &vertexData, m_vertexBuffer.ReleaseAndGetAddressOf());
-	if (FAILED(result))
+	result = CreateMeshBuffer(pDevice.Get(), vertexBufferDesc, vertexData, vertexBuffer.GetAddressOf());
+	if (FAILED(result) || !vertexBuffer.Get())
 	{
 		SKSE::log::error("{} - Failed to create vertex buffer", __FUNCTION__);
 		return false;
 	}
 
-	m_vertices.release();
-
 	// Set up the description of the static index buffer.
 	indexBufferDesc.usage = REX::W32::D3D11_USAGE_DEFAULT;
-	indexBufferDesc.byteWidth = sizeof(CDXMeshIndex) * m_indexCount;
+	indexBufferDesc.byteWidth = static_cast<std::uint32_t>(sizeof(CDXMeshIndex) * indexCount);
 	indexBufferDesc.bindFlags = REX::W32::D3D11_BIND_INDEX_BUFFER;
 	indexBufferDesc.cpuAccessFlags = 0;
 	indexBufferDesc.miscFlags = 0;
 	indexBufferDesc.structureByteStride = 0;
 
 	// Give the subresource structure a pointer to the index data.
-	indexData.sysMem = m_indices.get();
+	indexData.sysMem = indices.get();
 	indexData.sysMemPitch = 0;
 	indexData.sysMemSlicePitch = 0;
 
 	// Create the index buffer.
-	result = pDevice->CreateBuffer(&indexBufferDesc, &indexData, m_indexBuffer.ReleaseAndGetAddressOf());
-	if (FAILED(result))
+	result = CreateMeshBuffer(pDevice.Get(), indexBufferDesc, indexData, indexBuffer.GetAddressOf());
+	if (FAILED(result) || !indexBuffer.Get())
 	{
 		SKSE::log::error("{} - Failed to create index buffer", __FUNCTION__);
 		return false;
 	}
 
+	// Publish only after all allocations and fill succeeded. Failed replacement
+	// leaves the old mesh, device and any pending edits intact.
+	m_pDevice = device;
+	m_vertCount = vertexCount;
+	m_indexCount = indexCount;
+	m_vertices = std::move(vertices);
+	m_indices = std::move(indices);
+	m_topology = REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	m_vertexBuffer = std::move(vertexBuffer);
+	m_indexBuffer = std::move(indexBuffer);
+	m_verticesDirty = false;
 	return true;
 }
 
 void CDXMesh::Render(CDXD3DDevice * device, CDXShader * shader)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard dataGuard(m_dataMutex);
+	if (!device || device != m_pDevice || !shader || !device->GetDeviceContext().Get()) return;
+	if (!FlushVertices()) return;
 	unsigned int stride;
 	unsigned int offset;
 

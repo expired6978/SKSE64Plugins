@@ -2,6 +2,7 @@
 #include "CDXNifMaterial.h"
 #include "CDXScene.h"
 #include "CDXShader.h"
+#include "CDXTriangleList.h"
 
 #include "RE/N/NiGeometry.h"
 #include "RE/N/NiRTTI.h"
@@ -12,6 +13,7 @@
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <stdexcept>
 
 #ifdef min
 #undef min
@@ -39,29 +41,6 @@ CDXNifMesh::~CDXNifMesh()
 	
 }
 
-CDXMeshVert * CDXNifMesh::LockVertices(const LockMode type)
-{
-	EnterCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
-	return CDXMesh::LockVertices(type);
-}
-
-CDXMeshIndex * CDXNifMesh::LockIndices()
-{
-	EnterCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
-	return CDXMesh::LockIndices();
-}
-
-void CDXNifMesh::UnlockVertices(const LockMode type)
-{
-	CDXMesh::UnlockVertices(type);
-	LeaveCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
-}
-void CDXNifMesh::UnlockIndices(bool write)
-{
-	CDXMesh::UnlockIndices(write);
-	LeaveCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
-}
-
 CDXBSTriShapeMesh::CDXBSTriShapeMesh()
 {
 	m_geometry = nullptr;
@@ -82,7 +61,9 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 	std::uint32_t shaderFlags1 = 0;
 	std::uint32_t shaderFlags2 = 0;
 
-	CDXBSTriShapeMesh * nifMesh = new CDXBSTriShapeMesh;
+	if (!geometry) return nullptr;
+	auto candidate = std::make_unique<CDXBSTriShapeMesh>();
+	auto* nifMesh = candidate.get();
 	nifMesh->m_geometry.reset(geometry);
 	RE::BSShaderMaterial * material = nullptr;
 
@@ -106,19 +87,19 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 
 		const RE::NiSkinInstance * skinInstance = geometry->skinInstance.get();
 		if (!skinInstance) {
-			delete nifMesh;
 			return nullptr;
 		}
 
 		const RE::NiSkinPartition * skinPartition = skinInstance->skinPartition.get();
-		if (!skinPartition) {
-			delete nifMesh;
+		if (!skinPartition || !skinPartition->numPartitions || !skinPartition->partitions ||
+			!skinPartition->partitions[0].buffData || !skinPartition->partitions[0].buffData->rawVertexData) {
 			return nullptr;
 		}
 
 		std::vector<CDXMeshIndex> indices;
 		for (std::uint32_t p = 0; p < skinPartition->numPartitions; ++p)
 		{
+			if (skinPartition->partitions[p].triangles && !skinPartition->partitions[p].triList) return nullptr;
 			for (std::uint32_t t = 0; t < skinPartition->partitions[p].triangles * 3; ++t)
 			{
 				indices.push_back(skinPartition->partitions[p].triList[t]);
@@ -128,15 +109,12 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 		vertCount = geometry->vertexCount ? geometry->vertexCount : skinPartition->vertexCount;
 		triangleCount = indices.size();
 
-		nifMesh->m_vertCount = vertCount;
-		nifMesh->m_indexCount = triangleCount;
-
 		RE::BSFaceGenBaseMorphExtraData * morphData = (RE::BSFaceGenBaseMorphExtraData *)geometry->GetExtraData("FOD");
 		if (morphData) {
 			nifMesh->m_morphable = true;
 		}
 
-		nifMesh->InitializeBuffers(pDevice, nifMesh->m_vertCount, nifMesh->m_indexCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
+		if (!nifMesh->InitializeBuffers(pDevice, vertCount, triangleCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
 		{
 			nifMesh->m_topology = REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 			memcpy(pIndices, &indices.at(0), indices.size() * sizeof(CDXMeshIndex));
@@ -146,7 +124,15 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 			std::uint32_t vertOffset = geometry->vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::Attribute::VA_POSITION);
 			std::uint32_t uvOffset = geometry->vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::Attribute::VA_TEXCOORD0);
 
-			if(dynamicTriShape) dynamicTriShape->lock.Lock();
+			if (dynamicTriShape && !dynamicTriShape->dynamicData) throw std::runtime_error("Missing dynamic vertex data");
+			// Lock ownership is lexical even if the fill later throws.
+			struct DynamicReadGuard {
+				RE::BSDynamicTriShape* shape;
+				explicit DynamicReadGuard(RE::BSDynamicTriShape* value) : shape(value) { if (shape) shape->lock.Lock(); }
+				~DynamicReadGuard() { if (shape) shape->lock.Unlock(); }
+				DynamicReadGuard(const DynamicReadGuard&) = delete;
+				DynamicReadGuard& operator=(const DynamicReadGuard&) = delete;
+			} dynamicLock(dynamicTriShape);
 			for (std::uint32_t i = 0; i < vertCount; i++) {
 				RE::NiPoint3 * vertex = dynamicTriShape ? reinterpret_cast<RE::NiPoint3*>(&reinterpret_cast<DirectX::XMFLOAT4*>(dynamicTriShape->dynamicData)[i]) : reinterpret_cast<RE::NiPoint3*>(&skinPartition->partitions[0].buffData->rawVertexData[i * vertexSize + vertOffset]);
 				RE::NiPoint3 xformed = localTransform * (*vertex);
@@ -162,8 +148,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 				pVertices[i].Tex = uv;
 				XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
 			}
-			if (dynamicTriShape) dynamicTriShape->lock.Unlock();
-		});
+		})) return nullptr;
 
 		nifMesh->BuildAdjacency();
 		if (nifMesh->IsMorphable()) {
@@ -224,7 +209,7 @@ CDXBSTriShapeMesh * CDXBSTriShapeMesh::Create(CDXD3DDevice * pDevice, RE::BSTriS
 	if (!nifMesh->IsMorphable())
 		nifMesh->SetLocked(true);
 
-	return nifMesh;
+	return candidate.release();
 }
 
 const char * CDXBSTriShapeMesh::GetName() const
@@ -254,7 +239,9 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, RE::NiGeomet
 	std::uint32_t shaderFlags1 = 0;
 	std::uint32_t shaderFlags2 = 0;
 
-	CDXLegacyNifMesh * nifMesh = new CDXLegacyNifMesh;
+	if (!geometry) return nullptr;
+	auto candidate = std::make_unique<CDXLegacyNifMesh>();
+	auto* nifMesh = candidate.get();
 	nifMesh->m_geometry.reset(geometry);
 
 	if (geometry)
@@ -297,26 +284,28 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, RE::NiGeomet
 				vertCount = geometryData->vertices;
 				triangleCount = geometryData->numTriangles;
 
-				nifMesh->m_vertCount = vertCount;
-				nifMesh->m_indexCount = triangleCount;
+				if (!geometryData->vertex || !geometryData->texture || !triangleCount) return nullptr;
+				std::vector<CDXMeshIndex> indices;
+				if (triShapeData) {
+					if (!triShapeData->triList || triShapeData->triListLength != triangleCount * 3) return nullptr;
+					indices.assign(triShapeData->triList, triShapeData->triList + triShapeData->triListLength);
+				} else {
+					if (!triStripsData->stripLists || !triStripsData->stripLengths) return nullptr;
+					const std::span<const std::uint16_t> lengths(triStripsData->stripLengths, triStripsData->numStrips);
+					std::size_t points = 0;
+					for (auto length : lengths) points += length;
+					if (!ExpandTriangleStrips(lengths, {triStripsData->stripLists, points}, triangleCount, indices)) return nullptr;
+				}
+				const auto indexCount = static_cast<std::uint32_t>(indices.size());
 
 				RE::BSFaceGenBaseMorphExtraData * morphData = (RE::BSFaceGenBaseMorphExtraData *)geometry->GetExtraData("FOD");
 				if (morphData) {
 					nifMesh->m_morphable = true;
 				}
 
-				nifMesh->InitializeBuffers(pDevice, nifMesh->m_vertCount, nifMesh->m_indexCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
+				if (!nifMesh->InitializeBuffers(pDevice, vertCount, indexCount, [&](CDXMeshVert* pVertices, CDXMeshIndex* pIndices)
 				{
-					if (triShapeData)
-					{
-						nifMesh->m_topology = REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-						memcpy(pIndices, triShapeData->triList, triShapeData->triListLength * sizeof(CDXMeshIndex));
-					}
-					else if (triStripsData)
-					{
-						nifMesh->m_topology = REX::W32::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
-						memcpy(pIndices, triStripsData->stripLists, GetStripLengthSum(triStripsData) * sizeof(CDXMeshIndex));
-					}
+					memcpy(pIndices, indices.data(), indices.size() * sizeof(CDXMeshIndex));
 
 					for (std::uint32_t i = 0; i < vertCount; i++) {
 						RE::NiPoint3 xformed = localTransform * geometryData->vertex[i];
@@ -326,77 +315,18 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, RE::NiGeomet
 						pVertices[i].Normal = vNormal;
 						pVertices[i].Tex = *(DirectX::XMFLOAT2*)&uv;
 						XMStoreFloat3(&pVertices[i].Color, COLOR_UNSELECTED);
+						if (nifMesh->m_morphable && geometryData->normal)
+							XMStoreFloat3(&pVertices[i].Normal, XMLoadFloat3((XMFLOAT3*)&geometryData->normal[i]));
 
-						// Build adjacency table
-						if (nifMesh->m_morphable) {
-							for (std::uint32_t f = 0; f < triangleCount; f++) {
-								if (triShapeData) {
-									CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
-									if (i == face->v1 || i == face->v2 || i == face->v3)
-										nifMesh->m_adjacency[i].push_back(*face);
-								}
-								else if (triStripsData) {
-									std::uint16_t v1 = 0, v2 = 0, v3 = 0;
-									GetTriangleIndices(triStripsData, f, v1, v2, v3);
-									if (i == v1 || i == v2 || i == v3)
-										nifMesh->m_adjacency[i].push_back(CDXMeshFace(v1, v2, v3));
-								}
-							}
-						}
 					}
-
-					// Don't need edge table if not editable
-					if (nifMesh->m_morphable) {
-						CDXEdgeMap edges;
-						for (std::uint32_t f = 0; f < triangleCount; f++) {
-
-							if (triShapeData) {
-								CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
-								auto it = edges.emplace(CDXMeshEdge(std::min(face->v1, face->v2), std::max(face->v1, face->v2)), 1);
-								if (it.second == false)
-									it.first->second++;
-								it = edges.emplace(CDXMeshEdge(std::min(face->v2, face->v3), std::max(face->v2, face->v3)), 1);
-								if (it.second == false)
-									it.first->second++;
-								it = edges.emplace(CDXMeshEdge(std::min(face->v3, face->v1), std::max(face->v3, face->v1)), 1);
-								if (it.second == false)
-									it.first->second++;
-							}
-							else if (triStripsData) {
-								std::uint16_t v1 = 0, v2 = 0, v3 = 0;
-								GetTriangleIndices(triStripsData, f, v1, v2, v3);
-								auto it = edges.emplace(CDXMeshEdge(std::min(v1, v2), std::max(v1, v2)), 1);
-								if (it.second == false)
-									it.first->second++;
-								it = edges.emplace(CDXMeshEdge(std::min(v2, v3), std::max(v2, v3)), 1);
-								if (it.second == false)
-									it.first->second++;
-								it = edges.emplace(CDXMeshEdge(std::min(v3, v1), std::max(v3, v1)), 1);
-								if (it.second == false)
-									it.first->second++;
-							}
-						}
-
-						for (auto e : edges) {
-							if (e.second == 1) {
-								nifMesh->m_vertexEdges.insert(e.first.p1);
-								nifMesh->m_vertexEdges.insert(e.first.p2);
-							}
-						}
-					}
-
-					// Only need vertex normals when it's editable
-					if (nifMesh->m_morphable) {
-						for (std::uint32_t i = 0; i < vertCount; i++) {
-							// Setup normals
-							CDXVec vNormal = XMVectorSet(0, 0, 0, 0);
-							if (!geometryData->normal)
-								XMStoreFloat3(&pVertices[i].Normal, nifMesh->CalculateVertexNormal(i));
-							else
-								XMStoreFloat3(&pVertices[i].Normal, XMLoadFloat3((XMFLOAT3*)&geometryData->normal[i]));
-						}
-					}
-				});
+				})) return nullptr;
+				// All sculpt consumers now share the normalized triangle list.
+				// Build derived data only after the buffer transaction commits.
+				nifMesh->BuildAdjacency();
+				if (nifMesh->m_morphable) {
+					nifMesh->BuildFacemap();
+					if (!geometryData->normal) nifMesh->BuildNormals();
+				}
 				
 				std::shared_ptr<CDXMaterial> material = std::make_shared<CDXMaterial>();
 				material->SetTexture(0, diffuseTexture);
@@ -413,10 +343,11 @@ CDXLegacyNifMesh * CDXLegacyNifMesh::Create(CDXD3DDevice * pDevice, RE::NiGeomet
 		}
 	}
 
+	if (!nifMesh->GetVertexBuffer().Get() || !nifMesh->GetIndexBuffer().Get()) return nullptr;
 	if (!nifMesh->m_morphable)
 		nifMesh->SetLocked(true);
 
-	return nifMesh;
+	return candidate.release();
 }
 
 const char * CDXLegacyNifMesh::GetName() const

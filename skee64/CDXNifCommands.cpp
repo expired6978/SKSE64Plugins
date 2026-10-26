@@ -313,7 +313,8 @@ CDXNifResetSculpt::CDXNifResetSculpt(CDXNifMesh * mesh) : CDXUndoCommand()
 			if (headPart) {
 				auto sculptHost = sculptTarget->GetSculptHost(SculptData::GetHostByPart(headPart), false);
 				if (sculptHost) {
-					CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+					CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+					auto* pVertices = vertexAccess.Get();
 					if (pVertices) {
 
 						for (auto it : *sculptHost) {
@@ -326,7 +327,7 @@ CDXNifResetSculpt::CDXNifResetSculpt(CDXNifMesh * mesh) : CDXUndoCommand()
 							m_current.emplace(it.first, XMVectorNegate(delta));
 						}
 
-						m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+						vertexAccess.Release();
 					}
 				}
 			}
@@ -346,7 +347,8 @@ CDXUndoCommand::UndoType CDXNifResetSculpt::GetUndoType()
 
 void CDXNifResetSculpt::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -354,7 +356,7 @@ void CDXNifResetSculpt::Redo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
 	RE::BSTriShape * geometry = nifMesh->GetGeometry();
@@ -365,7 +367,8 @@ void CDXNifResetSculpt::Redo()
 
 void CDXNifResetSculpt::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -373,7 +376,7 @@ void CDXNifResetSculpt::Undo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
 	RE::BSTriShape * geometry = nifMesh->GetGeometry();
@@ -463,7 +466,8 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, RE::NiAVObject * s
 					if (dstLock) dstLock->Lock();
 
 					if (srcNumVertices == dstNumVertices && srcGeometry && dstGeometry) {
-						CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+						CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+						auto* pVertices = vertexAccess.Get();
 						if (pVertices) {
 							for (std::uint32_t i = 0; i < srcNumVertices; i++) {
 								// Skip masked vertices
@@ -481,7 +485,7 @@ CDXNifImportGeometry::CDXNifImportGeometry(CDXNifMesh * mesh, RE::NiAVObject * s
 								m_current.emplace(i, diffVector);
 							}
 
-							m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+							vertexAccess.Release();
 						}
 					}
 
@@ -505,7 +509,8 @@ CDXUndoCommand::UndoType CDXNifImportGeometry::GetUndoType()
 
 void CDXNifImportGeometry::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -513,7 +518,7 @@ void CDXNifImportGeometry::Redo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
 	RE::BSTriShape * geometry = nifMesh->GetGeometry();
@@ -524,7 +529,8 @@ void CDXNifImportGeometry::Redo()
 
 void CDXNifImportGeometry::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -532,7 +538,7 @@ void CDXNifImportGeometry::Undo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 
 	CDXNifMesh * nifMesh = static_cast<CDXNifMesh*>(m_mesh);
 	RE::BSTriShape * geometry = nifMesh->GetGeometry();

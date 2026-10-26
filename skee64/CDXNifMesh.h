@@ -26,17 +26,12 @@ public:
 	virtual RE::BSTriShape* GetGeometry() { return nullptr; }
 	virtual bool IsMorphable() const
 	{
-#ifdef CDX_MUTEX
-		std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+		std::lock_guard guard(m_dataMutex);
 		return m_morphable;
 	}
 
-	virtual CDXMeshVert * LockVertices(const LockMode type = READ) override;
-	virtual CDXMeshIndex * LockIndices() override;
-
-	virtual void UnlockVertices(const LockMode type) override;
-	virtual void UnlockIndices(bool write = false) override;
+	// Sculpt arrays are private CPU copies, not renderer allocations. Inherit
+	// mesh-owned access/flush synchronization, without the global renderer lock.
 
 protected:
 	bool m_morphable;
@@ -52,9 +47,7 @@ public:
 	virtual const char* GetName() const override;
 	virtual RE::NiGeometry* GetLegacyGeometry() override
 	{
-#ifdef CDX_MUTEX
-		std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+		std::lock_guard guard(m_dataMutex);
 		return m_geometry.get();
 	}
 
@@ -73,9 +66,7 @@ public:
 	virtual const char* GetName() const override;
 	virtual RE::BSTriShape* GetGeometry() override
 	{
-#ifdef CDX_MUTEX
-		std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+		std::lock_guard guard(m_dataMutex);
 		return m_geometry.get();
 	}
 

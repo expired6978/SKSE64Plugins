@@ -25,42 +25,36 @@ bool CDXEditableMesh::IsEditable() const
 
 bool CDXEditableMesh::IsLocked() const
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_locked;
 }
 
 bool CDXEditableMesh::ShowWireframe() const
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	return m_wireframe;
 }
 void CDXEditableMesh::SetShowWireframe(bool wf)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	m_wireframe = wf;
 }
 void CDXEditableMesh::SetLocked(bool l)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	m_locked = l;
 }
 
 void CDXEditableMesh::BuildAdjacency()
 {
-	CDXMeshIndex* pIndices = LockIndices();
+	CDXMesh::IndexAccess indexAccess(*this);
+	auto* pIndices = indexAccess.Get();
 
 	if (!pIndices)
 		return;
 
-	for (std::uint16_t i = 0; i < GetVertexCount(); i++) {
+	m_adjacency.clear();
+	for (std::uint32_t i = 0; i < GetVertexCount(); i++) {
 		for (std::uint32_t f = 0; f < GetFaceCount(); f++) {
 			CDXMeshFace * face = (CDXMeshFace *)&pIndices[f * 3];
 			if (i == face->v1 || i == face->v2 || i == face->v3)
@@ -68,12 +62,13 @@ void CDXEditableMesh::BuildAdjacency()
 		}
 	}
 
-	UnlockIndices();
+	indexAccess.Release();
 }
 
 void CDXEditableMesh::BuildFacemap()
 {
-	CDXMeshIndex* pIndices = LockIndices();
+	CDXMesh::IndexAccess indexAccess(*this);
+	auto* pIndices = indexAccess.Get();
 	if (!pIndices)
 		return;
 
@@ -92,32 +87,34 @@ void CDXEditableMesh::BuildFacemap()
 			it.first->second++;
 	}
 
+	m_vertexEdges.clear();
 	for (auto e : edges) {
 		if (e.second == 1) {
 			m_vertexEdges.insert(e.first.p1);
 			m_vertexEdges.insert(e.first.p2);
 		}
 	}
-	UnlockIndices();
+	indexAccess.Release();
 }
 
 void CDXEditableMesh::BuildNormals()
 {
-	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
-	if (!pVertices)
+	CDXMesh::VertexAccess vertexAccess(*this, LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
+	if (!pVertices) {
+		vertexAccess.Release();
 		return;
+	}
 
-	for (std::uint16_t i = 0; i < GetVertexCount(); i++) {
+	for (std::uint32_t i = 0; i < GetVertexCount(); i++) {
 		 XMStoreFloat3(&pVertices[i].Normal, CalculateVertexNormal(i));
 	}
-	UnlockVertices(LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXEditableMesh::VisitAdjacencies(CDXMeshIndex i, std::function<bool(CDXMeshFace&)> functor)
 {
-#ifdef CDX_MUTEX
-	std::lock_guard<std::mutex> guard(m_mutex);
-#endif
+	std::lock_guard guard(m_dataMutex);
 	auto it = m_adjacency.find(i);
 	if (it != m_adjacency.end()) {
 		for (auto adj : it->second) {
@@ -129,26 +126,32 @@ void CDXEditableMesh::VisitAdjacencies(CDXMeshIndex i, std::function<bool(CDXMes
 
 void CDXEditableMesh::Render(CDXD3DDevice * pDevice, CDXShader * shader)
 {
+	std::lock_guard guard(m_dataMutex);
 	CDXMesh::Render(pDevice, shader);
 
 	// Render again but in wireframe
 	if (m_wireframe) {
 		// Now set the rasterizer state.
 		if (m_material) {
+			const auto previous = m_material->IsWireframe();
 			m_material->SetWireframe(true);
-			CDXMesh::Render(pDevice, shader);
-			m_material->SetWireframe(false);
+			try { CDXMesh::Render(pDevice, shader); }
+			catch (...) { m_material->SetWireframe(previous); throw; }
+			m_material->SetWireframe(previous);
 		}
 	}
 }
 
 CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 {
-	CDXMeshVert* pVertices = LockVertices(LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*this, LockMode::READ);
+	auto* pVertices = vertexAccess.Get();
 
 	CDXVec vNormal = XMVectorZero();
-	if (!pVertices)
+	if (!pVertices) {
+		vertexAccess.Release();
 		return vNormal;
+	}
 
 	auto it = m_adjacency.find(i);
 	if (it != m_adjacency.end()) {
@@ -167,12 +170,13 @@ CDXVec CDXEditableMesh::CalculateVertexNormal(CDXMeshIndex i)
 		vNormal = XMVector3Normalize(vNormal);
 	}
 
-	UnlockVertices(LockMode::WRITE);
+	vertexAccess.Release();
 	return vNormal;
 }
 
 bool CDXEditableMesh::IsEdgeVertex(CDXMeshIndex i) const
 {
+	std::lock_guard guard(m_dataMutex);
 	auto it = m_vertexEdges.find(i);
 	if (it != m_vertexEdges.end())
 		return true;

@@ -24,7 +24,8 @@ void CDXBasicStroke::Begin(CDXPickInfo & pickInfo)
 
 void CDXBasicHitStroke::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -32,12 +33,13 @@ void CDXBasicHitStroke::Redo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXBasicHitStroke::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -45,7 +47,7 @@ void CDXBasicHitStroke::Undo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXMaskAddStroke::~CDXMaskAddStroke()
@@ -61,7 +63,8 @@ CDXStroke::StrokeType CDXMaskAddStroke::GetStrokeType()
 
 void CDXMaskAddStroke::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -69,12 +72,13 @@ void CDXMaskAddStroke::Redo()
 	for (auto it : m_current)
 		pVertices[it.first].Color = it.second;
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXMaskAddStroke::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -82,12 +86,13 @@ void CDXMaskAddStroke::Undo()
 	for (auto it : m_previous)
 		pVertices[it.first].Color = it.second;
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXMaskAddStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -100,7 +105,7 @@ void CDXMaskAddStroke::Update(CDXStroke::Info * info)
 
 	pVertices[info->index].Color = color;
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXStroke::StrokeType CDXMaskSubtractStroke::GetStrokeType()
@@ -110,7 +115,8 @@ CDXStroke::StrokeType CDXMaskSubtractStroke::GetStrokeType()
 
 void CDXMaskSubtractStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -125,7 +131,7 @@ void CDXMaskSubtractStroke::Update(CDXStroke::Info * info)
 
 		pVertices[info->index].Color = color;
 	}
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXInflateStroke::~CDXInflateStroke()
@@ -140,7 +146,8 @@ CDXStroke::StrokeType CDXInflateStroke::GetStrokeType()
 
 void CDXInflateStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -150,7 +157,7 @@ void CDXInflateStroke::Update(CDXStroke::Info * info)
 	m_current.emplace(info->index, XMVectorZero());
 	m_current[info->index] += difference;
 	XMStoreFloat3(&pVertices[info->index].Position, XMVectorAdd(XMLoadFloat3(&pVertices[info->index].Position), difference));
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXStroke::StrokeType CDXDeflateStroke::GetStrokeType()
@@ -160,7 +167,8 @@ CDXStroke::StrokeType CDXDeflateStroke::GetStrokeType()
 
 void CDXDeflateStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -170,7 +178,7 @@ void CDXDeflateStroke::Update(CDXStroke::Info * info)
 	m_current.emplace(info->index, XMVectorZero());
 	m_current[info->index] -= difference;
 	XMStoreFloat3(&pVertices[info->index].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[info->index].Position), difference));
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXSmoothStroke::~CDXSmoothStroke()
@@ -185,7 +193,8 @@ CDXStroke::StrokeType CDXSmoothStroke::GetStrokeType()
 
 void CDXSmoothStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -219,7 +228,7 @@ void CDXSmoothStroke::Update(CDXStroke::Info * info)
 	m_current.emplace(info->index, XMVectorZero());
 	m_current[info->index] += difference;
 	XMStoreFloat3(&pVertices[info->index].Position, XMVectorAdd(XMLoadFloat3(&pVertices[info->index].Position), difference));
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 CDXMoveStroke::~CDXMoveStroke()
@@ -242,7 +251,8 @@ void CDXMoveStroke::Begin(CDXPickInfo & pickInfo)
 
 void CDXMoveStroke::Redo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -250,12 +260,13 @@ void CDXMoveStroke::Redo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorAdd(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXMoveStroke::Undo()
 {
-	CDXMeshVert* pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -263,12 +274,13 @@ void CDXMoveStroke::Undo()
 	for (auto it : m_current)
 		XMStoreFloat3(&pVertices[it.first].Position, XMVectorSubtract(XMLoadFloat3(&pVertices[it.first].Position), it.second));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXMoveStroke::Update(CDXStroke::Info * info)
 {
-	CDXMeshVert * pVertices = m_mesh->LockVertices(CDXMesh::LockMode::WRITE);
+	CDXMesh::VertexAccess vertexAccess(*m_mesh, CDXMesh::LockMode::WRITE);
+	auto* pVertices = vertexAccess.Get();
 	if (!pVertices)
 		return;
 
@@ -280,7 +292,7 @@ void CDXMoveStroke::Update(CDXStroke::Info * info)
 	m_current[info->index] += difference;
 	XMStoreFloat3(&pVertices[info->index].Position, XMVectorAdd(XMLoadFloat3(&pVertices[info->index].Position), difference));
 
-	m_mesh->UnlockVertices(CDXMesh::LockMode::WRITE);
+	vertexAccess.Release();
 }
 
 void CDXMoveStroke::End()

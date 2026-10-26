@@ -1,11 +1,9 @@
 #pragma once
 
-#ifdef CDX_MUTEX
-#include <mutex>
-#endif
-
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <utility>
 
 #include "CDXTypes.h"
 #include <cstdint>
@@ -48,25 +46,65 @@ public:
 		WRITE = REX::W32::D3D11_MAP_WRITE_NO_OVERWRITE
 	};
 
-	void SetTopology(REX::W32::D3D_PRIMITIVE_TOPOLOGY topo) { m_topology = topo; }
+	void SetTopology(REX::W32::D3D_PRIMITIVE_TOPOLOGY topo) { std::lock_guard guard(m_dataMutex); m_topology = topo; }
 
 	virtual CDXMeshVert * LockVertices(const LockMode type = READ);
 	virtual CDXMeshIndex * LockIndices();
 
 	virtual void UnlockVertices(const LockMode type);
 	virtual void UnlockIndices(bool write = false);
+	// Null results also own a lock: guards balance all exits, including throws.
+	class VertexAccess
+	{
+	public:
+		VertexAccess(CDXMesh& mesh, LockMode mode = READ) : m_mesh(&mesh), m_mode(mode), m_data(mesh.LockVertices(mode)) {}
+		~VertexAccess() { Release(); }
+		VertexAccess(const VertexAccess&) = delete;
+		VertexAccess& operator=(const VertexAccess&) = delete;
+		CDXMeshVert* Get() const { return m_data; }
+		void Release() { if (auto* mesh = std::exchange(m_mesh, nullptr)) mesh->UnlockVertices(m_mode); }
+	private:
+		CDXMesh* m_mesh;
+		LockMode m_mode;
+		CDXMeshVert* m_data;
+	};
+	class IndexAccess
+	{
+	public:
+		explicit IndexAccess(CDXMesh& mesh) : m_mesh(&mesh), m_data(mesh.LockIndices()) {}
+		~IndexAccess() { Release(); }
+		IndexAccess(const IndexAccess&) = delete;
+		IndexAccess& operator=(const IndexAccess&) = delete;
+		CDXMeshIndex* Get() const { return m_data; }
+		void Release() { if (auto* mesh = std::exchange(m_mesh, nullptr)) mesh->UnlockIndices(); }
+	private:
+		CDXMesh* m_mesh;
+		CDXMeshIndex* m_data;
+	};
+	// Upload edited CPU vertices once before drawing, never while picking.
+	bool FlushVertices();
 
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer> GetVertexBuffer();
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer> GetIndexBuffer();
 
-	const CDXMatrix & GetTransform() { return m_transform; };
-	void SetTransform(const CDXMatrix & mat) { m_transform = mat; }
+	CDXMatrix GetTransform() { std::lock_guard guard(m_dataMutex); return m_transform; }
+	void SetTransform(const CDXMatrix & mat) { std::lock_guard guard(m_dataMutex); m_transform = mat; }
 
 	std::uint32_t GetIndexCount();
 	std::uint32_t GetFaceCount();
 	std::uint32_t GetVertexCount();
 
 protected:
+	// Narrow GPU boundary permits deterministic failure/order tests without
+	// replacing CPU ownership, locking, initialization or flush implementation.
+	virtual HRESULT CreateMeshBuffer(REX::W32::ID3D11Device* device,
+		const REX::W32::D3D11_BUFFER_DESC& desc, const REX::W32::D3D11_SUBRESOURCE_DATA& data,
+		REX::W32::ID3D11Buffer** result);
+	virtual HRESULT MapVertexBuffer(REX::W32::ID3D11DeviceContext* context,
+		REX::W32::D3D11_MAPPED_SUBRESOURCE& resource);
+	// CPU storage, dirty publication and upload share this authority regardless
+	// of CDX_MUTEX. Recursion permits nested normal reads and Render -> Flush.
+	mutable std::recursive_mutex m_dataMutex;
 	bool					m_visible;
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer>	m_vertexBuffer;
 	std::uint32_t					m_vertCount;
@@ -76,22 +114,17 @@ protected:
 		CDXVec	Position;
 		CDXVec	Color;
 	};
-	union
-	{
-		std::unique_ptr<CDXMeshVert[]>		m_vertices{};
-		std::unique_ptr<ColoredPrimitive[]> m_primitive;
-	};
+	std::unique_ptr<CDXMeshVert[]> m_vertices;
+	std::unique_ptr<ColoredPrimitive[]> m_primitive;
+	bool m_verticesDirty{false};
 	REX::W32::ComPtr<REX::W32::ID3D11Buffer>	m_indexBuffer;
 	std::uint32_t					m_indexCount;
 	std::unique_ptr<CDXMeshIndex[]>	m_indices;
 	REX::W32::D3D_PRIMITIVE_TOPOLOGY	m_topology;
 	std::shared_ptr<CDXMaterial> m_material;
 	CDXMatrix				m_transform;
-	CDXD3DDevice		*	m_pDevice;
+	CDXD3DDevice		*	m_pDevice{};
 
-#ifdef CDX_MUTEX
-	mutable std::mutex		m_mutex;
-#endif
 };
 
 DirectX::XMVECTOR CalculateFaceNormal(std::uint32_t f, CDXMeshIndex * faces, CDXMeshVert * vertices);
