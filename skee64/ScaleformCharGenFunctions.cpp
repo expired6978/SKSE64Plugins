@@ -513,8 +513,7 @@ void SKSEScaleform_GetSliderPartData::Invoke(Args* args)
 								{
 									createFilterTags(args->movie, &tagArray, partType);
 
-									// Custom sliders reserve zero for the default part and use one-based values.
-									uint32_t i = 1;
+									uint32_t i = 0;
 									for (auto& headPart : *partList)
 									{
 										addHeadPart(args->movie, &partArray, headPart, i++);
