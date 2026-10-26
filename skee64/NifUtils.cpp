@@ -964,7 +964,7 @@ void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNod
 			for (int i = 0; i < 42; ++i)
 			{
 				auto& data = weightModel->bipedData->unk10[i];
-				if (data.object)
+				if (data.object && refr->GetNiRootNode(k))
 				{
 					functor(k == 1, i, refr->GetNiRootNode(k), data.armor, data.addon, data.object);
 				}
@@ -972,7 +972,7 @@ void VisitBipedNodes(TESObjectREFR* refr, std::function<void(bool, UInt32, NiNod
 			for (int i = 0; i < 42; ++i)
 			{
 				auto& data = weightModel->bipedData->unk13C0[i];
-				if (data.object)
+				if (data.object && refr->GetNiRootNode(k))
 				{
 					functor(k == 1, i, refr->GetNiRootNode(k), data.armor, data.addon, data.object);
 				}
