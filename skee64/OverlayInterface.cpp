@@ -352,8 +352,11 @@ void OverlayInterface::RelinkOverlay(const char * nodeName, RE::TESObjectREFR * 
 		foundGeometry->vertexDesc = source->vertexDesc;
 		auto sourceSkin = source->GetGeometryRuntimeData().skinInstance;
 		if (sourceSkin) {
-			auto* clonedSkin = DetachedCopy(sourceSkin.get());
-			foundGeometry->GetGeometryRuntimeData().skinInstance.reset(clonedSkin);
+			auto clonedSkin = DetachedCopy(sourceSkin.get());
+			if (clonedSkin)
+				foundGeometry->GetGeometryRuntimeData().skinInstance = std::move(clonedSkin);
+			else
+				SKSE::log::error("Overlay relink: skin copy failed; retaining previous skin instance");
 		}
 	}
 }

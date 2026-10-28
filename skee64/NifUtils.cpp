@@ -2,8 +2,14 @@
 #include "FileUtils.h"
 #include "SKEEHooks.h"
 #include "Utilities.h"
+#include "HeadExportPolicy.h"
+#include "HeadExportFiles.h"
 
 #include <unordered_map>
+#include <limits>
+#include <memory>
+#include <cstring>
+#include <type_traits>
 
 
 
@@ -29,6 +35,44 @@
 extern bool g_exportSkinToBone;
 
 namespace {
+	struct GameHeapDelete
+	{
+		template <class T> void operator()(T* pointer) const noexcept { RE::free(pointer); }
+	};
+	template <class T> using GameBuffer = std::unique_ptr<T, GameHeapDelete>;
+
+	template <class T>
+	GameBuffer<T> CopySkinArray(const T* source, std::size_t count)
+	{
+		if (!count || !source || count > (std::numeric_limits<std::size_t>::max)() / sizeof(T))
+			return {};
+		GameBuffer<T> result(static_cast<T*>(RE::malloc(sizeof(T) * count)));
+		if (result) std::memcpy(result.get(), source, sizeof(T) * count);
+		return result;
+	}
+
+	// The pinned CommonLib skin layout has a critical section only on flat
+	// builds. VR has no lock at that offset; do not manufacture one there.
+	class SkinSourceLock
+	{
+	public:
+		explicit SkinSourceLock(RE::NiSkinInstance* source) : source_(source)
+		{
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
+			REX::W32::EnterCriticalSection(&source_->lock);
+#endif
+		}
+		~SkinSourceLock()
+		{
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
+			REX::W32::LeaveCriticalSection(&source_->lock);
+#endif
+		}
+		SkinSourceLock(const SkinSourceLock&) = delete;
+		SkinSourceLock& operator=(const SkinSourceLock&) = delete;
+	private:
+		RE::NiSkinInstance* source_;
+	};
 	// Legacy create factories for NIF-level geometry (matches legacy skse64/NiGeometry.cpp):
 	// allocate on the game heap, zero it, call the relocated constructor (see SKEEHooks),
 	// then install the derived vtable. The BSGeometry factories are relocated directly in
@@ -36,6 +80,7 @@ namespace {
 	RE::NiTriShape* CreateNiTriShape(RE::NiGeometryData* a_data)
 	{
 		auto* xData = RE::malloc<RE::NiTriShape>();
+		if (!xData) return nullptr;
 		std::memset(xData, 0, sizeof(RE::NiTriShape));
 		SKEE::NiTriBasedGeomCtor(xData, a_data);
 		*reinterpret_cast<std::uintptr_t**>(xData) = reinterpret_cast<std::uintptr_t*>(RE::NiTriShape::VTABLE[0].address());
@@ -45,6 +90,7 @@ namespace {
 	RE::NiTriStrips* CreateNiTriStrips(RE::NiGeometryData* a_data)
 	{
 		auto* mem = RE::malloc(sizeof(RE::NiTriStrips));
+		if (!mem) return nullptr;
 		std::memset(mem, 0, sizeof(RE::NiTriStrips));
 		SKEE::NiTriBasedGeomCtor(reinterpret_cast<RE::NiAVObject*>(mem), a_data);
 		*reinterpret_cast<std::uintptr_t**>(mem) = reinterpret_cast<std::uintptr_t*>(RE::VTABLE_NiTriStrips[0].address());
@@ -62,12 +108,12 @@ namespace {
 		if (!a_skinInstance)
 			return nullptr;
 
-		auto newSkinInstance = RE::NiPointer<RE::NiSkinInstance>(DetachedCopy(a_skinInstance));
+		auto newSkinInstance = DetachedCopy(a_skinInstance);
 		if (!newSkinInstance || newSkinInstance.get() == a_skinInstance) return nullptr;
 		newSkinInstance->rootParent = a_skinnedNode;
 
 		std::uint32_t numBones = 0;
-		RE::NiSkinData* skinData = a_skinInstance->skinData.get();
+		RE::NiSkinData* skinData = newSkinInstance->skinData.get();
 		if (skinData)
 			numBones = skinData->GetBoneCount();
 
@@ -75,11 +121,11 @@ namespace {
 		RE::NiPointer<RE::NiSkinData> newSkinData;
 		if (skinData) { skinData->CreateDeepCopy(newSdObj); newSkinData = niptr_cast<RE::NiSkinData>(newSdObj); }
 
-		RE::NiSkinPartition* skinPartition = a_skinInstance->skinPartition.get();
+		RE::NiSkinPartition* skinPartition = newSkinInstance->skinPartition.get();
 		RE::NiPointer<RE::NiObject> newSpObj;
 		RE::NiSkinPartition* newSkinPartition = nullptr;
 		if (skinPartition) { skinPartition->CreateDeepCopy(newSpObj); newSkinPartition = netimmerse_cast<RE::NiSkinPartition*>(newSpObj.get()); }
-		if ((skinData && (!newSkinData || newSkinData.get() == skinData)) ||
+		if ((skinData && (!newSkinData || newSkinData.get() == skinData || newSkinData->GetBoneCount() != numBones)) ||
 			(skinPartition && (!newSkinPartition || newSkinPartition == skinPartition))) {
 			SKSE::log::error("Head export: skin-data deep copy failed or aliases its source");
 			return nullptr;
@@ -92,8 +138,8 @@ namespace {
 		{
 			// The game clone already owns correctly sized bone/transform arrays.
 			// Do not replace (and leak) them, or touch the source arrays.
-			if (numBones > newSkinInstance->numMatrices ||
-				!a_skinInstance->bones || !newSkinInstance->bones ||
+			if (numBones != newSkinInstance->numMatrices ||
+				!newSkinInstance->bones ||
 				newSkinInstance->bones == a_skinInstance->bones ||
 				!newSkinInstance->boneWorldTransforms ||
 				newSkinInstance->boneWorldTransforms == a_skinInstance->boneWorldTransforms) {
@@ -102,17 +148,21 @@ namespace {
 			}
 			for (std::uint32_t i = 0; i < numBones; i++)
 			{
-				RE::NiAVObject* bone = a_skinInstance->bones[i];
+				RE::NiAVObject* bone = newSkinInstance->bones[i];
 				if (bone)
 				{
 					auto it = a_boneMap.find(bone);
 					if (it == a_boneMap.end()) {
-						RE::NiNode* newBone = RE::NiNode::Create();
-						newBone->IncRefCount();
+						RE::NiPointer<RE::NiNode> newBone(RE::NiNode::Create());
+						if (!newBone) {
+							SKSE::log::error("Head export: unable to allocate remapped bone");
+							return nullptr;
+						}
 						newBone->name = bone->name;
 						newBone->flags = bone->flags;
-						a_boneMap.insert(std::make_pair(bone, newBone));
-						newSkinInstance->bones[i] = newBone;
+						a_boneMap.emplace(bone, newBone.get());
+						newBone->IncRefCount();  // map's temporary reference; emplace has succeeded
+						newSkinInstance->bones[i] = newBone.get();
 					}
 					else
 						newSkinInstance->bones[i] = it->second;
@@ -142,68 +192,62 @@ namespace {
 //   m_uiBoneNodes->numMatrices, numFlags->numRegisters, unk44->allocatedSize,
 //   flags->boneMatrices, unk50->prevBoneMatrices;
 //   BSDismemberSkinInstance::partitionFlags->partitions (Data* vs UInt32*, same 4-byte stride).
-RE::NiSkinInstance* DetachedCopy(RE::NiSkinInstance* a_skinInstance)
+RE::NiPointer<RE::NiSkinInstance> DetachedCopy(RE::NiSkinInstance* a_skinInstance)
 {
 	if (!a_skinInstance)
 		return nullptr;
 
-	RE::NiSkinInstance* newSkinInstance = nullptr;
-
-	REX::W32::EnterCriticalSection(&a_skinInstance->lock);
+	SkinSourceLock sourceLock(a_skinInstance);
+	const auto numBones = a_skinInstance->numMatrices;
+	const auto skinData = a_skinInstance->skinData;
+	if (!HeadExportPolicy::CoherentSkinLayout(numBones,
+		skinData ? skinData->GetBoneCount() : 0, static_cast<bool>(skinData),
+		a_skinInstance->bones != nullptr, a_skinInstance->boneWorldTransforms != nullptr)) {
+		SKSE::log::error("Skin copy: inconsistent bone counts or missing source arrays");
+		return nullptr;
+	}
+	// Stage all buffers before transferring any to the new engine object.
+	// Failure frees these local buffers, and never writes through a null result.
+	auto bones = CopySkinArray(a_skinInstance->bones, numBones);
+	auto worlds = CopySkinArray(a_skinInstance->boneWorldTransforms, numBones);
+	auto matrices = CopySkinArray(static_cast<const std::uint32_t*>(a_skinInstance->boneMatrices), a_skinInstance->numRegisters);
+	auto previous = CopySkinArray(static_cast<const std::uint32_t*>(a_skinInstance->prevBoneMatrices), a_skinInstance->numRegisters);
+	if ((numBones && (!bones || !worlds)) ||
+		(a_skinInstance->boneMatrices && !matrices) ||
+		(a_skinInstance->prevBoneMatrices && !previous)) return nullptr;
 
 	auto* srcSkin = netimmerse_cast<RE::BSDismemberSkinInstance*>(a_skinInstance);
+	GameBuffer<RE::BSDismemberSkinInstance::Data> partitions;
+	if (srcSkin && srcSkin->numPartitions < 0) return nullptr;
+	if (srcSkin && srcSkin->numPartitions) {
+		partitions = CopySkinArray(srcSkin->partitions, srcSkin->numPartitions);
+		if (!partitions) return nullptr;
+	}
+	RE::NiPointer<RE::NiSkinInstance> newSkinInstance(srcSkin ?
+		static_cast<RE::NiSkinInstance*>(SKEE::CreateBSDismemberSkinInstance()) : RE::NiSkinInstance::Create());
+	if (!newSkinInstance) return nullptr;
 	if (srcSkin)
 	{
-		newSkinInstance = SKEE::CreateBSDismemberSkinInstance();
-		auto* dstSkin = static_cast<RE::BSDismemberSkinInstance*>(newSkinInstance);
+		auto* dstSkin = static_cast<RE::BSDismemberSkinInstance*>(newSkinInstance.get());
 		dstSkin->numPartitions = srcSkin->numPartitions;
-		if (srcSkin->partitions && srcSkin->numPartitions > 0)
-		{
-			dstSkin->partitions = static_cast<RE::BSDismemberSkinInstance::Data*>(RE::malloc(sizeof(RE::BSDismemberSkinInstance::Data) * srcSkin->numPartitions));
-			std::memcpy(dstSkin->partitions, srcSkin->partitions, sizeof(RE::BSDismemberSkinInstance::Data) * srcSkin->numPartitions);
-		}
+		dstSkin->partitions = partitions.release();
 		dstSkin->unk98 = srcSkin->unk98;
 		std::memcpy(&dstSkin->pad99, &srcSkin->pad99, 7);
-	}
-	else
-	{
-		newSkinInstance = RE::NiSkinInstance::Create();
 	}
 
 	newSkinInstance->skinData = a_skinInstance->skinData;
 	newSkinInstance->skinPartition = a_skinInstance->skinPartition;
 	newSkinInstance->rootParent = a_skinInstance->rootParent;
 
-	const std::uint32_t numBones = a_skinInstance->numMatrices;
-	if (numBones > 0)
-	{
-		newSkinInstance->bones = static_cast<RE::NiAVObject**>(RE::malloc(sizeof(RE::NiAVObject*) * numBones));
-		std::memcpy(newSkinInstance->bones, a_skinInstance->bones, sizeof(RE::NiAVObject*) * numBones);
-	}
+	newSkinInstance->bones = bones.release();
+	newSkinInstance->boneWorldTransforms = worlds.release();
 
 	newSkinInstance->frameID = a_skinInstance->frameID;
 	newSkinInstance->numMatrices = numBones;
 	newSkinInstance->numRegisters = a_skinInstance->numRegisters;
-	if (a_skinInstance->boneMatrices)
-	{
-		newSkinInstance->boneMatrices = RE::malloc(sizeof(std::uint32_t) * a_skinInstance->numRegisters);
-		std::memcpy(newSkinInstance->boneMatrices, a_skinInstance->boneMatrices, sizeof(std::uint32_t) * a_skinInstance->numRegisters);
-	}
+	newSkinInstance->boneMatrices = matrices.release();
 	newSkinInstance->allocatedSize = a_skinInstance->allocatedSize;
-	if (a_skinInstance->prevBoneMatrices)
-	{
-		newSkinInstance->prevBoneMatrices = RE::malloc(sizeof(std::uint32_t) * a_skinInstance->numRegisters);
-		std::memcpy(newSkinInstance->prevBoneMatrices, a_skinInstance->prevBoneMatrices, sizeof(std::uint32_t) * a_skinInstance->numRegisters);
-	}
-
-	if (auto* skinData = newSkinInstance->skinData.get())
-	{
-		const std::uint32_t boneCount = skinData->GetBoneCount();
-		newSkinInstance->boneWorldTransforms = static_cast<const RE::NiTransform**>(RE::malloc(sizeof(RE::NiTransform*) * boneCount));
-		std::memcpy(const_cast<RE::NiTransform**>(newSkinInstance->boneWorldTransforms), a_skinInstance->boneWorldTransforms, sizeof(RE::NiTransform*) * boneCount);
-	}
-
-	REX::W32::LeaveCriticalSection(&a_skinInstance->lock);
+	newSkinInstance->prevBoneMatrices = previous.release();
 	return newSkinInstance;
 }
 
@@ -407,8 +451,23 @@ SKSETaskExportHead::SKSETaskExportHead(RE::Actor * actor, RE::BSFixedString nifP
 	m_formId = actor->formID;
 }
 
-void SKSETaskExportHead::Run()
+void SKSETaskExportHead::Run() try
 {
+	bool completed = false;
+	auto report = [&](bool*) {
+		if (completed) {
+			SKSE::log::info("Head export complete: {} ; {}", m_nifPath.c_str(), m_ddsPath.c_str());
+		} else {
+			SKSE::log::error("Head export failed: {} ; {}", m_nifPath.c_str(), m_ddsPath.c_str());
+		}
+		if (auto* events = SKSE::GetModCallbackEventSource()) {
+			SKSE::ModCallbackEvent event{ "RaceMenu_HeadExport", m_nifPath, completed ? 1.0f : 0.0f,
+				RE::TESForm::LookupByID(m_formId) };
+			events->SendEvent(&event);
+		}
+	};
+	// Declared first: notify only after the scene and temporary actor state unwind.
+	std::unique_ptr<bool, decltype(report)> result(&completed, report);
 	if (!m_formId)
 		return;
 
@@ -443,7 +502,8 @@ void SKSETaskExportHead::Run()
 		SKEE::UpdateModelFace(faceNode);
 	}
 
-	FileUtils::MakeAllDirs(m_nifPath.c_str());
+	RE::NiPointer<RE::NiTexture> tintTexture;
+	bool referencesTint = false;
 
 	// BSFadeNode::Create() equivalent: game-heap alloc + relocated game ctor (P: 0x014E57C0).
 	// The 0x158/0x180 are the STATIC_ASSERT_SIZE(BSFadeNode, 0x158, 0x158, 0x180, 0x110) flat/VR sizes.
@@ -473,16 +533,19 @@ void SKSETaskExportHead::Run()
 			RE::NiPointer<RE::NiObject> newGeoObj;
 			RE::NiGeometryData * newGeometryData = NULL;
 			if (geometryData) { geometryData->CreateDeepCopy(newGeoObj); newGeometryData = netimmerse_cast<RE::NiGeometryData*>(newGeoObj.get()); }
+			if (geometryData && (!newGeometryData || newGeometryData == geometryData)) return;
 
 			RE::NiProperty * trishapeEffect = geometry->spEffectState.get();
 			RE::NiPointer<RE::NiObject> newTeObj;
 			RE::NiPointer<RE::NiProperty> newTrishapeEffect;
 			if (trishapeEffect) { trishapeEffect->CreateDeepCopy(newTeObj); newTrishapeEffect = niptr_cast<RE::NiProperty>(newTeObj); }
+			if (trishapeEffect && (!newTrishapeEffect || newTrishapeEffect.get() == trishapeEffect)) return;
 
 			RE::NiProperty * trishapeProperty = geometry->spPropertyState.get();
 			RE::NiPointer<RE::NiObject> newTpObj;
 			RE::NiPointer<RE::NiProperty> newTrishapeProperty;
 			if (trishapeProperty) { trishapeProperty->CreateDeepCopy(newTpObj); newTrishapeProperty = niptr_cast<RE::NiProperty>(newTpObj); }
+			if (trishapeProperty && (!newTrishapeProperty || newTrishapeProperty.get() == trishapeProperty)) return;
 
 			RE::NiPointer<RE::NiSkinInstance> newSkinInstance = BuildRemappedSkinInstance(geometry->spSkinInstance.get(), skinnedNode.get(), boneMap, false);
 			if (geometry->spSkinInstance && !newSkinInstance)
@@ -491,7 +554,8 @@ void SKSETaskExportHead::Run()
 			RE::NiPointer<RE::NiGeometry> newGeometry;
 			if (auto * trishape = geometry ? geometry->AsNiTriShape() : nullptr) {
 				auto * newTrishape = CreateNiTriShape(newGeometryData);
-				if (newGeometryData) newGeometryData->DecRefCount();  // the shape now owns a reference
+				if (!newTrishape) return;
+				// newGeoObj retains its own reference until this iteration ends.
 				newTrishape->local = geometry->local;
 				newTrishape->name = geometry->name;
 				newTrishape->spEffectState = newTrishapeEffect;
@@ -501,7 +565,7 @@ void SKSETaskExportHead::Run()
 			}
 			else if (netimmerse_isKind<RE::NiTriStrips>(geometry)) {
 				auto * newTristrips = CreateNiTriStrips(newGeometryData);
-				if (newGeometryData) newGeometryData->DecRefCount();
+				if (!newTristrips) return;
 				newTristrips->local = geometry->local;
 				newTristrips->name = geometry->name;
 				newTristrips->spEffectState = newTrishapeEffect;
@@ -523,8 +587,10 @@ void SKSETaskExportHead::Run()
 								material->textureSet->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(i), textureData.first->GetTexturePath(static_cast<RE::BSTextureSet::Texture>(i)));
 						}
 
-						if (textureData.second && textureData.second->type.any(RE::BGSHeadPart::HeadPartType::kFace))
+						if (textureData.second && textureData.second->type.any(RE::BGSHeadPart::HeadPartType::kFace)) {
 							material->textureSet->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(6), m_ddsPath.c_str());
+							referencesTint = true;
+						}
 					}
 				}
 
@@ -535,8 +601,7 @@ void SKSETaskExportHead::Run()
 					if (material) {
 						if (material->GetFeature() == RE::BSShaderMaterial::Feature::kFaceGen) {
 							auto * maskedMaterial = static_cast<RE::BSLightingShaderMaterialFacegen *>(static_cast<RE::BSLightingShaderMaterialBase *>(material));
-							FileUtils::MakeAllDirs(m_ddsPath.c_str());
-							SaveRenderedDDS(maskedMaterial->tintTexture.get(), m_ddsPath.c_str());
+							tintTexture = maskedMaterial->tintTexture;
 						}
 					}
 				}
@@ -551,29 +616,36 @@ void SKSETaskExportHead::Run()
 				RE::NiPointer<RE::NiObject> newTeObj;
 				RE::NiPointer<RE::NiProperty> newTrishapeEffect;
 				if (propEffect) { propEffect->CreateDeepCopy(newTeObj); newTrishapeEffect = niptr_cast<RE::NiProperty>(newTeObj); }
+				if (propEffect && (!newTrishapeEffect || newTrishapeEffect.get() == propEffect)) return;
 
 				RE::NiProperty * propProperty = static_cast<RE::NiProperty*>(trishape->GetGeometryRuntimeData().alphaProperty.get());
 				RE::NiPointer<RE::NiObject> newTpObj;
 				RE::NiPointer<RE::NiProperty> newTrishapeProperty;
 				if (propProperty) { propProperty->CreateDeepCopy(newTpObj); newTrishapeProperty = niptr_cast<RE::NiProperty>(newTpObj); }
+				if (propProperty && (!newTrishapeProperty || newTrishapeProperty.get() == propProperty)) return;
 
 				RE::NiPointer<RE::NiSkinInstance> newSkinInstance = BuildRemappedSkinInstance(trishape->GetGeometryRuntimeData().skinInstance.get(), skinnedNode.get(), boneMap, !g_exportSkinToBone);
 				if (trishape->GetGeometryRuntimeData().skinInstance && !newSkinInstance)
 					return;
 
+				RE::NiPointer<RE::BSTriShape> newShape;
 				RE::BSTriShape * newTrishape = nullptr;
 				auto * dynamicShape = trishape ? trishape->AsDynamicTriShape() : nullptr;
 				if (dynamicShape) {
 					auto * xData = SKEE::CreateBSDynamicTriShape();
+					newShape.reset(xData);
 					newTrishape = xData;
-					if (xData && dynamicShape->GetDynamicTrishapeRuntimeData().dynamicData) {
+					if (xData) {
 						std::size_t numVerts = trishape->GetTrishapeRuntimeData().vertexCount;
 						auto & srcRT = dynamicShape->GetDynamicTrishapeRuntimeData();
 						auto & dstRT = xData->GetDynamicTrishapeRuntimeData();
 						srcRT.lock.Lock();
+						auto unlock = [&](decltype(&srcRT.lock) lock) { lock->Unlock(); };
+						std::unique_ptr<std::remove_reference_t<decltype(srcRT.lock)>, decltype(unlock)> held(&srcRT.lock, unlock);
+						if ((numVerts && !srcRT.dynamicData) || numVerts > (std::numeric_limits<std::size_t>::max)() / 16) return;
 						dstRT.dynamicData = RE::NiMalloc(numVerts * 16);
-						std::memcpy(dstRT.dynamicData, srcRT.dynamicData, numVerts * 16);
-						srcRT.lock.Unlock();
+						if (numVerts && !dstRT.dynamicData) return;
+						if (numVerts) std::memcpy(dstRT.dynamicData, srcRT.dynamicData, numVerts * 16);
 						dstRT.dataSize = srcRT.dataSize;
 						dstRT.frameCount = srcRT.frameCount;
 						dstRT.unk178 = srcRT.unk178;
@@ -581,7 +653,9 @@ void SKSETaskExportHead::Run()
 				}
 				else {
 					newTrishape = SKEE::CreateBSTriShape();
+					newShape.reset(newTrishape);
 				}
+				if (!newTrishape) return;
 
 				if (newTrishape) {
 					auto & srcGD = trishape->GetGeometryRuntimeData();
@@ -617,8 +691,10 @@ void SKSETaskExportHead::Run()
 								for (std::uint32_t i = 0; i < RE::BSTextureSet::Texture::kUsedTotal; i++)
 									material->textureSet->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(i), textureData.first->GetTexturePath(static_cast<RE::BSTextureSet::Texture>(i)));
 							}
-							if (textureData.second && textureData.second->type.any(RE::BGSHeadPart::HeadPartType::kFace))
+							if (textureData.second && textureData.second->type.any(RE::BGSHeadPart::HeadPartType::kFace)) {
 								material->textureSet->SetTexturePath(static_cast<RE::BSTextureSet::Texture>(6), m_ddsPath.c_str());
+								referencesTint = true;
+							}
 						}
 					}
 
@@ -628,8 +704,7 @@ void SKSETaskExportHead::Run()
 						if (material) {
 							if (material->GetFeature() == RE::BSShaderMaterial::Feature::kFaceGen) {
 								auto * maskedMaterial = static_cast<RE::BSLightingShaderMaterialFacegen *>(static_cast<RE::BSLightingShaderMaterialBase *>(material));
-								FileUtils::MakeAllDirs(m_ddsPath.c_str());
-								SaveRenderedDDS(maskedMaterial->tintTexture.get(), m_ddsPath.c_str());
+								tintTexture = maskedMaterial->tintTexture;
 							}
 						}
 					}
@@ -647,12 +722,39 @@ void SKSETaskExportHead::Run()
 
 	rootNode.get()->AttachChild(skinnedNode.get(), true);
 
+	if (referencesTint && !tintTexture) {
+		SKSE::log::error("Head export: face material requires an unavailable tint texture");
+		return;
+	}
+	HeadExportFiles files(m_nifPath.c_str(), m_ddsPath.c_str(), static_cast<bool>(tintTexture));
+	if (!files.Prepare()) {
+		SKSE::log::error("Head export: unable to reserve output staging");
+		return;
+	}
+	if (tintTexture) {
+		const bool saved = SaveRenderedDDS(tintTexture.get(), files.DDS().string().c_str());
+		files.RememberStaged();
+		if (!saved) return;
+	}
 	{
 		NifStreamWrapper niStream;
 		SKEE::NiStreamAddObject(niStream.get(), rootNode.get());
-		niStream->Save3(m_nifPath.c_str());
+		const bool saved = niStream->Save3(files.NIF().string().c_str());
+		files.RememberStaged();
+		if (!saved) {
+			SKSE::log::error("Head export: NIF serialization failed");
+			return;
+		}
 	}
-
+	completed = files.Commit();
+	if (!completed) {
+		SKSE::log::error("Head export: output publication failed; recovery required={}; staging={}",
+			files.RecoveryRequired(), files.RecoveryDirectories());
+	}
+}
+catch (const std::exception& error)
+{
+	SKSE::log::error("Head export exception: {}", error.what());
 }
 
 bool VisitObjects(RE::NiAVObject * parent, std::function<bool(RE::NiAVObject*)> functor)

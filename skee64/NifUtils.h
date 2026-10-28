@@ -136,8 +136,9 @@ inline RE::BSFaceGenNiNode* GetFaceGenNiNode(RE::Actor* a_actor)
 // Port of legacy skse64 NiSkinInstance::Clone() (skse64/NiGeometry.cpp:96) — a detached
 // copy on the game heap: fresh instance from the engine factory, shared
 // skinData/skinPartition/rootParent pointers, copied bone array. Returns nullptr for
-// a null input.
-RE::NiSkinInstance* DetachedCopy(RE::NiSkinInstance* a_skinInstance);
+// invalid layout/allocation. The returned smart pointer owns partial-copy
+// cleanup as well as the successful result. This is not an export bone remap.
+RE::NiPointer<RE::NiSkinInstance> DetachedCopy(RE::NiSkinInstance* a_skinInstance);
 
 class GeometryVisitor
 {
