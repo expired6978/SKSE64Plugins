@@ -218,6 +218,20 @@ foreach(spec IN LISTS SKEE_SHADERS)
         "${SKEE_SHADER_OUT_ROOT}/${subdir}/Compiled/${base}.cso")
 endforeach()
 
+# Standalone production-history and session-helper regressions; no game launch.
+# Build Broker must qualify this opt-in lane separately from the plugin build.
+option(SKEE_BUILD_SCULPT_SESSION_TESTS "Build sculpt history/session regressions" OFF)
+if(SKEE_BUILD_SCULPT_SESSION_TESTS)
+    enable_testing()
+    add_executable(sculpt-stroke-session tests/sculpt-stroke-session.cpp)
+    target_include_directories(sculpt-stroke-session PRIVATE skee64)
+    add_executable(sculpt-history tests/sculpt-history.cpp skee64/CDXUndo.cpp)
+    target_include_directories(sculpt-history PRIVATE skee64)
+    add_test(NAME sculpt-stroke-session COMMAND sculpt-stroke-session)
+    add_test(NAME sculpt-history COMMAND sculpt-history)
+    set_tests_properties(sculpt-stroke-session sculpt-history PROPERTIES TIMEOUT 30)
+endif()
+
 # Every NiOverride effect is a plain-HLSL pixel shader whose entry point is the
 # lowercased file name; the runtime looks up Compiled/Effects/<name>.cso.
 file(GLOB SKEE_EFFECT_SOURCES CONFIGURE_DEPENDS "${SKEE_SHADER_SRC_ROOT}/NiOverride/Effects/*.fx")

@@ -261,6 +261,7 @@ bool CDXNifScene::CreateRenderTarget(CDXD3DDevice * pDevice, std::uint32_t width
 void CDXNifScene::Release()
 {
 	utils::ScopedCriticalSection locker(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
+	EndPaint(); // Commit/finalize before clearing the working actor or imported geometry.
 	if(m_renderTexture) {
 		RE::BSScaleformImageLoader * imageLoader = RE::BSScaleformManager::GetSingleton()->imageLoader.get();
 		RE::BSScaleformExternalTexture extTex;
