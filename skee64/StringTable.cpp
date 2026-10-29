@@ -6,17 +6,26 @@
 
 #include <cstdint>
 
-extern StringTable g_stringTable;
-
 using namespace Serialization;
+
+struct StringTable::Storage
+{
+	std::unordered_map<SKEEFixedString, WeakTableItem> m_table;
+	std::vector<WeakTableItem> m_tableVector;
+	std::recursive_mutex m_lock;
+
+	void RemoveString(const SKEEFixedString& str, const SKEEFixedString* expected = nullptr);
+};
+
+StringTable::StringTable() : m_storage(std::make_shared<Storage>()) {}
 
 void StringTable::PrintDiagnostics()
 {
 	Console_Print("StringTable Diagnostics:");
-	std::lock_guard<std::recursive_mutex> locker(m_lock);
-	Console_Print("\t%llu string entries", m_table.size());
+	std::lock_guard<std::recursive_mutex> locker(m_storage->m_lock);
+	Console_Print("\t%llu string entries", m_storage->m_table.size());
 	size_t byteSize = 0;
-	for (auto& item : m_table)
+	for (auto& item : m_storage->m_table)
 	{
 		byteSize += item.first.length();
 		SKSE::log::info("String: {}", item.first.c_str());
@@ -24,38 +33,51 @@ void StringTable::PrintDiagnostics()
 	Console_Print("\t%llu total bytes", byteSize);
 }
 
-void DeleteStringEntry(const SKEEFixedString* string)
-{
-	g_stringTable.RemoveString(*string);
-	delete string;
-}
-
 StringTableItem StringTable::GetString(const SKEEFixedString & str)
 {
-	std::lock_guard<std::recursive_mutex> locker(m_lock);
-	auto it = m_table.find(str);
-	if (it != m_table.end()) {
-		return it->second.lock();
+	auto storage = m_storage;
+	std::lock_guard<std::recursive_mutex> locker(storage->m_lock);
+	auto it = storage->m_table.find(str);
+	if (it != storage->m_table.end()) {
+		if (auto existing = it->second.lock())
+			return existing;
+		// The old last-owner callback may still be waiting for this mutex.
+		// Remove its expired record before publishing a live replacement.
+		storage->RemoveString(str);
 	}
-	else {
-		StringTableItem item = std::shared_ptr<SKEEFixedString>(new SKEEFixedString(str), DeleteStringEntry);
-		m_table.emplace(str, item);
-		m_tableVector.push_back(item);
+	{
+		StringTableItem item(new SKEEFixedString(str), [storage](const SKEEFixedString* string) mutable {
+			storage->RemoveString(*string, string);
+			delete string;
+			// Weak observers may retain the deleter after the string dies.
+			// They must not keep an otherwise unused intern table alive.
+			storage.reset();
+		});
+		storage->m_table.emplace(str, item);
+		storage->m_tableVector.push_back(item);
 		return item;
 	}
-
-	return nullptr;
 }
 
 void StringTable::RemoveString(const SKEEFixedString & str)
+{
+	m_storage->RemoveString(str);
+}
+
+void StringTable::Storage::RemoveString(const SKEEFixedString & str, const SKEEFixedString* expected)
 {
 	std::lock_guard<std::recursive_mutex> locker(m_lock);
 	auto it = m_table.find(str);
 	if (it != m_table.end())
 	{
+		// Revert may have removed an old item and created a replacement.
+		// A late old deleter must not erase a live new item with equal text.
+		auto current = it->second.lock();
+		if (expected && current && current.get() != expected)
+			return;
 		for (auto i = m_tableVector.begin(); i != m_tableVector.end(); ++i)
 		{
-			if (i->lock() == it->second.lock()) {
+			if (!i->owner_before(it->second) && !it->second.owner_before(*i)) {
 				i = m_tableVector.erase(i);
 				break;
 			}
@@ -67,9 +89,9 @@ void StringTable::RemoveString(const SKEEFixedString & str)
 
 std::uint32_t StringTable::GetStringID(const StringTableItem & str)
 {
-	std::lock_guard<std::recursive_mutex> locker(m_lock);
+	std::lock_guard<std::recursive_mutex> locker(m_storage->m_lock);
 	std::uint32_t i = 0;
-	for (auto it = m_tableVector.begin(); it != m_tableVector.end(); ++it, ++i)
+	for (auto it = m_storage->m_tableVector.begin(); it != m_storage->m_tableVector.end(); ++it, ++i)
 	{
 		auto item = it->lock();
 		if (item == str)
@@ -85,11 +107,11 @@ void StringTable::Save(const SKSE::SerializationInterface * intfc, std::uint32_t
 		SKSE::log::error("{} - Failed to open record", __FUNCTION__);
 	}
 
-	std::lock_guard<std::recursive_mutex> locker(m_lock);
-	std::uint32_t totalStrings = m_tableVector.size();
+	std::lock_guard<std::recursive_mutex> locker(m_storage->m_lock);
+	std::uint32_t totalStrings = m_storage->m_tableVector.size();
 	WriteData<std::uint32_t>(intfc, &totalStrings);
 
-	for (auto & str : m_tableVector)
+	for (auto & str : m_storage->m_tableVector)
 	{
 		auto data = str.lock();
 		std::uint16_t length = 0;
@@ -180,9 +202,9 @@ bool StringTable::Load(const SKSE::SerializationInterface * intfc, std::uint32_t
 
 void StringTable::Revert()
 {
-	std::lock_guard<std::recursive_mutex> locker(m_lock);
-	m_table.clear();
-	m_tableVector.clear();
+	std::lock_guard<std::recursive_mutex> locker(m_storage->m_lock);
+	m_storage->m_table.clear();
+	m_storage->m_tableVector.clear();
 }
 
 template <typename T>
