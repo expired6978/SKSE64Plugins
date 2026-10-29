@@ -30,7 +30,7 @@ class InventoryEntryData;
 class TESObjectARMO;
 class TESObjectARMA;
 
-class SKSETaskExportHead : public SKSE::Impl::TaskDelegate
+class SKSETaskExportHead : public SKSE::detail::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -43,7 +43,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSETaskExportTintMask : public SKSE::Impl::TaskDelegate
+class SKSETaskExportTintMask : public SKSE::detail::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -55,7 +55,7 @@ public:
 	RE::BSFixedString		m_fileName;
 };
 
-class SKSETaskRefreshTintMask : public SKSE::Impl::TaskDelegate
+class SKSETaskRefreshTintMask : public SKSE::detail::TaskDelegate
 {
 public:
 	virtual void Run();
@@ -67,7 +67,7 @@ public:
 	RE::BSFixedString		m_ddsPath;
 };
 
-class SKSEUpdateFaceModel : public SKSE::Impl::TaskDelegate
+class SKSEUpdateFaceModel : public SKSE::detail::TaskDelegate
 {
 public:
 	virtual void Run();
