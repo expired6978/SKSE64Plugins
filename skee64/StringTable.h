@@ -88,6 +88,12 @@ typedef std::unordered_map<std::uint32_t, StringTableItem> StringIdMap;
 class StringTable
 {
 public:
+	StringTable();
+	StringTable(const StringTable&) = delete;
+	StringTable& operator=(const StringTable&) = delete;
+	StringTable(StringTable&&) = delete;
+	StringTable& operator=(StringTable&&) = delete;
+
 	enum
 	{
 		kSerializationVersion1 = 1,
@@ -134,9 +140,10 @@ public:
 	void PrintDiagnostics();
 
 private:
-	std::unordered_map<SKEEFixedString, WeakTableItem>	m_table;
-	std::vector<WeakTableItem>							m_tableVector;
-	mutable std::recursive_mutex									m_lock;
+	// Interned items can outlive this facade during DLL static destruction.
+	// Deleters retain storage, never the facade or the global table object.
+	struct Storage;
+	std::shared_ptr<Storage> m_storage;
 };
 
 extern StringTable g_stringTable;
