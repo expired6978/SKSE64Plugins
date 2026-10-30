@@ -97,6 +97,7 @@ set(SKEE_SOURCES
     skee64/StringTable.cpp
     skee64/tinyxml2.cpp
     skee64/TintMaskInterface.cpp
+	skee64/VisualEquipmentInterface.cpp
     skee64/Utilities.cpp
     skee64/CDXBSShaderResource.cpp
     skee64/CDXBrush.cpp

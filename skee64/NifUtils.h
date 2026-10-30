@@ -111,6 +111,7 @@ bool ResolveAnyForm(SKSE::SerializationInterface* intfc, std::uint32_t handle, s
 bool ResolveAnyHandle(SKSE::SerializationInterface* intfc, std::uint64_t handle, std::uint64_t* newHandle);
 
 bool IsSlotMatch(RE::TESForm* pForm, std::uint32_t mask);
+bool IsSlotMatch(RE::Actor* actor, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, std::uint32_t mask);
 
 RE::TESObjectARMO* GetActorSkin(RE::Actor* actor);
 RE::BGSTextureSet* GetTextureSetForPart(RE::TESNPC* npc, RE::BGSHeadPart* headPart);
