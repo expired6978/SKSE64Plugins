@@ -17,6 +17,8 @@
 #include "RE/M/MemoryManager.h"  // TES_HEAP_REDEFINE_NEW()
 #include "RE/V/Variable.h"       // RE::BSScript::Variable (== legacy VMValue)
 #include "SKSE/Interfaces.h"     // SKSE::SerializationInterface, ObjectInterface
+#include <type_traits>
+#include <utility>
 
 namespace SKSE
 {
@@ -53,10 +55,7 @@ public:
 	virtual bool ShouldResumeStack(std::uint32_t& a_stackId) = 0;
 };
 
-// The TES_HEAP_REDEFINE_NEW() macro body references `stl::report_and_fail` and
-// the `sv` literal, which CommonLib only exposes inside namespace RE/REL
-// (SKSE/Impl/PCH.h:648-657). These types live at global scope (to match SKSE's),
-// so make those names visible here for the macro expansion.
+// Make the string-view literal available for TES_HEAP_REDEFINE_NEW().
 using namespace std::literals;
 
 // A delay functor that resumes a latent Papyrus stack. Declared as a full class
@@ -94,17 +93,6 @@ protected:
 	std::uint32_t stackId_ = 0;
 };
 
-// The SKSE runtime's delay-functor manager. Only Enqueue is virtual in the real
-// class, so this vtable-only declaration matches slot 0. Retrieve the live
-// instance via SKSE::GetObjectInterface()->GetDelayFunctorManager() (non-const)
-// or SKSE::GetDelayFunctorManager() (const*).
-class SKSEDelayFunctorManager
-{
-public:
-	// Takes ownership of a_func. Runs it on the game thread.
-	virtual void Enqueue(ISKSEDelayFunctor* a_func, std::int32_t a_delayMS = 0) const = 0;
-};
-
 // Factory for an ISKSEObject (legacy PapyrusObjects.h). The object registry
 // stores the vtable directly, so RegisterFactory may be handed a temporary.
 class ISKSEObjectFactory
@@ -132,13 +120,29 @@ public:
 	}
 };
 
-// The SKSE runtime's object registry. Only RegisterFactory / GetFactoryByName
-// are virtual (legacy PapyrusObjects.h). Retrieve the live instance via
-// SKSE::GetObjectInterface()->GetObjectRegistry() or SKSE::GetObjectRegistry().
+}
+
+// CommonLib 7a60f4de forward-declares these two runtime-owned types at GLOBAL
+// scope in SKSE/Impl/Stubs.h. ObjectInterface returns those exact types, not
+// SKSE namespace classes. Complete only their used virtual slots here; never
+// construct, copy, delete or access data members through these bridge views.
+// Official SKSE PapyrusDelayFunctors.h / PapyrusObjects.h define these slots
+// without a virtual destructor. Enqueue and RegisterFactory are non-const.
+// This pin-specific bridge does not claim the runtime classes' full layout.
+class SKSEDelayFunctorManager
+{
+public:
+	// Slot 0; transfers ownership of the game-heap functor to the runtime.
+	virtual void Enqueue(SKSE::ISKSEDelayFunctor* a_func, std::int32_t a_delayMS = 0) = 0;
+};
+
 class SKSEObjectRegistry
 {
 public:
-	virtual void RegisterFactory(ISKSEObjectFactory* a_factory) const = 0;
-	virtual const ISKSEObjectFactory* GetFactoryByName(const char* a_name) const = 0;
+	virtual void RegisterFactory(SKSE::ISKSEObjectFactory* a_factory) = 0;
+	virtual const SKSE::ISKSEObjectFactory* GetFactoryByName(const char* a_name) const = 0;
 };
-}
+
+// Reject a dependency whose ObjectInterface binds a different namespace/API.
+static_assert(std::is_same_v<decltype(std::declval<const SKSE::ObjectInterface&>().GetDelayFunctorManager()), SKSEDelayFunctorManager&>);
+static_assert(std::is_same_v<decltype(std::declval<const SKSE::ObjectInterface&>().GetObjectRegistry()), SKSEObjectRegistry&>);

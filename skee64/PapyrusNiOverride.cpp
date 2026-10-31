@@ -1,5 +1,6 @@
 #include "SKEETasks.h"
 #include "SKEEDelayFunctors.h"
+#include "SKEELatentFunction.h"
 
 #include "RE/N/NiExtraData.h"
 #include "RE/A/Array.h"           // RE::BSScript::Array (legacy VMArray equiv)
@@ -2007,8 +2008,8 @@ void papyrusNiOverride::RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("GetStringsExtraData", "NiOverride", papyrusNiOverride::GetExtraData<std::vector<RE::BSFixedString>>);
 	// Mesh Manipulation
 	// R is the type returned to the script via ReturnLatentResult (legacy LatentNativeFunction result type: bool)
-	a_vm->RegisterLatentFunction<bool>("AttachMesh", "NiOverride", papyrusNiOverride::AttachMesh);
-	a_vm->RegisterLatentFunction<bool>("DetachMesh", "NiOverride", papyrusNiOverride::DetachMesh);
+	SKEE_RegisterLatentBoolFunction(a_vm, "AttachMesh", "NiOverride", papyrusNiOverride::AttachMesh);
+	SKEE_RegisterLatentBoolFunction(a_vm, "DetachMesh", "NiOverride", papyrusNiOverride::DetachMesh);
 
 	// Legacy g_objectInterface->GetObjectRegistry().RegisterClass<T>() — the SKSE object
 	// registry maps ClassName() to a factory so co-saved latent functors can be rebuilt.
