@@ -12,6 +12,7 @@
 #include "OverrideVariant.h"
 #include "ShaderUtilities.h"
 #include "NifUtils.h"
+#include "HeadExportPolicy.h"
 #include "SKEEHooks.h"
 #include "Utilities.h"
 
@@ -349,12 +350,12 @@ void OverlayInterface::RelinkOverlay(const char * nodeName, RE::TESObjectREFR * 
 
 	if (source && foundGeometry)
 	{
-		foundGeometry->vertexDesc = source->vertexDesc;
 		auto sourceSkin = source->GetGeometryRuntimeData().skinInstance;
-		if (sourceSkin) {
-			auto* clonedSkin = DetachedCopy(sourceSkin.get());
-			foundGeometry->GetGeometryRuntimeData().skinInstance.reset(clonedSkin);
-		}
+		if (!HeadExportPolicy::TryRelinkSkin(foundGeometry->vertexDesc,
+			foundGeometry->GetGeometryRuntimeData().skinInstance,
+			source->vertexDesc, sourceSkin,
+			[](RE::NiSkinInstance* skin) { return DetachedCopy(skin); }))
+			SKSE::log::error("Overlay relink: source has no skin or skin copy failed; retaining previous descriptor and skin");
 	}
 }
 

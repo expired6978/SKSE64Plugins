@@ -627,10 +627,13 @@ void SKSEScaleform_GetModName::Call(RE::GFxFunctionHandler::Params& a_params)
 
 void SKSEScaleform_ExportHead::Call(RE::GFxFunctionHandler::Params& a_params)
 {
-	assert(a_params.argCount >= 1);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kString);
+	// This result means queued only. The deferred task reports completion/failure.
+	if (a_params.retVal) a_params.retVal->SetBoolean(false);
+	if (a_params.argCount < 1 || a_params.args[0].GetType() != RE::GFxValue::ValueType::kString ||
+		!g_enableHeadExport || !g_task) return;
 
 	const char	* strData = a_params.args[0].GetString();
+	if (!strData || !*strData) return;
 
 	// Get the Editor's working actor
 	RE::Actor * actor = (RE::PlayerCharacter::GetSingleton());//g_World.GetWorkingActor();
@@ -642,8 +645,8 @@ void SKSEScaleform_ExportHead::Call(RE::GFxFunctionHandler::Params& a_params)
 	std::string ddsPath = strData;
 	ddsPath.append(".dds");
 
-	if(g_enableHeadExport)
-		SKEE_AddTask(g_task, new SKSETaskExportHead(actor, nifPath.c_str(), ddsPath.c_str()));
+	SKEE_AddTask(g_task, new SKSETaskExportHead(actor, nifPath.c_str(), ddsPath.c_str()));
+	if (a_params.retVal) a_params.retVal->SetBoolean(true);
 }
 
 void SKSEScaleform_ImportHead::Call(RE::GFxFunctionHandler::Params& a_params)
