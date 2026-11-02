@@ -5,6 +5,7 @@ The external release CSV is an input, never modified or bundled into the mod.
 """
 import ast
 import csv
+import hashlib
 import json
 import pathlib
 import re
@@ -16,7 +17,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 CSV = pathlib.Path(sys.argv[1])
 BASE = sys.argv[2]
 sys.argv = sys.argv[:1]
-ROWS = list(csv.DictReader(CSV.read_text(encoding="utf-8-sig").splitlines()))
+CSV_BYTES = CSV.read_bytes()
+BASELINE = json.loads((ROOT / "tests/VR/address-library-baseline.json").read_text())
+ROWS = list(csv.DictReader(CSV_BYTES.decode("utf-8-sig").splitlines()))
 LIBRARY = {int(r["id"]): int(r["offset"], 16) for r in ROWS
            if re.fullmatch(r"[0-9a-fA-F]+", r["offset"])}
 HEADER = (ROOT / "skee64/VR/AddressLibrary.h").read_text()
@@ -43,6 +46,15 @@ def evaluate(expression, absolute):
     return number(tree.body)
 
 class Mapping(unittest.TestCase):
+    def test_compiled_baseline_matches_verified_release(self):
+        # CSV files carry no package-version field. Bind the version label to
+        # the retained complete release-file identity, not its mutable path.
+        self.assertEqual(len(CSV_BYTES), BASELINE["bytes"])
+        self.assertEqual(hashlib.sha256(CSV_BYTES).hexdigest(), BASELINE["sha256"])
+        definitions = re.findall(r'SKEE_VR_ADDRESS_LIBRARY_VERSION="([^"]+)"',
+                                 (ROOT / "CMakeLists.txt").read_text())
+        self.assertEqual(definitions, [BASELINE["version"]])
+
     def test_complete_catalogue_matches_external_library(self):
         fixture = json.loads((ROOT / "tests/VR/address-library-map.json").read_text())
         self.assertEqual(set(IDS), {entry["name"] for entry in fixture})
@@ -113,4 +125,8 @@ class Mapping(unittest.TestCase):
         self.assertEqual(windows(before("skee64/VR/SKEEHooks.cpp")),
                          windows((ROOT / "skee64/VR/SKEEHooks.cpp").read_text()))
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+    print(json.dumps({"addressLibraryRelease": {
+        "version": BASELINE["version"], "bytes": len(CSV_BYTES),
+        "sha256": hashlib.sha256(CSV_BYTES).hexdigest()}}, sort_keys=True), flush=True)
+    unittest.main()
