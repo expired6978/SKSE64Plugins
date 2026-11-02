@@ -8,6 +8,7 @@
 #endif
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <stdexcept>
 
@@ -69,6 +70,39 @@ int main()
         Check(!CoherentSkinLayout(3, 0, false, true, true), "nonempty skin without data accepted");
         Check(!CoherentSkinLayout(3, 3, true, false, true), "missing bones accepted");
         Check(!CoherentSkinLayout(3, 3, true, true, false), "missing worlds accepted");
+
+        // Exercise the production caller boundary with injectable clone refusal,
+        // success and exception, including the explicit unskinned-source policy.
+        {
+            unsigned descriptor = 11;
+            auto oldSkin = std::make_shared<int>(1);
+            auto skin = oldSkin;
+            const auto source = std::make_shared<int>(2);
+            unsigned calls = 0;
+            auto refuse = [&](int*) { ++calls; return std::shared_ptr<int>{}; };
+            Check(!HeadExportPolicy::TryRelinkSkin(descriptor, skin, 22u, source, refuse),
+                "refused clone accepted");
+            Check(descriptor == 11 && skin == oldSkin && calls == 1,
+                "clone refusal changed the descriptor/skin pair");
+            const std::shared_ptr<int> noSource;
+            Check(!HeadExportPolicy::TryRelinkSkin(descriptor, skin, 33u, noSource, refuse),
+                "unskinned source accepted");
+            Check(descriptor == 11 && skin == oldSkin && calls == 1,
+                "unskinned source changed the pair or called clone");
+            bool threw = false;
+            try {
+                HeadExportPolicy::TryRelinkSkin(descriptor, skin, 22u, source,
+                    [](int*) -> std::shared_ptr<int> { throw std::runtime_error("clone"); });
+            } catch (const std::runtime_error&) { threw = true; }
+            Check(threw && descriptor == 11 && skin == oldSkin,
+                "clone exception changed the pair");
+            auto replacement = std::make_shared<int>(3);
+            Check(HeadExportPolicy::TryRelinkSkin(descriptor, skin, 22u, source,
+                [&](int* value) { Check(value == source.get(), "wrong clone input"); return replacement; }),
+                "successful clone refused");
+            Check(descriptor == 22 && skin == replacement && source && *source == 2,
+                "successful relink did not commit the new pair");
+        }
 
         for (bool existing : {false, true}) {
             auto out = Outputs(existing); auto files = Files(existing); bool recovery{};
