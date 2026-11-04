@@ -27,6 +27,7 @@
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
+#include "HeadPartSliderPolicy.h"
 #include "NifUtils.h"
 #include "SKEEHooks.h"
 
@@ -1347,15 +1348,15 @@ std::int32_t FaceMorphInterface::LoadSliders(RE::RaceMenuSliderArray * sliderArr
 			upperMultiplier = 1.0;
 			upperBound = (float)slider->presetCount;
 		} else if(slider->type == SliderInternal::kTypeHeadPart) {
-			lowerBound = -1.0;
+			lowerBound = SKEE::HeadPartSlider::kNoPart;
 			interval = 1;
 			lowerMultiplier = 1.0;
 			upperMultiplier = 1.0;
 			HeadPartList * headPartList = g_partSet.GetPartList(slider->presetCount);
 			RE::BGSHeadPart * headPart = npc->GetHeadPartByType(static_cast<RE::TESNPC::HeadPartType>(slider->presetCount));
-			std::int32_t partIndex = -1;
-			if(headPart && headPartList)
-				value = g_partSet.GetPartIndex(headPartList, headPart);
+			const std::int32_t partIndex = headPart && headPartList ?
+				g_partSet.GetPartIndex(headPartList, headPart) : -1;
+			value = SKEE::HeadPartSlider::ValueForPartIndex(partIndex);
 			if(headPartList)
 				upperBound = ((float)headPartList->size()) - 1.0f;
 			else

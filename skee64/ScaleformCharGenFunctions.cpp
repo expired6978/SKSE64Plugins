@@ -16,6 +16,7 @@
 
 #include "FaceMorphInterface.h"
 #include "PartHandler.h"
+#include "HeadPartSliderPolicy.h"
 #include "SKEEHooks.h"
 
 
@@ -588,7 +589,8 @@ void SKSEScaleform_GetSliderData::Call(RE::GFxFunctionHandler::Params& a_params)
 					if (!headPartList) {
 						break;
 					}
-					RE::BGSHeadPart * headPart = (value < headPartList->size()) ? (*headPartList)[(std::uint32_t)value] : NULL;
+					const auto partIndex = SKEE::HeadPartSlider::PartIndexForValue(value, headPartList->size());
+					RE::BGSHeadPart * headPart = partIndex ? (*headPartList)[*partIndex] : NULL;
 					if(headPart) {
 						RegisterNumber(a_params.retVal, "formId", headPart->formID);
 						RegisterString(a_params.retVal, a_params.movie, "partName", headPart->formEditorID.c_str());
@@ -614,7 +616,8 @@ void SKSEScaleform_GetSliderData::Call(RE::GFxFunctionHandler::Params& a_params)
 								HeadPartList * partList = g_partSet.GetPartList(partType);
 								if (partList)
 								{
-									RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)value);
+									const auto partIndex = SKEE::HeadPartSlider::PartIndexForValue(value, partList->size());
+									RE::BGSHeadPart * targetPart = partIndex ? g_partSet.GetPartByIndex(partList, *partIndex) : NULL;
 									if (targetPart) {
 										RegisterNumber(a_params.retVal, "formId", targetPart->formID);
 										RegisterString(a_params.retVal, a_params.movie, "partName", targetPart->formEditorID.c_str());

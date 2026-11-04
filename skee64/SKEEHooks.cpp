@@ -22,6 +22,7 @@
 #include <RE/G/GFxMovieView.h>
 #include <RE/G/GFxValue.h>
 #include <RE/I/Inventory3DManager.h>
+#include "HeadPartSliderPolicy.h"
 #include <RE/N/NiAVObject.h>
 #include <RE/N/NiGeometryData.h>
 #include <RE/N/NiBooleanExtraData.h>
@@ -795,31 +796,42 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 
 			if (sliderInternal->type == SliderInternal::kTypeHeadPart)
 			{
-				slider->value = newValue;
-
 				std::uint8_t partType = sliderInternal->presetCount;
 
 				HeadPartList * partList = g_partSet.GetPartList(partType);
 				if (partList)
 				{
-					if (newValue == -1.0) {
-						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
+					const auto readPart = [actorBase, partType]() {
+						return actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
+					};
+					const auto applyPart = [&](RE::BGSHeadPart* targetPart, float requestedValue) {
+						if (!SKEE::HeadPartSlider::ApplySelection(slider->value, requestedValue, targetPart, readPart,
+							[actorBase](RE::BGSHeadPart* part) { actorBase->ChangeHeadPart(part); },
+							[player](RE::BGSHeadPart* oldPart, RE::BGSHeadPart* part) { SKEE::ChangeActorHeadPart(player, oldPart, part); })) {
+							SKSE::log::warn("Custom head-part slider type {} did not apply requested value {}; retaining reported value {}",
+								partType, requestedValue, slider->value);
+						}
+					};
+					if (newValue == SKEE::HeadPartSlider::kNoPart) {
+						RE::BGSHeadPart * oldPart = readPart();
+						RE::BGSHeadPart * defaultPart = nullptr;
 						if (oldPart) {
-							RE::BGSHeadPart * defaultPart = g_partSet.GetDefaultPart(partType);
-							if (defaultPart && oldPart != defaultPart) {
-								actorBase->ChangeHeadPart(defaultPart);
-								SKEE::ChangeActorHeadPart(player, oldPart, defaultPart);
+							defaultPart = g_partSet.GetDefaultPart(partType);
+							if (!defaultPart) {
+								SKSE::log::warn("Cannot clear custom head-part slider type {}: no default part is registered", partType);
+								return;
 							}
 						}
+						applyPart(defaultPart, SKEE::HeadPartSlider::kNoPart);
 						return;
 					}
-					RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, (std::uint32_t)newValue);
+					const auto partIndex = SKEE::HeadPartSlider::PartIndexForValue(newValue, partList->size());
+					if (!partIndex) {
+						return;
+					}
+					RE::BGSHeadPart * targetPart = g_partSet.GetPartByIndex(partList, *partIndex);
 					if (targetPart) {
-						RE::BGSHeadPart * oldPart = actorBase->GetCurrentHeadPartByType(static_cast<RE::BGSHeadPart::HeadPartType>(partType));
-						if (oldPart != targetPart) {
-							actorBase->ChangeHeadPart(targetPart);
-							SKEE::ChangeActorHeadPart(player, oldPart, targetPart);
-						}
+						applyPart(targetPart, static_cast<float>(*partIndex));
 					}
 				}
 
