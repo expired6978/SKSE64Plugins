@@ -21,6 +21,7 @@
 #	include "RE/U/UI.h"
 #	include "RE/U/UserEvents.h"
 #	include "REL/Relocation.h"
+#	include "AddressLibrary.h"
 #	include "SKSE/Trampoline.h"
 
 
@@ -65,7 +66,7 @@ namespace
 	};
 	static_assert(sizeof(MouseCoords) == 0x10);
 
-	REL::Relocation<MouseCoords**> g_mouseCoords{ REL::Offset(0x02FEBC40) };
+	REL::Relocation<MouseCoords**> g_mouseCoords{ SKEE::VR::Address::MenuCursor };
 
 	constexpr auto kFirstVRInputDevice = std::to_underlying(RE::INPUT_DEVICE::kVivePrimary);
 	constexpr auto kLastVRInputDevice = std::to_underlying(RE::INPUT_DEVICE::kWMRSecondary);

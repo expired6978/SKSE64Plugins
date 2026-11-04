@@ -14,14 +14,6 @@ namespace SKEE
 		return reinterpret_cast<Fn>(a_id.address());
 	}
 
-	// No published ID currently matches FxDelegate's qualified VR target.
-	// Keep that explicit exception, rather than substituting an unrelated ID.
-	template <class Fn>
-	[[nodiscard]] inline Fn VRQualifiedFunctionRVA(std::uintptr_t a_rva) noexcept
-	{
-		return reinterpret_cast<Fn>(REL::Offset(a_rva).address());
-	}
-
 	[[nodiscard]] inline bool HasQualifiedCustomAddresses() noexcept
 	{
 		return REL::Module::IsVR() ?
@@ -377,7 +369,7 @@ namespace SKEE
 	inline void* GFxInvokeFunction(RE::GFxMovieView* a_movie, const char* a_fnName, RE::FxResponseArgsBase& a_arguments)
 	{
 		if (REL::Module::IsVR()) {
-			return VRQualifiedFunctionRVA<void* (*)(RE::GFxMovieView*, const char*, RE::FxResponseArgsBase*)>(0x00F342E0)(a_movie, a_fnName, std::addressof(a_arguments));
+			return VRFunction<void* (*)(RE::GFxMovieView*, const char*, RE::FxResponseArgsBase*)>(SKEE::VR::Address::FxDelegateInvoke)(a_movie, a_fnName, std::addressof(a_arguments));
 		}
 		if (!HasQualifiedCustomAddresses()) {
 			return nullptr;

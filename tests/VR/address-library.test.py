@@ -47,13 +47,14 @@ def evaluate(expression, absolute):
 
 class Mapping(unittest.TestCase):
     def test_compiled_baseline_matches_verified_release(self):
-        # CSV files carry no package-version field. Bind the version label to
-        # the retained complete release-file identity, not its mutable path.
+        # Bind the baseline to the complete release identity and version row,
+        # rather than trusting a mutable input path or its filename.
         self.assertEqual(len(CSV_BYTES), BASELINE["bytes"])
         self.assertEqual(hashlib.sha256(CSV_BYTES).hexdigest(), BASELINE["sha256"])
         definitions = re.findall(r'SKEE_VR_ADDRESS_LIBRARY_VERSION="([^"]+)"',
                                  (ROOT / "CMakeLists.txt").read_text())
         self.assertEqual(definitions, [BASELINE["version"]])
+        self.assertEqual(ROWS[0]["offset"], BASELINE["version"])
 
     def test_complete_catalogue_matches_external_library(self):
         fixture = json.loads((ROOT / "tests/VR/address-library-map.json").read_text())
@@ -74,7 +75,7 @@ class Mapping(unittest.TestCase):
         for name, rva in old.items():
             with self.subTest(helper=name):
                 self.assertEqual(evaluate(new[name], True), BASE_ADDRESS + int(rva, 16))
-        self.assertEqual(len(IDS), 32)
+        self.assertEqual(len(IDS), 52)
         for name, ident in IDS.items():
             self.assertIn(ident, LIBRARY, name)
 
@@ -124,6 +125,53 @@ class Mapping(unittest.TestCase):
                     ("uint8_t" in declaration or "std::uint8_t{" in body or "std::uint8_t{ " in body)]
         self.assertEqual(windows(before("skee64/VR/SKEEHooks.cpp")),
                          windows((ROOT / "skee64/VR/SKEEHooks.cpp").read_text()))
+
+    def test_other_migrated_sites_keep_the_qualified_addresses(self):
+        current = (ROOT / "skee64/VR/SKEEHooks.cpp").read_text()
+        original = before("skee64/VR/SKEEHooks.cpp")
+        # These sites are outside the VRCallPatch tables. Compare actual
+        # expressions with the independent pre-migration source as well.
+        old_preprocessing = int(re.search(r'preprocessing = (0x[0-9A-Fa-f]+);', original)[1], 16)
+        new_preprocessing = re.search(r'preprocessing = ([^;]+);', current)[1]
+        for site in ("site1", "site2", "site3"):
+            old_expression = re.search(r'const auto '+site+r' = REL::Offset\(preprocessing \+ (0x[0-9A-Fa-f]+)\)', original)[1]
+            new_expression = re.search(r'const auto '+site+r' = ([^;]+);', current)[1]
+            new_expression = new_expression.replace("preprocessing", new_preprocessing)
+            self.assertEqual(evaluate(new_expression, True), BASE_ADDRESS + old_preprocessing + int(old_expression, 16))
+        old_armor = int(re.search(r'kVRCreateArmorNodeRVA = (0x[0-9A-Fa-f]+);', original)[1], 16)
+        self.assertIn("const auto expectedTarget = SKEE::VR::Address::CreateArmorNode.address();", current)
+        self.assertEqual(LIBRARY[IDS["CreateArmorNode"]], old_armor)
+        old_set_model = re.search(r'const auto setModel = (REL::Offset\(0x[0-9A-Fa-f]+\)\.address\(\));', original)[1]
+        new_set_model = re.search(r'const auto setModel = ([^;]+);', current)[1]
+        self.assertEqual(evaluate(new_set_model, True), evaluate(old_set_model, True))
+        old_cache = original.split("SKEEHookGroupResult InstallVRFaceGenCacheBypass()", 1)[1]
+        new_cache = current.split("SKEEHookGroupResult InstallVRFaceGenCacheBypass()", 1)[1]
+        self.assertEqual(evaluate(re.search(r'const auto address = ([^;]+);', new_cache)[1], True),
+                         evaluate(re.search(r'const auto address = ([^;]+);', old_cache)[1], True))
+
+    def test_cursor_pointer_type_and_data_address_are_unchanged(self):
+        path = "skee64/VR/RaceSexMenuVRInput.cpp"
+        original, current = before(path), (ROOT / path).read_text()
+        old = re.search(r'REL::Relocation<([^>]+)> g_mouseCoords\{ REL::Offset\((0x[0-9A-Fa-f]+)\) \}', original)
+        new = re.search(r'REL::Relocation<([^>]+)> g_mouseCoords\{ SKEE::VR::Address::(\w+) \}', current)
+        self.assertEqual(old[1], new[1])
+        self.assertEqual(LIBRARY[IDS[new[2]]], int(old[2], 16))
+        expected = original.replace('#\tinclude "REL/Relocation.h"',
+                                    '#\tinclude "REL/Relocation.h"\n#\tinclude "AddressLibrary.h"')
+        expected = expected.replace('g_mouseCoords{ REL::Offset('+old[2]+') }',
+                                    'g_mouseCoords{ SKEE::VR::Address::'+new[2]+' }')
+        self.assertEqual(current, expected)
+
+    def test_no_remaining_mapped_entry_rva_exceptions(self):
+        current = (ROOT / "skee64/VR/SKEEHooks.cpp").read_text()
+        helpers = (ROOT / "skee64/VR/RuntimeHelpers.h").read_text()
+        self.assertNotIn("VRQualifiedFunctionRVA", helpers)
+        self.assertNotIn("REL::Offset", helpers)
+        # The separate data flag still lacks an exact library entry.
+        self.assertEqual(re.findall(r'REL::Offset\(([^)]+)\)', current), ["0x01EA71B0"])
+        self.assertNotIn("kVRCreateArmorNodeRVA", current)
+        self.assertNotIn("0x00CB8800", current)
+        self.assertNotIn("0x00CB9000", current)
 
 if __name__ == "__main__":
     print(json.dumps({"addressLibraryRelease": {

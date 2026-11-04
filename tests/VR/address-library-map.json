@@ -158,5 +158,105 @@
     "name": "CopyFrom",
     "id": 100006,
     "qualifiedRva": "0x130de50"
+  },
+  {
+    "name": "GetHeadParts",
+    "id": 13541,
+    "qualifiedRva": "0x175da0"
+  },
+  {
+    "name": "CreateArmorNode",
+    "id": 15534,
+    "qualifiedRva": "0x1db680"
+  },
+  {
+    "name": "PreprocessHead",
+    "id": 24227,
+    "qualifiedRva": "0x373740"
+  },
+  {
+    "name": "UpdateAllMorphsCaller",
+    "id": 26256,
+    "qualifiedRva": "0x3e1e50"
+  },
+  {
+    "name": "RaceMorphCaller",
+    "id": 26299,
+    "qualifiedRva": "0x3e3f20"
+  },
+  {
+    "name": "SetInventoryModel",
+    "id": 50899,
+    "qualifiedRva": "0x8b60a0"
+  },
+  {
+    "name": "NewInventoryModelCaller",
+    "id": 50900,
+    "qualifiedRva": "0x8b6220"
+  },
+  {
+    "name": "DoubleMorphSecondaryCaller",
+    "id": 51494,
+    "qualifiedRva": "0x8df4e0"
+  },
+  {
+    "name": "SliderCategoryCaller",
+    "id": 51532,
+    "qualifiedRva": "0x8e2dc0"
+  },
+  {
+    "name": "FaceGenPartCache",
+    "id": 51552,
+    "qualifiedRva": "0x8e8930"
+  },
+  {
+    "name": "AllocateGeometry",
+    "id": 67673,
+    "qualifiedRva": "0xc69680"
+  },
+  {
+    "name": "FreeGeometry",
+    "id": 67677,
+    "qualifiedRva": "0xc698e0"
+  },
+  {
+    "name": "DynamicGeometryCopy",
+    "id": 69556,
+    "qualifiedRva": "0xcb82b0"
+  },
+  {
+    "name": "DynamicGeometryLoad",
+    "id": 69557,
+    "qualifiedRva": "0xcb8390"
+  },
+  {
+    "name": "DynamicGeometryCtor",
+    "id": 69563,
+    "qualifiedRva": "0xcb8600"
+  },
+  {
+    "name": "DynamicGeometryDtor",
+    "id": 69565,
+    "qualifiedRva": "0xcb8700"
+  },
+  {
+    "name": "DynamicGeometryResize",
+    "id": 69569,
+    "qualifiedRva": "0xcb8830"
+  },
+  {
+    "name": "DynamicGeometryDelete",
+    "id": 69573,
+    "qualifiedRva": "0xcb9010"
+  },
+  {
+    "name": "FxDelegateInvoke",
+    "id": 80520,
+    "qualifiedRva": "0xf342e0"
+  },
+  {
+    "name": "MenuCursor",
+    "id": 517043,
+    "qualifiedRva": "0x2febc40"
   }
 ]

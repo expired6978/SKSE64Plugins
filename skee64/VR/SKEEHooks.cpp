@@ -356,7 +356,7 @@ namespace SKEE
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C }, std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x55 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x41 }, std::uint8_t{ 0x56 } }) &&
 				validate("InventoryChanges::SetUniqueID", SKEE::VR::Address::SetUniqueID.address(),
 					std::array{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x85 }, std::uint8_t{ 0xD2 }, std::uint8_t{ 0x0F }, std::uint8_t{ 0x84 }, std::uint8_t{ 0xC0 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 }, std::uint8_t{ 0x00 } }) &&
-				validate("FxDelegate::Invoke target", REL::Offset(0x00F342E0).address(),
+				validate("FxDelegate::Invoke target", SKEE::VR::Address::FxDelegateInvoke.address(),
 					std::array{ std::uint8_t{ 0x40 }, std::uint8_t{ 0x57 }, std::uint8_t{ 0x48 }, std::uint8_t{ 0x83 }, std::uint8_t{ 0xEC }, std::uint8_t{ 0x40 } });
 		}();
 
@@ -1536,7 +1536,6 @@ namespace
 	// used by this bridge.
 	constexpr std::uint64_t kVRBipedAttachRoutineID = 15501;
 	constexpr std::uintptr_t kVRBipedAttachCallOffset = 0xC41;
-	constexpr std::uintptr_t kVRCreateArmorNodeRVA = 0x001DB680;
 	constexpr std::array<std::uint8_t, 14> kVRBipedAttachExpectedBytes{
 		0x45, 0x8B, 0xC7,              // mov r8d, r15d
 		0x48, 0x8B, 0xD6,              // mov rdx, rsi
@@ -1651,7 +1650,7 @@ namespace
 
 		const auto callDisplacement = *reinterpret_cast<const std::int32_t*>(callSite + 10);
 		const auto originalTarget = callSite + kVRBipedAttachExpectedBytes.size() + callDisplacement;
-		const auto expectedTarget = REL::Offset(kVRCreateArmorNodeRVA).address();
+		const auto expectedTarget = SKEE::VR::Address::CreateArmorNode.address();
 		if (originalTarget != expectedTarget || originalTarget < text.address() || originalTarget >= textEnd) {
 			SKSE::log::error(
 				"VR body hook original target mismatch: decoded=0x{:X}, expected=0x{:X}",
@@ -1763,11 +1762,11 @@ namespace
 
 		const auto loadSliders = SKEE::VR::Address::LoadSliders.address();
 		const std::array patches{
-			VRCallPatch{ "head-part-list", loadSliders + 0x215, reinterpret_cast<std::uintptr_t>(GetHeadParts_Hooked), REL::Offset(0x00175DA0).address() },
-			VRCallPatch{ "slider-category-list", REL::Offset(0x008E2DC0).address() + 0x9FB, reinterpret_cast<std::uintptr_t>(InvokeCategoryList_Hook), REL::Offset(0x00F342E0).address() },
+			VRCallPatch{ "head-part-list", loadSliders + 0x215, reinterpret_cast<std::uintptr_t>(GetHeadParts_Hooked), SKEE::VR::Address::GetHeadParts.address() },
+			VRCallPatch{ "slider-category-list", SKEE::VR::Address::SliderCategoryCaller.address() + 0x9FB, reinterpret_cast<std::uintptr_t>(InvokeCategoryList_Hook), SKEE::VR::Address::FxDelegateInvoke.address() },
 			VRCallPatch{ "add-native-slider", loadSliders + 0x37E4, reinterpret_cast<std::uintptr_t>(AddSlider_Hook), SKEE::VR::Address::AddSlider.address() },
 			VRCallPatch{ "double-morph-primary", loadSliders + 0x3CD5, reinterpret_cast<std::uintptr_t>(DoubleMorphCallback_Hook), SKEE::VR::Address::DoubleMorph.address() },
-			VRCallPatch{ "double-morph-secondary", REL::Offset(0x008DF4E0).address() + 0x4F, reinterpret_cast<std::uintptr_t>(DoubleMorphCallback_Hook), SKEE::VR::Address::DoubleMorph.address() }
+			VRCallPatch{ "double-morph-secondary", SKEE::VR::Address::DoubleMorphSecondaryCaller.address() + 0x4F, reinterpret_cast<std::uintptr_t>(DoubleMorphCallback_Hook), SKEE::VR::Address::DoubleMorph.address() }
 		};
 		const auto lookupSite = loadSliders + 0x3895;
 		constexpr std::array expectedLookup{ std::uint8_t{ 0x48 }, std::uint8_t{ 0x8B }, std::uint8_t{ 0x4C }, std::uint8_t{ 0x18 }, std::uint8_t{ 0x18 } };
@@ -1820,10 +1819,10 @@ namespace
 			return { "head-preset-compatibility", SKEEHookStatus::kInitializationFailed, "head preprocessing trampolines could not be allocated" };
 		}
 
-		constexpr std::uintptr_t preprocessing = 0x00373740;
-		const auto site1 = REL::Offset(preprocessing + 0x58).address();
-		const auto site2 = REL::Offset(preprocessing + 0x81).address();
-		const auto site3 = REL::Offset(preprocessing + 0x67).address();
+		const auto preprocessing = SKEE::VR::Address::PreprocessHead.address();
+		const auto site1 = preprocessing + 0x58;
+		const auto site2 = preprocessing + 0x81;
+		const auto site3 = preprocessing + 0x67;
 		const auto regenerate = SKEE::VR::Address::RegenerateHead.address();
 		constexpr std::array site1Expected{
 			std::uint8_t{ 0x0F }, std::uint8_t{ 0xB6 }, std::uint8_t{ 0x0D },
@@ -1913,8 +1912,8 @@ namespace
 
 		std::array<VRCallPatch, 4> patches{
 			VRCallPatch{ "chargen-morph", SKEE::VR::Address::ApplyMorphByPart.address() + 0xF3, reinterpret_cast<std::uintptr_t>(ApplyChargenMorph_Hooked), SKEE::VR::Address::ApplyRaceMorph.address() },
-			VRCallPatch{ "race-morph", REL::Offset(0x003E3F20).address() + 0x56, reinterpret_cast<std::uintptr_t>(ApplyRaceMorph_Hooked), SKEE::VR::Address::ApplyRaceMorph.address() },
-			VRCallPatch{ "update-all-morphs", REL::Offset(0x003E1E50).address() + 0xC7, reinterpret_cast<std::uintptr_t>(UpdateMorphs_Hooked), SKEE::VR::Address::UpdateNPCMorphs.address() },
+			VRCallPatch{ "race-morph", SKEE::VR::Address::RaceMorphCaller.address() + 0x56, reinterpret_cast<std::uintptr_t>(ApplyRaceMorph_Hooked), SKEE::VR::Address::ApplyRaceMorph.address() },
+			VRCallPatch{ "update-all-morphs", SKEE::VR::Address::UpdateAllMorphsCaller.address() + 0xC7, reinterpret_cast<std::uintptr_t>(UpdateMorphs_Hooked), SKEE::VR::Address::UpdateNPCMorphs.address() },
 			VRCallPatch{ "update-one-morph", SKEE::VR::Address::UpdateOneMorphCaller.address() + 0x79, reinterpret_cast<std::uintptr_t>(UpdateMorph_Hooked), SKEE::VR::Address::UpdateNPCMorph.address() }
 		};
 		if (!g_extendedMorphs) {
@@ -1978,15 +1977,15 @@ namespace
 		// use the refcount-aware pair; otherwise an assignment or the virtual
 		// deleting destructor can pass the interior data pointer to NiFree.
 		const std::array patches{
-			VRCallPatch{ "face-overlay-free-copy", REL::Offset(0x00CB82B0).address() + 0x8B, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), REL::Offset(0x00C698E0).address() },
-			VRCallPatch{ "face-overlay-allocate-copy", REL::Offset(0x00CB82B0).address() + 0x92, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), REL::Offset(0x00C69680).address() },
-			VRCallPatch{ "face-overlay-free-assignment", REL::Offset(0x00CB8390).address() + 0x65, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), REL::Offset(0x00C698E0).address() },
-			VRCallPatch{ "face-overlay-allocate-assignment", REL::Offset(0x00CB8390).address() + 0x6C, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), REL::Offset(0x00C69680).address() },
-			VRCallPatch{ "face-overlay-allocate-constructor", REL::Offset(0x00CB8600).address() + 0x76, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), REL::Offset(0x00C69680).address() },
-			VRCallPatch{ "face-overlay-free-destructor", REL::Offset(0x00CB8700).address() + 0x28, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), REL::Offset(0x00C698E0).address() },
-			VRCallPatch{ "face-overlay-free-resize", REL::Offset(0x00CB8800).address() + 0x4E, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), REL::Offset(0x00C698E0).address() },
-			VRCallPatch{ "face-overlay-allocate-resize", REL::Offset(0x00CB8800).address() + 0x55, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), REL::Offset(0x00C69680).address() },
-			VRCallPatch{ "face-overlay-free-deleting-destructor", REL::Offset(0x00CB9000).address() + 0x3F, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), REL::Offset(0x00C698E0).address() },
+			VRCallPatch{ "face-overlay-free-copy", SKEE::VR::Address::DynamicGeometryCopy.address() + 0x8B, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), SKEE::VR::Address::FreeGeometry.address() },
+			VRCallPatch{ "face-overlay-allocate-copy", SKEE::VR::Address::DynamicGeometryCopy.address() + 0x92, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), SKEE::VR::Address::AllocateGeometry.address() },
+			VRCallPatch{ "face-overlay-free-assignment", SKEE::VR::Address::DynamicGeometryLoad.address() + 0x65, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), SKEE::VR::Address::FreeGeometry.address() },
+			VRCallPatch{ "face-overlay-allocate-assignment", SKEE::VR::Address::DynamicGeometryLoad.address() + 0x6C, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), SKEE::VR::Address::AllocateGeometry.address() },
+			VRCallPatch{ "face-overlay-allocate-constructor", SKEE::VR::Address::DynamicGeometryCtor.address() + 0x76, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), SKEE::VR::Address::AllocateGeometry.address() },
+			VRCallPatch{ "face-overlay-free-destructor", SKEE::VR::Address::DynamicGeometryDtor.address() + 0x28, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), SKEE::VR::Address::FreeGeometry.address() },
+			VRCallPatch{ "face-overlay-free-resize", SKEE::VR::Address::DynamicGeometryResize.address() + 0x1E, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), SKEE::VR::Address::FreeGeometry.address() },
+			VRCallPatch{ "face-overlay-allocate-resize", SKEE::VR::Address::DynamicGeometryResize.address() + 0x25, reinterpret_cast<std::uintptr_t>(NiAllocate_Hooked), SKEE::VR::Address::AllocateGeometry.address() },
+			VRCallPatch{ "face-overlay-free-deleting-destructor", SKEE::VR::Address::DynamicGeometryDelete.address() + 0x2F, reinterpret_cast<std::uintptr_t>(NiFree_Hooked), SKEE::VR::Address::FreeGeometry.address() },
 			VRCallPatch{ "face-overlay-enable", SKEE::VR::Address::EnableHead.address() + 0x1E0, reinterpret_cast<std::uintptr_t>(UpdateHeadState_Enable_Hooked), SKEE::VR::Address::UpdateHeadState.address() },
 			VRCallPatch{ "face-overlay-disable", SKEE::VR::Address::DisableHead.address() + 0x1DF, reinterpret_cast<std::uintptr_t>(UpdateHeadState_Disabled_Hooked), SKEE::VR::Address::UpdateHeadState.address() }
 		};
@@ -2009,7 +2008,7 @@ namespace
 		const bool installInventory = g_hookTintInventory && g_enableTintInventory;
 		const auto skin = SKEE::VR::Address::UpdateModelSkin.address();
 		const auto hair = SKEE::VR::Address::UpdateModelHair.address();
-		const auto setModel = REL::Offset(0x008B60A0).address();
+		const auto setModel = SKEE::VR::Address::SetInventoryModel.address();
 		const auto transfer = SKEE::VR::Address::TransferUID.address();
 		constexpr std::array tintProlog{
 			std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x54 },
@@ -2035,7 +2034,7 @@ namespace
 
 		const VRCallPatch newModel{
 			"new-inventory-model",
-			REL::Offset(0x008B6220).address() + 0x1B0,
+			SKEE::VR::Address::NewInventoryModelCaller.address() + 0x1B0,
 			reinterpret_cast<std::uintptr_t>(InitializeDisplayObject_Hooked),
 			SKEE::VR::Address::InitializeDisplayObject.address()
 		};
@@ -2113,7 +2112,7 @@ namespace
 		if (!g_disableFaceGenCache) {
 			return { "facegen-cache-bypass", SKEEHookStatus::kDisabledByPolicy, "FaceGen cache bypass is disabled by configuration" };
 		}
-		const auto address = REL::Offset(0x008E8930).address();
+		const auto address = SKEE::VR::Address::FaceGenPartCache.address();
 		constexpr std::array expectedProlog{
 			std::uint8_t{ 0x48 }, std::uint8_t{ 0x89 }, std::uint8_t{ 0x5C },
 			std::uint8_t{ 0x24 }, std::uint8_t{ 0x10 }, std::uint8_t{ 0x48 },
@@ -2126,7 +2125,7 @@ namespace
 		}
 		constexpr std::uint8_t ret = 0xC3;
 		REL::safe_write(address, std::addressof(ret), sizeof(ret));
-		SKSE::log::info("VR FaceGen cache bypass installed at RVA 0x{:X}", 0x008E8930);
+		SKSE::log::info("VR FaceGen cache bypass installed at RVA 0x{:X}", address - REL::Module::get().base());
 		return { "facegen-cache-bypass", SKEEHookStatus::kEnabled, "the vanilla FaceGen part cache is bypassed as configured" };
 	}
 }

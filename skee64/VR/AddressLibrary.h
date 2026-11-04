@@ -2,8 +2,8 @@
 
 #include <REL/Relocation.h>
 
-// VR-only IDs verified in the installed 0.276.1 release CSV and published
-// alandtse/skyrim_vr_address_library database at 70c3f5c9. These are not AE IDs.
+// VR-only IDs verified against the published 0.294.0 release CSV.
+// See tests/VR/address-library-baseline.json for its exact identity. These are not AE IDs.
 // Runtime branches using them must remain VR-only; flat wrappers keep their
 // existing AE IDs. An ID is not a replacement for ABI/instruction validation.
 namespace SKEE::VR::Address
@@ -40,4 +40,24 @@ namespace SKEE::VR::Address
     inline constexpr REL::RelocationID BSFadeNodeCtor{ 0, 0, 98844 };
     inline constexpr REL::RelocationID InitializeShader{ 0, 0, 99862 };
     inline constexpr REL::RelocationID CopyFrom{ 0, 0, 100006 };
+    inline constexpr REL::RelocationID GetHeadParts{ 0, 0, 13541 };
+    inline constexpr REL::RelocationID CreateArmorNode{ 0, 0, 15534 };
+    inline constexpr REL::RelocationID PreprocessHead{ 0, 0, 24227 };
+    inline constexpr REL::RelocationID UpdateAllMorphsCaller{ 0, 0, 26256 };
+    inline constexpr REL::RelocationID RaceMorphCaller{ 0, 0, 26299 };
+    inline constexpr REL::RelocationID SetInventoryModel{ 0, 0, 50899 };
+    inline constexpr REL::RelocationID NewInventoryModelCaller{ 0, 0, 50900 };
+    inline constexpr REL::RelocationID DoubleMorphSecondaryCaller{ 0, 0, 51494 };
+    inline constexpr REL::RelocationID SliderCategoryCaller{ 0, 0, 51532 };
+    inline constexpr REL::RelocationID FaceGenPartCache{ 0, 0, 51552 };
+    inline constexpr REL::RelocationID AllocateGeometry{ 0, 0, 67673 };
+    inline constexpr REL::RelocationID FreeGeometry{ 0, 0, 67677 };
+    inline constexpr REL::RelocationID DynamicGeometryCopy{ 0, 0, 69556 };
+    inline constexpr REL::RelocationID DynamicGeometryLoad{ 0, 0, 69557 };
+    inline constexpr REL::RelocationID DynamicGeometryCtor{ 0, 0, 69563 };
+    inline constexpr REL::RelocationID DynamicGeometryDtor{ 0, 0, 69565 };
+    inline constexpr REL::RelocationID DynamicGeometryResize{ 0, 0, 69569 };
+    inline constexpr REL::RelocationID DynamicGeometryDelete{ 0, 0, 69573 };
+    inline constexpr REL::RelocationID FxDelegateInvoke{ 0, 0, 80520 };
+    inline constexpr REL::RelocationID MenuCursor{ 0, 0, 517043 };
 }
