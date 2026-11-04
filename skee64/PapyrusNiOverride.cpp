@@ -1770,7 +1770,7 @@ namespace papyrusNiOverride
 			}
 
 			RE::TESForm* form = RE::TESForm::LookupByID(newFormId);
-			if (!form || form->IsNot(RE::FormType::ActorCharacter)) {
+			if (!form || (form->IsNot(RE::FormType::ActorCharacter) && form->IsNot(RE::FormType::Reference))) {
 				m_ref = nullptr;
 				return false;
 			}
