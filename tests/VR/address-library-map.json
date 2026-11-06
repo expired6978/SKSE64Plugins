@@ -1,0 +1,262 @@
+[
+  {
+    "name": "SetUniqueID",
+    "id": 15907,
+    "qualifiedRva": "0x1fd7d0"
+  },
+  {
+    "name": "TransferUID",
+    "id": 15909,
+    "qualifiedRva": "0x1fd990"
+  },
+  {
+    "name": "UpdateNPCMorphs",
+    "id": 24209,
+    "qualifiedRva": "0x370140"
+  },
+  {
+    "name": "UpdateNPCMorph",
+    "id": 24210,
+    "qualifiedRva": "0x370330"
+  },
+  {
+    "name": "UpdateHeadState",
+    "id": 24220,
+    "qualifiedRva": "0x3727b0"
+  },
+  {
+    "name": "DisableHead",
+    "id": 24221,
+    "qualifiedRva": "0x372920"
+  },
+  {
+    "name": "EnableHead",
+    "id": 24228,
+    "qualifiedRva": "0x373880"
+  },
+  {
+    "name": "ApplyMorph",
+    "id": 26252,
+    "qualifiedRva": "0x3e1b80"
+  },
+  {
+    "name": "ApplyMorphByPart",
+    "id": 26254,
+    "qualifiedRva": "0x3e1ce0"
+  },
+  {
+    "name": "RegenerateHead",
+    "id": 26259,
+    "qualifiedRva": "0x3e23d0"
+  },
+  {
+    "name": "ApplyRaceMorph",
+    "id": 26300,
+    "qualifiedRva": "0x3e3fa0"
+  },
+  {
+    "name": "UpdateModelFace",
+    "id": 26458,
+    "qualifiedRva": "0x3eb710"
+  },
+  {
+    "name": "UpdateOneMorphCaller",
+    "id": 26466,
+    "qualifiedRva": "0x3ebb30"
+  },
+  {
+    "name": "ChangeHeadPart",
+    "id": 26468,
+    "qualifiedRva": "0x3ebd30"
+  },
+  {
+    "name": "UpdateModelSkin",
+    "id": 26472,
+    "qualifiedRva": "0x3ec090"
+  },
+  {
+    "name": "UpdateModelHair",
+    "id": 26473,
+    "qualifiedRva": "0x3ec150"
+  },
+  {
+    "name": "RenderMenu",
+    "id": 32867,
+    "qualifiedRva": "0x52ede0"
+  },
+  {
+    "name": "SetNiGeometryTexture",
+    "id": 36012,
+    "qualifiedRva": "0x5cf190"
+  },
+  {
+    "name": "InitializeDisplayObject",
+    "id": 50896,
+    "qualifiedRva": "0x8b5b40"
+  },
+  {
+    "name": "DoubleMorph",
+    "id": 51526,
+    "qualifiedRva": "0x8e23b0"
+  },
+  {
+    "name": "LoadSliders",
+    "id": 51534,
+    "qualifiedRva": "0x8e39b0"
+  },
+  {
+    "name": "AddSlider",
+    "id": 51580,
+    "qualifiedRva": "0x8e9850"
+  },
+  {
+    "name": "NiStreamCtor",
+    "id": 68971,
+    "qualifiedRva": "0xc9ec40"
+  },
+  {
+    "name": "NiStreamDtor",
+    "id": 68972,
+    "qualifiedRva": "0xc9eea0"
+  },
+  {
+    "name": "NiStreamAddObject",
+    "id": 68973,
+    "qualifiedRva": "0xc9f090"
+  },
+  {
+    "name": "CreateBSTriShape",
+    "id": 69284,
+    "qualifiedRva": "0xcad6d0"
+  },
+  {
+    "name": "CreateSourceTexture",
+    "id": 69335,
+    "qualifiedRva": "0xcaef60"
+  },
+  {
+    "name": "CreateBSDynamicTriShape",
+    "id": 69562,
+    "qualifiedRva": "0xcb8530"
+  },
+  {
+    "name": "NiTriBasedGeomCtor",
+    "id": 69838,
+    "qualifiedRva": "0xcc7420"
+  },
+  {
+    "name": "BSFadeNodeCtor",
+    "id": 98844,
+    "qualifiedRva": "0x12c8230"
+  },
+  {
+    "name": "InitializeShader",
+    "id": 99862,
+    "qualifiedRva": "0x1303ac0"
+  },
+  {
+    "name": "CopyFrom",
+    "id": 100006,
+    "qualifiedRva": "0x130de50"
+  },
+  {
+    "name": "GetHeadParts",
+    "id": 13541,
+    "qualifiedRva": "0x175da0"
+  },
+  {
+    "name": "CreateArmorNode",
+    "id": 15534,
+    "qualifiedRva": "0x1db680"
+  },
+  {
+    "name": "PreprocessHead",
+    "id": 24227,
+    "qualifiedRva": "0x373740"
+  },
+  {
+    "name": "UpdateAllMorphsCaller",
+    "id": 26256,
+    "qualifiedRva": "0x3e1e50"
+  },
+  {
+    "name": "RaceMorphCaller",
+    "id": 26299,
+    "qualifiedRva": "0x3e3f20"
+  },
+  {
+    "name": "SetInventoryModel",
+    "id": 50899,
+    "qualifiedRva": "0x8b60a0"
+  },
+  {
+    "name": "NewInventoryModelCaller",
+    "id": 50900,
+    "qualifiedRva": "0x8b6220"
+  },
+  {
+    "name": "DoubleMorphSecondaryCaller",
+    "id": 51494,
+    "qualifiedRva": "0x8df4e0"
+  },
+  {
+    "name": "SliderCategoryCaller",
+    "id": 51532,
+    "qualifiedRva": "0x8e2dc0"
+  },
+  {
+    "name": "FaceGenPartCache",
+    "id": 51552,
+    "qualifiedRva": "0x8e8930"
+  },
+  {
+    "name": "AllocateGeometry",
+    "id": 67673,
+    "qualifiedRva": "0xc69680"
+  },
+  {
+    "name": "FreeGeometry",
+    "id": 67677,
+    "qualifiedRva": "0xc698e0"
+  },
+  {
+    "name": "DynamicGeometryCopy",
+    "id": 69556,
+    "qualifiedRva": "0xcb82b0"
+  },
+  {
+    "name": "DynamicGeometryLoad",
+    "id": 69557,
+    "qualifiedRva": "0xcb8390"
+  },
+  {
+    "name": "DynamicGeometryCtor",
+    "id": 69563,
+    "qualifiedRva": "0xcb8600"
+  },
+  {
+    "name": "DynamicGeometryDtor",
+    "id": 69565,
+    "qualifiedRva": "0xcb8700"
+  },
+  {
+    "name": "DynamicGeometryResize",
+    "id": 69569,
+    "qualifiedRva": "0xcb8830"
+  },
+  {
+    "name": "DynamicGeometryDelete",
+    "id": 69573,
+    "qualifiedRva": "0xcb9010"
+  },
+  {
+    "name": "FxDelegateInvoke",
+    "id": 80520,
+    "qualifiedRva": "0xf342e0"
+  },
+  {
+    "name": "MenuCursor",
+    "id": 517043,
+    "qualifiedRva": "0x2febc40"
+  }
+]

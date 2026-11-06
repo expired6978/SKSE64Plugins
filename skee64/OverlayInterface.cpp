@@ -108,13 +108,14 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 		// shader/alpha properties are carried onto the new shape; attachNew marks that a
 		// fresh overlay should be attached to the destination node.
 		NifStreamWrapper niStream;
-		if (!niStream->Load1(&binaryStream)) {
+		if (!niStream.LoadStream(&binaryStream)) {
 			return;
 		}
 
-		for (std::uint32_t t = 0; t < niStream->topObjects.size() && !attachNew; ++t)
+		RE::NiStream* stream = niStream.get();
+		for (std::uint32_t t = 0; t < stream->topObjects.size() && !attachNew; ++t)
 		{
-			RE::NiObject* root = niStream->topObjects[t].get();
+			RE::NiObject* root = stream->topObjects[t].get();
 			if (!root)
 				continue;
 

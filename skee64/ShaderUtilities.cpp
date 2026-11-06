@@ -23,11 +23,14 @@
 #include "RE/N/NiTimeController.h"
 #include "RE/N/NiExtraData.h"
 #include "RE/N/NiTexture.h"
+#include "RE/M/MemoryManager.h"
+#include "RE/S/ScrapHeap.h"
 #include "RE/T/TESForm.h"
 
 #include <regex>
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include "NiRTTIUtils.h"
 #include "SKEEHooks.h"
 
@@ -349,15 +352,31 @@ void SetShaderProperty(RE::NiAVObject* node, OverrideVariant* value, bool immedi
 					// Convert the shaderType to support tints
 					if (material->GetFeature() != RE::BSShaderMaterial::Feature::kFaceGenRGBTint && material->GetFeature() != RE::BSShaderMaterial::Feature::kHairTint)
 					{
-						auto* tintedMaterial = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(RE::malloc(sizeof(RE::BSLightingShaderMaterialFacegenTint)));
-						new (tintedMaterial) RE::BSLightingShaderMaterialFacegenTint();
+						auto* memoryManager = RE::MemoryManager::GetSingleton();
+						auto* materialHeap = memoryManager ? memoryManager->GetThreadScrapHeap() : nullptr;
+						if (!materialHeap) {
+							SKSE::log::error("Cannot create tint material without a thread scrap heap");
+							return;
+						}
+						auto* tintedMaterial = RE::BSLightingShaderMaterialBase::CreateMaterial(
+							RE::BSShaderMaterial::Feature::kFaceGenRGBTint);
+						if (!tintedMaterial) {
+							SKSE::log::error("Failed to create tint material");
+							return;
+						}
+						// CreateMaterial uses the engine constructor and thread scrap heap.
+						// SetMaterial(..., true) acquires a separate material copy; release
+						// this temporary through its engine vtable and matching heap.
+						auto releaseMaterial = [materialHeap](RE::BSLightingShaderMaterialBase* temporary) {
+							temporary->~BSLightingShaderMaterialBase();
+							materialHeap->Deallocate(temporary);
+						};
+						std::unique_ptr<RE::BSLightingShaderMaterialBase, decltype(releaseMaterial)> temporary(tintedMaterial, releaseMaterial);
 						SKEE::CopyFrom(static_cast<RE::BSLightingShaderMaterial*>(static_cast<RE::BSLightingShaderMaterialBase*>(tintedMaterial)), material);
 						lightingShader->SetFlags(static_cast<RE::BSShaderProperty::EShaderPropertyFlag8>(0x0A), false);
 						lightingShader->SetFlags(static_cast<RE::BSShaderProperty::EShaderPropertyFlag8>(0x15), true);
 						lightingShader->SetMaterial(tintedMaterial, 1);
 						SKEE::InitializeShader(lightingShader, geometry);
-						tintedMaterial->~BSLightingShaderMaterialFacegenTint();
-						RE::free(tintedMaterial);
 					}
 
 					material = static_cast<RE::BSLightingShaderMaterial*>(shaderProperty->material);

@@ -185,55 +185,34 @@ void StringTable::Revert()
 	m_tableVector.clear();
 }
 
-template <typename T>
-bool Serialization::WriteData(const SKSE::SerializationInterface * intfc, const T * data)
-{
-	return intfc->WriteRecordData(data, sizeof(T));
-}
-
-template <typename T>
-bool Serialization::ReadData(const SKSE::SerializationInterface * intfc, T * data)
-{
-	return intfc->ReadRecordData(data, sizeof(T)) > 0;
-}
-
 template<>
 bool Serialization::WriteData<SKEEFixedString>(const SKSE::SerializationInterface * intfc, const SKEEFixedString * str)
 {
-	std::uint16_t len = str->length();
-	if (len > SHRT_MAX)
-		return false;
-	if (!intfc->WriteRecordData(&len, sizeof(len)))
-		return false;
-	if (len == 0)
-		return true;
-	if (!intfc->WriteRecordData(str->c_str(), len))
-		return false;
-	return true;
+	return str && Detail::WriteString(intfc, str->c_str(), str->length());
 }
 
 template<>
 bool Serialization::ReadData<SKEEFixedString>(const SKSE::SerializationInterface * intfc, SKEEFixedString * str)
 {
-	std::uint16_t len = 0;
+	std::string decoded;
+	if (!str || !Detail::ReadString(intfc, decoded)) return false;
+	*str = SKEEFixedString(decoded);
+	return true;
+}
 
-	if (!intfc->ReadRecordData(&len, sizeof(len)))
-		return false;
-	if (len == 0)
-		return true;
-	if (len > SHRT_MAX)
-		return false;
+template<>
+bool Serialization::WriteData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, const RE::BSFixedString* str)
+{
+	if (!str) return false;
+	const auto* text = str->c_str();
+	return Detail::WriteString(intfc, text, text ? str->length() : 0);
+}
 
-	char * buf = new char[len + 1];
-	buf[0] = 0;
-
-	if (!intfc->ReadRecordData(buf, len)) {
-		delete[] buf;
-		return false;
-	}
-	buf[len] = 0;
-
-	*str = SKEEFixedString(buf);
-	delete[] buf;
+template<>
+bool Serialization::ReadData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, RE::BSFixedString* str)
+{
+	std::string decoded;
+	if (!str || !Detail::ReadString(intfc, decoded)) return false;
+	*str = RE::BSFixedString(decoded.c_str());
 	return true;
 }

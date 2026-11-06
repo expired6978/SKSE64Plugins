@@ -18,6 +18,12 @@ public:
 	void Call(RE::GFxFunctionHandler::Params& a_params) override;
 };
 
+class SKSEScaleform_SetCharacterName : public RE::GFxFunctionHandler
+{
+public:
+	void Call(RE::GFxFunctionHandler::Params& a_params) override;
+};
+
 class SKSEScaleform_GetSliderData : public RE::GFxFunctionHandler
 {
 public:

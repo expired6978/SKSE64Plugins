@@ -1163,7 +1163,9 @@ void NIOVTaskUpdateSkinPartition::Run()
 	if (m_skinInstance && m_partition)
 	{
 		REX::W32::EnterCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
 		REX::W32::EnterCriticalSection(&m_skinInstance->lock);
+#endif
 		auto & partition = m_partition->partitions[0];
 		std::uint32_t vertexSize = partition.vertexDesc.GetSize();
 		std::uint32_t vertexCount = m_partition->vertexCount;
@@ -1273,7 +1275,9 @@ void NIOVTaskUpdateSkinPartition::Run()
 		}
 
 		m_skinInstance->skinPartition = m_partition;
+#if defined(EXCLUSIVE_SKYRIM_FLAT)
 		REX::W32::LeaveCriticalSection(&m_skinInstance->lock);
+#endif
 		REX::W32::LeaveCriticalSection(&RE::BSGraphics::Renderer::GetSingleton()->GetRendererData().lock);
 	}
 }

@@ -59,3 +59,6 @@ vcpkg_installed/
 
 # Local build toolchain (downloaded by build.sh)
 toolchain/
+# Private derivatives of Nexus assets: never include in public source/releases.
+packaging/Interface/
+tools/vr-racesex-patches/SearchWidget.as

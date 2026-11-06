@@ -3,6 +3,7 @@
 #include "RE/B/BSFixedString.h"
 #include "SKSE/Interfaces.h"
 #include "Utilities.h"
+#include "SerializationPolicy.h"
 #include <unordered_map>
 #include <memory>
 #include <vector>
@@ -74,13 +75,21 @@ namespace std {
 namespace Serialization
 {
 	template <typename T>
-	bool WriteData(const SKSE::SerializationInterface* intfc, const T* data);
+	bool WriteData(const SKSE::SerializationInterface* intfc, const T* data)
+	{
+		return Detail::WriteScalar(intfc, data);
+	}
 
 	template <typename T>
-	bool ReadData(const SKSE::SerializationInterface* intfc, T* data);
+	bool ReadData(const SKSE::SerializationInterface* intfc, T* data)
+	{
+		return Detail::ReadScalar(intfc, data);
+	}
 
 	template<> bool WriteData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, const SKEEFixedString* str);
 	template<> bool ReadData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, SKEEFixedString* str);
+	template<> bool WriteData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, const RE::BSFixedString* str);
+	template<> bool ReadData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, RE::BSFixedString* str);
 }
 
 typedef std::unordered_map<std::uint32_t, StringTableItem> StringIdMap;

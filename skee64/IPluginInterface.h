@@ -51,6 +51,87 @@ struct InterfaceExchangeMessage
 	IInterfaceMap * interfaceMap = nullptr;
 };
 
+class ICharacterCreationInterface : public IPluginInterface
+{
+public:
+	enum
+	{
+		kPluginVersion1 = 1,
+		kPluginVersion2,
+		kPluginVersion3,
+		kCurrentPluginVersion = kPluginVersion3,
+	};
+
+	enum Capability : skee_u64
+	{
+		kCapabilityFinish = 1ull << 0,
+		kCapabilitySetName = 1ull << 1,
+		kCapabilityTextSnapshot = 1ull << 2,
+		kCapabilitySetFilter = 1ull << 3,
+		kCapabilityNotifications = 1ull << 4,
+		kCapabilityView = 1ull << 5,
+	};
+
+	// Character creation is asynchronous. Consumers should wait for kReady,
+	// request completion, then wait for kInactive. kFinishing prevents a
+	// second request while the first one is still on the game task queue.
+	enum State : skee_u32
+	{
+		kInactive = 0,
+		kOpening,
+		kReady,
+		kFinishing,
+	};
+
+	enum FinishResult : skee_u32
+	{
+		kFinishQueued = 0,
+		kFinishNotActive,
+		kFinishNotReady,
+		kFinishAlreadyPending,
+		kFinishInvalidName,
+		kFinishTaskInterfaceUnavailable,
+	};
+
+	enum NameResult : skee_u32
+	{
+		kNameQueued = 0,
+		kNameNotActive,
+		kNameNotReady,
+		kNameInvalid,
+		kNameTaskInterfaceUnavailable,
+	};
+
+	virtual bool IsActive() = 0;
+	virtual State GetState() = 0;
+	virtual FinishResult FinishWithDefaultName() = 0;
+	virtual FinishResult FinishWithName(const char* name) = 0;
+
+	// Version 2 appends methods after the complete v1 ABI. Consumers must check
+	// GetVersion() before calling them; v1 callers retain their original vtable
+	// prefix unchanged.
+	virtual skee_u64 GetCapabilities() = 0;
+	virtual NameResult SetName(const char* name) = 0;
+
+	// Version 3 retains the complete v1/v2 prefix. Strings are caller-owned
+	// buffers, UTF-8, NUL terminated. Required size includes that NUL.
+	// Snapshots reflect the last published movie state (not pending edits).
+	virtual skee_u32 GetName(char* buffer, skee_u32 capacity) = 0;
+	virtual skee_u32 GetFilter(char* buffer, skee_u32 capacity) = 0;
+	virtual NameResult SetFilter(const char* text) = 0;
+	enum Change : skee_u32 { kStateChanged, kNameChanged, kFilterChanged, kViewChanged };
+	using ChangeCallback = void (*)(Change change, void* context);
+	// Callbacks run on the publishing/game thread, outside the service lock.
+	// Unsubscribe before unloading. Unsubscribe does not wait for an already
+	// running callback; consumer must coordinate that lifetime with this thread.
+	virtual bool Subscribe(ChangeCallback callback, void* context) = 0;
+	virtual void Unsubscribe(ChangeCallback callback, void* context) = 0;
+	// 0 normal, 1 face, 2 unavailable. Selection is asynchronous; observe the
+	// resulting view/change notification rather than assuming queued=applied.
+	virtual skee_u32 GetView() = 0;
+	virtual bool SetView(skee_u32 view) = 0;
+};
+
 class IAddonAttachmentInterface
 {
 public:

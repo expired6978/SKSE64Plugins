@@ -3,7 +3,7 @@
 # PowerShell edition (native Windows; no WSL/Git Bash required)
 #
 # Usage:
-#   .\build.ps1 [release|debug] [--static | --dynamic] [--full] [--install] [--portable-msvc]
+#   .\build.ps1 [release|debug] [--ae | --vr] [--static | --dynamic] [--full] [--install] [--portable-msvc]
 #
 # From WSL, invoke the Windows PowerShell explicitly (not pwsh - a Linux pwsh
 # in the same shell would run this on Linux, where cmd.exe does not exist):
@@ -20,7 +20,7 @@
 # root directory (the folder containing Data\).
 #
 # Default mode is incremental: if the project is already configured
-# (build/<preset>/build.ninja exists), ninja runs directly against it - only
+# (<SKEE_BUILD_ROOT>/<preset>/build.ninja exists), ninja runs directly against it - only
 # changed files are recompiled and relinked, so iteration is fast. HLSL
 # shaders in skee64/Shaders are recompiled by fxc when their sources change.
 #
@@ -28,7 +28,7 @@
 # Every step is idempotent - already-downloaded pieces are detected and
 # skipped:
 #   1. Initializes the CommonLibSSE-NG git submodule if missing.
-#   2. Downloads CMake + Ninja for Windows into ./toolchain (gitignored).
+#   2. Downloads CMake + Ninja for Windows into SKEE_TOOLCHAIN_ROOT.
 #   3. Fetches vcpkg at the exact commit pinned in vcpkg.json
 #      (builtin-baseline) into ./toolchain/vcpkg and bootstraps it.
 #   4. Resolves an MSVC compiler environment, in order:
@@ -39,9 +39,9 @@
 #        e. relocated installs (top-level *studio* folders, bounded scan)
 #        f. cl.exe already on PATH (developer prompt)
 #      If none is found it downloads a portable MSVC + Windows SDK into
-#      ./toolchain/msvc via tools/portable-msvc.py - nothing is installed
+#      SKEE_TOOLCHAIN_ROOT/msvc via tools/portable-msvc.py - nothing is installed
 #      system-wide. Pass --portable-msvc to force that path.
-#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-<flatrim|static>
+#   5. Configures and builds with the CMake preset <type>-msvc-vcpkg-<ae|vr|static-ae>
 #      (dynamic CRT by default; --static / SKEE_RUNTIME=static selects the fully
 #       static-CRT variant, which statically links the MSVC runtimes).
 #
@@ -49,6 +49,12 @@
 #   $env:SKEE_VCVARS = 'C:\path\to\vcvars64.bat'  use this compiler environment
 #   $env:SKEE_JOBS   = 'N'                        ninja parallelism (default 8)
 #   $env:SKEE_RUNTIME= 'static'|'dynamic'         statically (/MT) vs dynamically (/MD) link the MSVC CRT (default dynamic)
+#   $env:SKEE_GAME_RUNTIME = 'AE'|'VR'             target game runtime (default AE)
+#   $env:SKEE_BUILD_ROOT = 'D:\managed\work\build' generated build root
+#   $env:SKEE_TOOLCHAIN_ROOT = 'D:\managed\work\toolchain' generated toolchain root
+#   $env:SKEE_COMMONLIB_SOURCE_DIR = 'D:\managed\work\source\CommonLibSSE-NG' dependency staging root
+#   $env:SKEE_VR2_PACKAGE_VERSION = '0.1.3'            assembled VR baseline identity
+#   $env:SKEE_NATIVE_PLUGIN_VERSION = '0.5.0.13'       four-component native DLL/SKSE identity
 #   $env:Skyrim64Path= 'C:\path\to\Skyrim'        game root used by --install
 #
 # Requires: Windows PowerShell 5.1+ or pwsh on Windows, git.
@@ -59,7 +65,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
 
 $ScriptDir = $PSScriptRoot
-$Toolchain = Join-Path $ScriptDir 'toolchain'
+$BuildRoot = if ($env:SKEE_BUILD_ROOT) { $env:SKEE_BUILD_ROOT } else { Join-Path $ScriptDir 'build' }
+$Toolchain = if ($env:SKEE_TOOLCHAIN_ROOT) { $env:SKEE_TOOLCHAIN_ROOT } else { Join-Path $ScriptDir 'toolchain' }
 
 # Pinned versions (match the known-good reference environment).
 $CMakeVersion = '3.31.12'
@@ -302,6 +309,7 @@ No usable Python found to download the portable MSVC toolchain.
 # ----------------------------------------------------------------------------
 $BuildType     = 'release'
 $Runtime       = if ($env:SKEE_RUNTIME) { $env:SKEE_RUNTIME } else { 'dynamic' } # static|dynamic -> MSVC CRT linkage (default dynamic)
+$GameRuntime   = if ($env:SKEE_GAME_RUNTIME) { $env:SKEE_GAME_RUNTIME.ToLowerInvariant() } else { 'ae' }
 $ForceFull     = $false
 $DoInstall     = $false
 $ForcePortable = $false
@@ -310,24 +318,35 @@ foreach ($arg in $args) {
         '^(release|debug)$' { $BuildType = $arg }
         '^--static$'        { $Runtime = 'static' }
         '^--dynamic$'       { $Runtime = 'dynamic' }
+        '^--ae$'            { $GameRuntime = 'ae' }
+        '^--vr$'            { $GameRuntime = 'vr' }
         '^--full$'          { $ForceFull = $true }
         '^--install$'       { $DoInstall = $true }
         '^--portable-msvc$' { $ForcePortable = $true }
         '^(?:-h|--help)$'   { Show-Help; exit 0 }
         default {
-            Write-Host "Unknown argument: $arg (expected [release|debug] [--static|--dynamic] [--full] [--install] [--portable-msvc])" -ForegroundColor Red
+            Write-Host "Unknown argument: $arg (expected [release|debug] [--ae|--vr] [--static|--dynamic] [--full] [--install] [--portable-msvc])" -ForegroundColor Red
             exit 2
         }
     }
 }
 
 switch ($Runtime) {
-    'static'  { $RuntimeTag = 'static' }
-    'dynamic' { $RuntimeTag = 'flatrim' }
+    'static'  { $RuntimeTag = "static-$GameRuntime" }
+    'dynamic' { $RuntimeTag = $GameRuntime }
     default   { Write-Host "Unknown runtime: $Runtime (expected static|dynamic)" -ForegroundColor Red; exit 2 }
 }
+$validGameRuntimes = @('ae', 'vr')
+if ($GameRuntime -notin $validGameRuntimes) {
+    Write-Host "Unknown game runtime: $GameRuntime (expected ae|vr)" -ForegroundColor Red
+    exit 2
+}
+if ($Runtime -eq 'static' -and $GameRuntime -eq 'vr') {
+    Write-Host "The VR milestone currently supports the dynamic CRT preset only" -ForegroundColor Red
+    exit 2
+}
 $Preset   = "$BuildType-msvc-vcpkg-$RuntimeTag"
-$BuildDir = Join-Path $ScriptDir "build/$Preset"
+$BuildDir = Join-Path $BuildRoot $Preset
 $CfgName  = $BuildType.Substring(0, 1).ToUpper() + $BuildType.Substring(1)
 
 $CMakeRoot     = Join-Path $Toolchain "cmake-$CMakeVersion-windows-x86_64"
@@ -337,6 +356,35 @@ $NinjaExe      = Join-Path $NinjaDir 'ninja.exe'
 $VcpkgDir      = Join-Path $Toolchain 'vcpkg'
 $PortableDir   = Join-Path $Toolchain 'msvc'
 $PortableSetup = Join-Path $PortableDir 'setup_x64.bat'
+
+# A reused scratch tree must be reconfigured when either externally supplied
+# build identity changes. Otherwise the fast ninja path would retain stale
+# CMake cache values and produce an incorrectly labelled DLL.
+if (-not $ForceFull -and (Test-Path -LiteralPath (Join-Path $BuildDir 'build.ninja'))) {
+    $requestedIdentity = [ordered]@{}
+    if ($env:SKEE_VR2_PACKAGE_VERSION) {
+        $requestedIdentity['SKEE_VR2_PACKAGE_VERSION'] = $env:SKEE_VR2_PACKAGE_VERSION
+    }
+    if ($env:SKEE_NATIVE_PLUGIN_VERSION) {
+        $requestedIdentity['SKEE_NATIVE_PLUGIN_VERSION'] = $env:SKEE_NATIVE_PLUGIN_VERSION
+    }
+    if ($requestedIdentity.Count -gt 0) {
+        $identityCache = Join-Path $BuildDir 'CMakeCache.txt'
+        foreach ($entry in $requestedIdentity.GetEnumerator()) {
+            $cachedIdentity = if (Test-Path -LiteralPath $identityCache) {
+                $line = (Select-String -LiteralPath $identityCache -Pattern "^$([regex]::Escape($entry.Key)):[^=]*=" | Select-Object -First 1).Line
+                if ($line) { $line.Substring($line.IndexOf('=') + 1) } else { $null }
+            } else {
+                $null
+            }
+            if ($cachedIdentity -ne $entry.Value) {
+                Info "Build identity changed ($($entry.Key)=$($entry.Value)); reconfiguring"
+                $ForceFull = $true
+                break
+            }
+        }
+    }
+}
 
 # ----------------------------------------------------------------------------
 if (-not (Get-Command cmd.exe -ErrorAction SilentlyContinue)) {
@@ -485,7 +533,17 @@ $env:VCPKG_DEFAULT_BINARY_CACHE = Join-Path $Toolchain 'vcpkg-cache'
 $env:PATH = "$CMakeRoot\bin;$NinjaDir;$env:PATH"
 Push-Location $ScriptDir
 try {
-    & $CMakeBin --preset $Preset
+    $configureArgs = @('--preset', $Preset)
+    if ($env:SKEE_COMMONLIB_SOURCE_DIR) {
+        $configureArgs += "-DSKEE_COMMONLIB_SOURCE_DIR=$($env:SKEE_COMMONLIB_SOURCE_DIR)"
+    }
+    if ($env:SKEE_VR2_PACKAGE_VERSION) {
+        $configureArgs += "-DSKEE_VR2_PACKAGE_VERSION=$($env:SKEE_VR2_PACKAGE_VERSION)"
+    }
+    if ($env:SKEE_NATIVE_PLUGIN_VERSION) {
+        $configureArgs += "-DSKEE_NATIVE_PLUGIN_VERSION=$($env:SKEE_NATIVE_PLUGIN_VERSION)"
+    }
+    & $CMakeBin @configureArgs
     if ($LASTEXITCODE -ne 0) { Die "Build failed (see output above)" }
     & $CMakeBin --build $BuildDir --config $CfgName
     if ($LASTEXITCODE -ne 0) { Die "Build failed (see output above)" }
