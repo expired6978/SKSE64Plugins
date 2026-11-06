@@ -7,6 +7,7 @@
 
 #include "ScaleformCharGenFunctions.h"
 #include <cmath>
+#include <limits>
 #include "CharacterNameUpdate.h"
 #if defined(ENABLE_SKYRIM_VR)
 #include "RaceSexMenuFaceView.h"
@@ -565,12 +566,19 @@ void SKSEScaleform_GetSliderData::Call(RE::GFxFunctionHandler::Params& a_params)
 {
 	using namespace ScaleformUtils;
 
-	assert(a_params.argCount >= 1);
-	assert(a_params.args[0].GetType() == RE::GFxValue::ValueType::kNumber);
-	assert(a_params.args[1].GetType() == RE::GFxValue::ValueType::kNumber);
+	if (a_params.argCount < 2 || !a_params.args ||
+		a_params.args[0].GetType() != RE::GFxValue::ValueType::kNumber ||
+		a_params.args[1].GetType() != RE::GFxValue::ValueType::kNumber) {
+		return;
+	}
 
-	std::uint32_t sliderId = (std::uint32_t)a_params.args[0].GetNumber();
-	double value = a_params.args[1].GetNumber();
+	const auto id = a_params.args[0].GetNumber();
+	if (!std::isfinite(id) || id < 0.0 || std::trunc(id) != id ||
+		id > static_cast<double>(std::numeric_limits<std::uint32_t>::max())) {
+		return;
+	}
+	const auto sliderId = static_cast<std::uint32_t>(id);
+	const auto value = a_params.args[1].GetNumber();
 
 	auto [raceMenu, slider] = GetRaceMenuSlider(sliderId);
 	if (raceMenu && slider)

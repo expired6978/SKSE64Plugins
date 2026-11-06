@@ -25,8 +25,10 @@ The 19 previously documented helper/hook-anchor gaps are now covered. Eighteen
 new mappings were accepted in Address Library PRs308–314; head preprocessing
 ID24227 was already contributed in PR304. All are present in the published
 [0.294.0 release](https://github.com/alandtse/skyrim_vr_address_library/releases/tag/v0.294.0).
-The existing MenuCursor data ID517043 is also used without changing its pointer
-type or the local cursor layout.
+The existing MenuCursor data ID517043 is resolved during VR 1.4.15 runtime
+qualification. A missing entry or a resolved pointer slot outside the data
+segment disables RaceMenu pointer hooks. Input dispatch uses the validated
+pointer slot with its original type and local cursor layout.
 
 Two old dynamic-geometry anchors were interior addresses, not function entries:
 

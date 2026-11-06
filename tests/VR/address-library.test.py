@@ -82,11 +82,11 @@ class Mapping(unittest.TestCase):
     def test_call_patch_addresses_and_targets_are_unchanged(self):
         def tables(text):
             result = {}
-            for match in re.finditer(r'VRCallPatch\{ "([^"]+)", (.*?), reinterpret_cast<std::uintptr_t>\([^\n]+?\), (.*?) \}', text):
-                result[match[1]] = (match[2], match[3])
-            extra = re.search(r'const VRCallPatch newModel\{\s*"([^"]+)",\s*([^,]+),\s*reinterpret_cast<std::uintptr_t>\([^\n]+?\),\s*([^\n]+)\s*\};', text)
+            for match in re.finditer(r'VRCallPatch\{ "([^"]+)", (.*?), reinterpret_cast<std::uintptr_t>\(([^\n]+?)\), (.*?) \}', text):
+                result[match[1]] = (match[2], match[4], match[3])
+            extra = re.search(r'const VRCallPatch newModel\{\s*"([^"]+)",\s*([^,]+),\s*reinterpret_cast<std::uintptr_t>\(([^\n]+?)\),\s*([^\n]+)\s*\};', text)
             self.assertIsNotNone(extra)
-            result[extra[1]] = (extra[2], extra[3].strip())
+            result[extra[1]] = (extra[2], extra[4].strip(), extra[3])
             return result
         old = tables(before("skee64/VR/SKEEHooks.cpp"))
         current = (ROOT / "skee64/VR/SKEEHooks.cpp").read_text()
@@ -94,6 +94,7 @@ class Mapping(unittest.TestCase):
         self.assertEqual(len(old), 21)
         self.assertEqual(old.keys(), new.keys())
         for name, pair in old.items():
+            self.assertEqual(new[name][2], pair[2], name)
             for index in (0, 1):
                 with self.subTest(patch=name, member=index):
                     self.assertEqual(evaluate(new[name][index], True), BASE_ADDRESS + evaluate(pair[index], False))
@@ -153,14 +154,60 @@ class Mapping(unittest.TestCase):
         path = "skee64/VR/RaceSexMenuVRInput.cpp"
         original, current = before(path), (ROOT / path).read_text()
         old = re.search(r'REL::Relocation<([^>]+)> g_mouseCoords\{ REL::Offset\((0x[0-9A-Fa-f]+)\) \}', original)
-        new = re.search(r'REL::Relocation<([^>]+)> g_mouseCoords\{ SKEE::VR::Address::(\w+) \}', current)
-        self.assertEqual(old[1], new[1])
-        self.assertEqual(LIBRARY[IDS[new[2]]], int(old[2], 16))
-        expected = original.replace('#\tinclude "REL/Relocation.h"',
-                                    '#\tinclude "REL/Relocation.h"\n#\tinclude "AddressLibrary.h"')
-        expected = expected.replace('g_mouseCoords{ REL::Offset('+old[2]+') }',
-                                    'g_mouseCoords{ SKEE::VR::Address::'+new[2]+' }')
-        self.assertEqual(current, expected)
+        saved = re.search(r'(MouseCoords\*\*) g_mouseCoords\{ nullptr \}', current)
+        resolved = re.search(r'REL::Relocation<([^>]+)> mouseCoords\{ REL::Offset\(cursor->offset\) \}', current)
+        self.assertEqual(old[1], saved[1])
+        self.assertEqual(old[1], resolved[1])
+        self.assertEqual(LIBRARY[IDS["MenuCursor"]], int(old[2], 16))
+
+    def test_cursor_lookup_is_confined_to_runtime_qualification(self):
+        current = (ROOT / "skee64/VR/RaceSexMenuVRInput.cpp").read_text()
+        qualification = current.split("bool ValidateRaceSexMenuVRRuntimeContract()", 1)[1].split(
+            "bool ApplyRaceSexMenuWorldTransform()", 1)[0]
+        self.assertEqual(current.count("Address::MenuCursor"), 1)
+        self.assertRegex(qualification,
+                         r"(?s)if \(!REL::Module::IsVR\(\) \|\| module.version\(\) != .*?return false;\s*}"
+                         r".*?Address::MenuCursor.id\(\);\s*const REL::Offset2ID mappings;")
+        self.assertRegex(qualification, r"(?s)std::ranges::find\(mappings, cursorId, &REL::IDDB::mapping_t::id\);"
+                         r"\s*if \(cursor == mappings.end\(\) \|\| cursor->offset == 0 .*?"
+                         r"return false;\s*}.*?!IsInsideSegment\(mouseCoords.address\(\), sizeof\(\*g_mouseCoords\), data\)"
+                         r".*?return false;\s*}\s*g_mouseCoords = mouseCoords.get\(\);")
+        registration = current.split("bool RegisterRaceSexMenuPointerInput()", 1)[1]
+        self.assertRegex(registration, r"(?s)if \(!ValidateRaceSexMenuVRRuntimeContract\(\)\) \{\s*"
+                         r"return false;\s*}.*?HookTransaction::Commit\(")
+        self.assertIn("g_mouseCoords ? *g_mouseCoords : nullptr", current)
+
+    def test_slider_callback_guards_arguments_before_read_and_conversion(self):
+        current = (ROOT / "skee64/ScaleformCharGenFunctions.cpp").read_text()
+        callback = current.split("void SKSEScaleform_GetSliderData::Call(", 1)[1]
+        prefix = callback.split("GetRaceMenuSlider(sliderId)", 1)[0]
+        self.assertRegex(prefix, r"(?s)using namespace ScaleformUtils;\s*"
+                         r"if \(a_params.argCount < 2 \|\| !a_params.args \|\|\s*"
+                         r"a_params.args\[0\].GetType\(\) != RE::GFxValue::ValueType::kNumber \|\|\s*"
+                         r"a_params.args\[1\].GetType\(\) != RE::GFxValue::ValueType::kNumber\) \{\s*return;\s*}"
+                         r"\s*const auto id = a_params.args\[0\].GetNumber\(\);\s*"
+                         r"if \(!std::isfinite\(id\) \|\| id < 0.0 \|\| std::trunc\(id\) != id \|\|\s*"
+                         r"id > static_cast<double>\(std::numeric_limits<std::uint32_t>::max\(\)\)\) \{\s*return;\s*}"
+                         r"\s*const auto sliderId = static_cast<std::uint32_t>\(id\);\s*"
+                         r"const auto value = a_params.args\[1\].GetNumber\(\);")
+        # Interpret the verified source guard in order. Accessing a missing
+        # argument here raises, so the short-array cases exercise short circuit.
+        guard = re.search(r"if \((a_params.argCount < 2.*?)\) \{", prefix, re.S)[1]
+        for count, types, rejected in [
+            (0, [], True), (1, ["number"], True), (2, None, True),
+            (2, ["string", "number"], True), (2, ["number", "string"], True),
+            (2, ["number", "number"], False),
+        ]:
+            with self.subTest(count=count, types=types):
+                terms = {
+                    "a_params.argCount < 2": lambda: count < 2,
+                    "!a_params.args": lambda: types is None,
+                    "a_params.args[0].GetType() != RE::GFxValue::ValueType::kNumber": lambda: types[0] != "number",
+                    "a_params.args[1].GetType() != RE::GFxValue::ValueType::kNumber": lambda: types[1] != "number",
+                }
+                self.assertEqual(any(terms[term.strip()]() for term in guard.split("||")), rejected)
+        self.assertIn("skee::GetRaceMenuHeadPartList(raceMenu, slider->index)", callback)
+        self.assertIn("SKEE::HeadPartSlider::PartIndexForValue(value, headPartList->size())", callback)
 
     def test_no_remaining_mapped_entry_rva_exceptions(self):
         current = (ROOT / "skee64/VR/SKEEHooks.cpp").read_text()

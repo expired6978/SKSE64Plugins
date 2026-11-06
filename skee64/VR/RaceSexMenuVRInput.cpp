@@ -20,15 +20,18 @@
 #	include "RE/R/RaceSexMenu.h"
 #	include "RE/U/UI.h"
 #	include "RE/U/UserEvents.h"
+#	include "REL/Offset2ID.h"
 #	include "REL/Relocation.h"
 #	include "AddressLibrary.h"
 #	include "SKSE/Trampoline.h"
 
 
+#	include <algorithm>
 #	include <array>
 #	include <atomic>
 #	include <chrono>
 #	include <nlohmann/json.hpp>
+#	include <limits>
 #	include <mutex>
 #	include <string>
 #	include "BuildVersion.h"
@@ -66,7 +69,7 @@ namespace
 	};
 	static_assert(sizeof(MouseCoords) == 0x10);
 
-	REL::Relocation<MouseCoords**> g_mouseCoords{ SKEE::VR::Address::MenuCursor };
+	MouseCoords** g_mouseCoords{ nullptr };
 
 	constexpr auto kFirstVRInputDevice = std::to_underlying(RE::INPUT_DEVICE::kVivePrimary);
 	constexpr auto kLastVRInputDevice = std::to_underlying(RE::INPUT_DEVICE::kWMRSecondary);
@@ -576,15 +579,27 @@ namespace
 			SKSE::log::error("RaceSexMenu VR DispatchGFxEvent signature mismatch at 0x{:X}", dispatchAddress);
 			return false;
 		}
+		// The direct ID lookup terminates on a missing entry. Enumerate the
+		// loaded database here so an absent cursor ID can disable pointer input.
+		const auto cursorId = SKEE::VR::Address::MenuCursor.id();
+		const REL::Offset2ID mappings;
+		const auto cursor = std::ranges::find(mappings, cursorId, &REL::IDDB::mapping_t::id);
+		if (cursor == mappings.end() || cursor->offset == 0 ||
+			cursor->offset > std::numeric_limits<std::uintptr_t>::max() - module.base()) {
+			SKSE::log::error("RaceSexMenu VR pointer input has no usable Address Library entry for cursor ID {}", cursorId);
+			return false;
+		}
+		const REL::Relocation<MouseCoords**> mouseCoords{ REL::Offset(cursor->offset) };
 		if (!IsInsideSegment(RE::ScaleformEvent::g_scaleformGFxEventData.address(), sizeof(void*), data) ||
-			!IsInsideSegment(g_mouseCoords.address(), sizeof(void*), data)) {
+			!IsInsideSegment(mouseCoords.address(), sizeof(*g_mouseCoords), data)) {
 			SKSE::log::error(
 				"RaceSexMenu VR Scaleform globals are outside Skyrim's data segment: eventData=0x{:X}, mouseCoords=0x{:X}",
 				RE::ScaleformEvent::g_scaleformGFxEventData.address(),
-				g_mouseCoords.address());
+				mouseCoords.address());
 			return false;
 		}
 
+		g_mouseCoords = mouseCoords.get();
 		return true;
 	}
 
@@ -679,7 +694,7 @@ namespace
 			movie->SetMouseCursorCount(1);
 		}
 
-		auto* coordinates = *g_mouseCoords;
+		auto* coordinates = g_mouseCoords ? *g_mouseCoords : nullptr;
 		auto* eventData = *RE::ScaleformEvent::g_scaleformGFxEventData;
 		if (!coordinates || !eventData) {
 			SKSE::log::warn(
