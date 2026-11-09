@@ -1131,6 +1131,34 @@ static uintptr_t ScanPatternTarget(const char * patternName, const uint8_t * bas
 static SKSE::Trampoline g_branchTrampoline;
 static SKSE::Trampoline g_localTrampoline;
 
+// BSFaceGenNiNode::FixSkinInstances (vtable slot 0x3E, "SkinAllGeometry") binds the head parts
+// to the skeleton. HDT-SMP builds the head part physics right after it, from the current vertex
+// positions, so body morphs have to be on the head parts (e.g. SMP collision parts) before it runs.
+using FixSkinInstancesFn = void (*)(RE::BSFaceGenNiNode*, RE::NiNode*, bool);
+static FixSkinInstancesFn FixSkinInstances_Original = nullptr;
+
+static void FixSkinInstances_Hooked(RE::BSFaceGenNiNode* a_this, RE::NiNode* a_skeleton, bool a_arg2)
+{
+	if (a_this && a_skeleton)
+	{
+		if (RE::TESObjectREFR* refr = a_skeleton->GetUserData())
+		{
+			g_bodyMorphInterface.ApplyHeadPartMorphs(refr, a_this);
+		}
+	}
+
+	FixSkinInstances_Original(a_this, a_skeleton, a_arg2);
+}
+
+void InstallHeadPartMorphHook()
+{
+	// Patching the vtable slot after all plugins loaded chains to whatever is there now:
+	// the game function (HDT-SMP detours it) or another plugin's vtable hook.
+	REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_BSFaceGenNiNode[0] };
+	FixSkinInstances_Original = reinterpret_cast<FixSkinInstancesFn>(vtbl.write_vfunc(0x3E, FixSkinInstances_Hooked));
+	SKSE::log::info("{} - Hooked BSFaceGenNiNode::FixSkinInstances for head part body morphs", __FUNCTION__);
+}
+
 bool InstallSKEEHooks()
 {
 	if (const auto* trampolineIface = SKSE::GetTrampolineInterface()) {

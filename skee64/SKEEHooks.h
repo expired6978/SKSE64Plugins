@@ -316,3 +316,4 @@ namespace SKEE
 }
 
 bool InstallSKEEHooks();
+void InstallHeadPartMorphHook();

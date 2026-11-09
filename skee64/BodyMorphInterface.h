@@ -205,6 +205,9 @@ public:
 	std::vector<NIOVTaskUpdateSkinPartition*> ApplyMorph(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool erase, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph);
 	void ForEachShape(std::function<void(const SKEEFixedString&, const BodyMorphMap&)> functor) const;
 
+	// Runs the skin partition swaps now on the main thread, otherwise queues them for it
+	static void RunPartitionUpdates(const std::vector<NIOVTaskUpdateSkinPartition*>& partitionUpdates);
+
 	size_t GetByteSize() const { return vertexMap.memoryUsage; }
 
 private:
@@ -233,6 +236,7 @@ public:
 
 	void ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool attaching = false, bool deferUpdate = false);
 	void UpdateMorphs(RE::TESObjectREFR * refr, bool deferUpdate = false);
+	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate = false);
 	void ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const;
 
 	void Shrink();
@@ -396,6 +400,10 @@ public:
 
 	void LoadMods();
 	void PrintDiagnostics();
+
+	// Applies body morphs to the head parts under a face node (e.g. SMP collision parts).
+	// Called before the face node is skinned to the skeleton, so physics reads the morphed shape.
+	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode);
 
 	void ForEachMorphShapeCallback(std::function<void(IBodyMorphInterface::MorphShapeCallback)> func);
 

@@ -642,6 +642,10 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 	{
 		case SKSE::MessagingInterface::kPostLoad:
 		{
+			// After all plugins loaded, so HDT-SMP has detoured the function the vtable points to
+			if (g_enableBodyMorph)
+				InstallHeadPartMorphHook();
+
 			if (!g_enableEarlyRegistration)
 			{
 				if (auto* msg = SKSE::GetMessagingInterface()) {
