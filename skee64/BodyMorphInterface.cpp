@@ -49,6 +49,7 @@ extern bool								g_parallelMorphing;
 extern std::uint16_t							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
+extern bool								g_enableHeadPartBodyMorph;
 extern std::uint32_t						g_mainThreadId;
 extern bool								g_enableBodyNormalRecalculate;
 extern bool								g_bodyMorphGPUCopy;
@@ -827,9 +828,10 @@ void MorphCache::UpdateMorphs(RE::TESObjectREFR * refr, bool deferUpdate)
 		}
 	});
 
-	if (RE::BSFaceGenNiNode* faceNode = GetFaceGenNiNode(actor))
+	if (g_enableHeadPartBodyMorph)
 	{
-		ApplyHeadPartMorphs(refr, faceNode, deferUpdate);
+		if (RE::BSFaceGenNiNode* faceNode = GetFaceGenNiNode(actor))
+			ApplyHeadPartMorphs(refr, faceNode, deferUpdate);
 	}
 }
 
@@ -1356,7 +1358,7 @@ void BodyMorphInterface::Impl_ApplyVertexDiff(RE::TESObjectREFR * refr, RE::NiAV
 
 void BodyMorphInterface::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, RE::BGSHeadPart * headPart)
 {
-	if (g_enableBodyMorph && refr && faceNode && HasMorphs(refr))
+	if (g_enableBodyMorph && g_enableHeadPartBodyMorph && refr && faceNode && HasMorphs(refr))
 	{
 		morphCache.ApplyHeadPartMorphs(refr, faceNode, true, headPart);
 	}

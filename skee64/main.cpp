@@ -126,6 +126,7 @@ bool	g_enableBodyGen = true;
 bool	g_enableAutoTransforms = true;
 bool	g_enableHeadExport = true;
 bool	g_enableBodyMorph = true;
+bool	g_enableHeadPartBodyMorph = true;
 std::uint32_t g_mainThreadId = 0;
 bool	g_enableTintSync = true;
 bool	g_enableTintInventory = true;
@@ -644,7 +645,7 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 		case SKSE::MessagingInterface::kPostLoad:
 		{
 			// After all plugins loaded, so HDT-SMP has detoured the function the vtable points to
-			if (g_enableBodyMorph)
+			if (g_enableBodyMorph && g_enableHeadPartBodyMorph)
 				InstallHeadPartMorphHook();
 
 			if (!g_enableEarlyRegistration)
@@ -680,7 +681,7 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 		{
 			// The game creates its model processor in InitApplication, after kPostLoad. Head part
 			// models are only loaded once their forms exist, so this is early enough to see them.
-			if (g_enableBodyMorph)
+			if (g_enableBodyMorph && g_enableHeadPartBodyMorph)
 				InstallModelProcessorProxy();
 
 			if (g_enableBodyGen) {
@@ -722,6 +723,7 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 	SKEE64GetConfigValue("Features", "bEnableHeadExport", &g_enableHeadExport);
 	SKEE64GetConfigValue("Features", "bEnableBodyGen", &g_enableBodyGen);
 	SKEE64GetConfigValue("Features", "bEnableBodyMorph", &g_enableBodyMorph);
+	SKEE64GetConfigValue("Features", "bEnableHeadPartBodyMorph", &g_enableHeadPartBodyMorph);
 	SKEE64GetConfigValue("Features", "bEnableAutoTransforms", &g_enableAutoTransforms);
 	SKEE64GetConfigValue("Features", "bEnableEquippableTransforms", &g_enableEquippableTransforms);
 	SKEE64GetConfigValue("Features", "bEnableTintSync", &g_enableTintSync);

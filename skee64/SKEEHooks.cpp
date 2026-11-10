@@ -133,6 +133,7 @@ extern bool					g_hookSliderCallbacks;
 extern bool					g_hookHeadPreprocessing;
 extern bool					g_hookMorphUpdates;
 extern bool					g_enableBodyMorph;
+extern bool					g_enableHeadPartBodyMorph;
 extern bool					g_hookMorphExtensions;
 extern bool					g_suppressPatternWarnings;
 extern bool					g_hookTintInventory;
@@ -1485,7 +1486,7 @@ bool InstallSKEEHooks()
 		g_branchTrampoline.write_call<5>(UpdateMorph_Target, (uintptr_t)UpdateMorph_Hooked);
 	}
 
-	if (g_enableBodyMorph)
+	if (g_enableBodyMorph && g_enableHeadPartBodyMorph)
 	{
 		// Body morphs for head parts changed on their own (Character::ChangeHeadPart): the RegenerateHead
 		// call in HandleCharacterFaceMeshUpdate, and the two calls of HandleCharacterFaceMeshUpdate in
