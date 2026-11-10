@@ -677,6 +677,11 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 		}
 		case SKSE::MessagingInterface::kDataLoaded:
 		{
+			// The game creates its model processor in InitApplication, after kPostLoad. Head part
+			// models are only loaded once their forms exist, so this is early enough to see them.
+			if (g_enableBodyMorph)
+				InstallModelProcessorProxy();
+
 			if (g_enableBodyGen) {
 				SKEERegisterEventSink<RE::TESInitScriptEvent>(&g_actorUpdateManager);
 

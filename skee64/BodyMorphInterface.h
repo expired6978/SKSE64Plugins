@@ -236,7 +236,11 @@ public:
 
 	void ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool attaching = false, bool deferUpdate = false);
 	void UpdateMorphs(RE::TESObjectREFR * refr, bool deferUpdate = false);
-	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate = false);
+	// headPart limits it to that head part, otherwise all head parts of the face node are morphed
+	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate = false, RE::BGSHeadPart * headPart = nullptr);
+
+	// Remembers the BODYTRI of a loaded model, called for every model the game loads
+	static void RecordModelBodyTri(const char * modelPath, RE::NiAVObject * root);
 	void ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const;
 
 	void Shrink();
@@ -401,9 +405,9 @@ public:
 	void LoadMods();
 	void PrintDiagnostics();
 
-	// Applies body morphs to the head parts under a face node (e.g. SMP collision parts).
-	// Called before the face node is skinned to the skeleton, so physics reads the morphed shape.
-	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode);
+	// Applies body morphs to the head parts under a face node (e.g. SMP collision parts), or only to
+	// headPart. Called before head parts are skinned to the skeleton, so physics reads the morphed shape.
+	void ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, RE::BGSHeadPart * headPart = nullptr);
 
 	void ForEachMorphShapeCallback(std::function<void(IBodyMorphInterface::MorphShapeCallback)> func);
 

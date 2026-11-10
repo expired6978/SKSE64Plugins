@@ -68,8 +68,8 @@ inline constexpr std::uint32_t kID_RegenerateHead                  = 26838;
 inline constexpr std::uint32_t kID_BSFaceGenModel_ApplyRaceMorph   = 26882;
 inline constexpr std::uint32_t kID_BSFaceGenModel_ApplyMorph       = 26883;
 inline constexpr std::uint32_t kID_UpdateModelFace                 = 27044;
-inline constexpr std::uint32_t kID_UpdateMorph_Target              = 27061;
-inline constexpr std::uint32_t kID_ChangeActorHeadPart             = 27063;
+inline constexpr std::uint32_t kID_UpdateMorph_Target              = 27061; // Character::HandleCharacterFaceMeshUpdate
+inline constexpr std::uint32_t kID_ChangeActorHeadPart             = 27063; // Character::ChangeHeadPart
 inline constexpr std::uint32_t kID_UpdateModelSkin                 = 27066;
 inline constexpr std::uint32_t kID_UpdateModelHair                 = 27067;
 inline constexpr std::uint32_t kID_SetNiGeometryTexture            = 36987;
@@ -100,6 +100,7 @@ inline constexpr std::uint32_t kID_InvalidateTextures              = 106510;
 inline constexpr std::uint32_t kID_CopyFrom                        = 106713;
 inline constexpr std::uint32_t kID_RaceSexMenu_Vtable              = 215885; // ??_7RaceSexMenu@@6B@
 inline constexpr std::uint32_t kID_useFaceGenPreProcessedHeads     = 378620; // ini setting (data, not a function)
+inline constexpr std::uint32_t kID_BSModelProcessor_Singleton     = 400486; // BSTSingletonExplicit<BSModelDB::BSModelProcessor>::singleton (data)
 
 // Function-pointer types for the hooked functions whose unpatched originals
 // are kept in code-cave trampolines (see the *_Original holders below).
@@ -317,3 +318,4 @@ namespace SKEE
 
 bool InstallSKEEHooks();
 void InstallHeadPartMorphHook();
+void InstallModelProcessorProxy();

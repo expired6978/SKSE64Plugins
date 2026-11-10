@@ -132,6 +132,7 @@ extern bool					g_hookNativeSliders;
 extern bool					g_hookSliderCallbacks;
 extern bool					g_hookHeadPreprocessing;
 extern bool					g_hookMorphUpdates;
+extern bool					g_enableBodyMorph;
 extern bool					g_hookMorphExtensions;
 extern bool					g_suppressPatternWarnings;
 extern bool					g_hookTintInventory;
@@ -1150,6 +1151,62 @@ static void FixSkinInstances_Hooked(RE::BSFaceGenNiNode* a_this, RE::NiNode* a_s
 	FixSkinInstances_Original(a_this, a_skeleton, a_arg2);
 }
 
+// Character::ChangeHeadPart handles the new head part and each of its extra parts on its own
+// (Character::HandleCharacterFaceMeshUpdate): it attaches the part, updates its morphs, regenerates
+// it (RegenerateHead) and then skins it to the skeleton, where HDT-SMP builds the physics.
+// FixSkinInstances isn't involved, so apply the body morphs to the part right after RegenerateHead.
+// The face node isn't necessarily attached to the actor at this point (RaceMenu), so the actor
+// comes from the two HandleCharacterFaceMeshUpdate calls in Character::ChangeHeadPart.
+static thread_local RE::Actor* t_faceMeshUpdateActor = nullptr;
+
+using HandleFaceMeshUpdateFn = void (*)(RE::Actor*, RE::BGSHeadPart*);
+static HandleFaceMeshUpdateFn HandleFaceMeshUpdate_Original[2] = { nullptr, nullptr };
+
+template <std::size_t N>
+static void HandleFaceMeshUpdate_Hooked(RE::Actor* a_actor, RE::BGSHeadPart* a_headPart)
+{
+	RE::Actor* previous = t_faceMeshUpdateActor;
+	t_faceMeshUpdateActor = a_actor;
+	HandleFaceMeshUpdate_Original[N](a_actor, a_headPart);
+	t_faceMeshUpdateActor = previous;
+}
+
+static RegenerateHeadFn RegenerateHeadCall_Original = nullptr;
+
+static void RegenerateHeadCall_Hooked(RE::BSFaceGenManager* a_manager, RE::BSFaceGenNiNode* a_faceNode, RE::BGSHeadPart* a_headPart, RE::TESNPC* a_npc)
+{
+	RegenerateHeadCall_Original(a_manager, a_faceNode, a_headPart, a_npc);
+
+	if (a_faceNode && a_headPart)
+	{
+		RE::TESObjectREFR* refr = t_faceMeshUpdateActor;
+		if (!refr) {
+			// Otherwise the face node's root, if it's attached to the actor
+			RE::NiNode* root = a_faceNode;
+			while (root->parent)
+				root = root->parent;
+			refr = root->GetUserData();
+		}
+
+		if (refr)
+		{
+			g_bodyMorphInterface.ApplyHeadPartMorphs(refr, a_faceNode, a_headPart);
+		}
+	}
+}
+
+// True if a_site is a 5 byte call to a_target, i.e. the code is the expected game version
+static bool IsCallTo(std::uintptr_t a_site, std::uintptr_t a_target)
+{
+	const auto* code = reinterpret_cast<const std::uint8_t*>(a_site);
+	if (code[0] != 0xE8)
+		return false;
+
+	std::int32_t rel = 0;
+	std::memcpy(&rel, code + 1, sizeof(rel));
+	return a_site + 5 + static_cast<std::intptr_t>(rel) == a_target;
+}
+
 void InstallHeadPartMorphHook()
 {
 	// Patching the vtable slot after all plugins loaded chains to whatever is there now:
@@ -1157,6 +1214,47 @@ void InstallHeadPartMorphHook()
 	REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_BSFaceGenNiNode[0] };
 	FixSkinInstances_Original = reinterpret_cast<FixSkinInstancesFn>(vtbl.write_vfunc(0x3E, FixSkinInstances_Hooked));
 	SKSE::log::info("{} - Hooked BSFaceGenNiNode::FixSkinInstances for head part body morphs", __FUNCTION__);
+}
+
+// The game hands every model it loads with post processing to the BSModelDB::BSModelProcessor
+// singleton. Replace the singleton with a proxy that records the BODYTRI of each model and then
+// calls whatever processor was there before (the game's TESProcessor or another plugin's proxy).
+// The face node copy of a head part loses the extra data of its NIF, so this is where body morphs
+// for head parts learn their TRI file. Same vtable layout as BSModelProcessor: destructor, PostCreate.
+class BodyTriModelProcessor
+{
+public:
+	explicit BodyTriModelProcessor(RE::BSModelDB::BSModelProcessor* a_original) : m_original(a_original) {}
+	virtual ~BodyTriModelProcessor() = default;
+
+	virtual void PostCreate(const RE::BSModelDB::DBTraits::ArgsType& a_args, const char* a_modelName, RE::NiPointer<RE::NiNode>& a_root, std::uint32_t& a_typeOut)
+	{
+		// Before the original, the extra data is still as it is in the file
+		if (a_root)
+			MorphCache::RecordModelBodyTri(a_modelName, a_root.get());
+
+		if (m_original)
+			m_original->PostCreate(a_args, a_modelName, a_root, a_typeOut);
+	}
+
+private:
+	RE::BSModelDB::BSModelProcessor* m_original;
+};
+
+void InstallModelProcessorProxy()
+{
+	REL::Relocation<RE::BSModelDB::BSModelProcessor**> singleton{ REL::RelocationID(0, kID_BSModelProcessor_Singleton) };
+	RE::BSModelDB::BSModelProcessor* original = *singleton;
+	if (!original) {
+		// Without the game's processor the models would lose their post processing
+		SKSE::log::error("{} - No model processor yet, head part body morphs are disabled", __FUNCTION__);
+		return;
+	}
+
+	// Heap allocated and never freed by us; if the game deletes the singleton, it calls our destructor
+	auto* proxy = new BodyTriModelProcessor(original);
+	*singleton = reinterpret_cast<RE::BSModelDB::BSModelProcessor*>(proxy);
+	SKSE::log::info("{} - Model processor proxy installed (previous processor {:#x})", __FUNCTION__, reinterpret_cast<std::uintptr_t>(original));
 }
 
 bool InstallSKEEHooks()
@@ -1385,6 +1483,27 @@ bool InstallSKEEHooks()
 
 		const std::uintptr_t UpdateMorph_Target = REL::RelocationID(0, kID_UpdateMorph_Target).address() + 0x7E;
 		g_branchTrampoline.write_call<5>(UpdateMorph_Target, (uintptr_t)UpdateMorph_Hooked);
+	}
+
+	if (g_enableBodyMorph)
+	{
+		// Body morphs for head parts changed on their own (Character::ChangeHeadPart): the RegenerateHead
+		// call in HandleCharacterFaceMeshUpdate, and the two calls of HandleCharacterFaceMeshUpdate in
+		// ChangeHeadPart (new part, then each extra part).
+		const std::uintptr_t faceMeshUpdate = REL::RelocationID(0, kID_UpdateMorph_Target).address();
+		const std::uintptr_t regenerateHeadSite = faceMeshUpdate + 0xFE;
+		const std::uintptr_t changeHeadPart = REL::RelocationID(0, kID_ChangeActorHeadPart).address();
+		const std::uintptr_t partSite = changeHeadPart + 0xBE;
+		const std::uintptr_t extraPartSite = changeHeadPart + 0xE6;
+
+		if (IsCallTo(regenerateHeadSite, REL::RelocationID(0, kID_RegenerateHead).address()) && IsCallTo(partSite, faceMeshUpdate) && IsCallTo(extraPartSite, faceMeshUpdate)) {
+			RegenerateHeadCall_Original = reinterpret_cast<RegenerateHeadFn>(g_branchTrampoline.write_call<5>(regenerateHeadSite, (uintptr_t)RegenerateHeadCall_Hooked));
+			HandleFaceMeshUpdate_Original[0] = reinterpret_cast<HandleFaceMeshUpdateFn>(g_branchTrampoline.write_call<5>(partSite, (uintptr_t)HandleFaceMeshUpdate_Hooked<0>));
+			HandleFaceMeshUpdate_Original[1] = reinterpret_cast<HandleFaceMeshUpdateFn>(g_branchTrampoline.write_call<5>(extraPartSite, (uintptr_t)HandleFaceMeshUpdate_Hooked<1>));
+		}
+		else {
+			SKSE::log::error("{} - Unexpected code in Character::ChangeHeadPart, body morphs won't reach changed head parts", __FUNCTION__);
+		}
 	}
 
 	// Hooking Dynamic Geometry Alloc/Free to add intrusive refcount

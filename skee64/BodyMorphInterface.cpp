@@ -827,13 +827,66 @@ void MorphCache::UpdateMorphs(RE::TESObjectREFR * refr, bool deferUpdate)
 	}
 }
 
-// BODYTRI path and shape name of a head part's own NIF. The face node copy of a head part
-// keeps no extra data of its NIF, so read them from the file once.
-struct HeadPartBodyTri
+// BODYTRI of every loaded model, recorded by the model processor proxy (see SKEEHooks.cpp)
+// before the game builds anything from it. Head parts lose the extra data of their NIF when the
+// face node copy is made, so this is the only place it can still be read.
+struct ModelBodyTri
 {
 	std::string triPath;
 	std::string shapeName;
 };
+
+static std::mutex g_modelBodyTriLock;
+static std::unordered_map<std::string, ModelBodyTri> g_modelBodyTri;
+
+// Lower case, backslashes, no "data\" or "meshes\" prefix
+static std::string NormalizeModelPath(const char* a_path)
+{
+	std::string path = a_path ? a_path : "";
+	std::transform(path.begin(), path.end(), path.begin(), [](char c) { return c == '/' ? '\\' : static_cast<char>(::tolower(static_cast<unsigned char>(c))); });
+	for (std::string_view prefix : { "data\\"sv, "meshes\\"sv }) {
+		if (path.starts_with(prefix))
+			path.erase(0, prefix.size());
+	}
+	return path;
+}
+
+void MorphCache::RecordModelBodyTri(const char* modelPath, RE::NiAVObject* root)
+{
+	if (!modelPath || !modelPath[0] || !root)
+		return;
+
+	ModelBodyTri entry;
+	VisitObjects(root, [&](RE::NiAVObject* object) {
+		if (object->AsGeometry() && entry.shapeName.empty())
+			entry.shapeName = object->name.c_str();
+
+		auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData("BODYTRI"));
+		if (stringData && stringData->value && entry.triPath.empty()) {
+			entry.triPath = stringData->value;
+			if (object->AsGeometry())
+				entry.shapeName = object->name.c_str();
+		}
+		return false;
+	});
+
+	if (entry.triPath.empty())
+		return;
+
+	std::lock_guard locker(g_modelBodyTriLock);
+	g_modelBodyTri.insert_or_assign(NormalizeModelPath(modelPath), std::move(entry));
+}
+
+static bool LookupModelBodyTri(const char* modelPath, ModelBodyTri& a_out)
+{
+	std::lock_guard locker(g_modelBodyTriLock);
+	auto it = g_modelBodyTri.find(NormalizeModelPath(modelPath));
+	if (it == g_modelBodyTri.end())
+		return false;
+
+	a_out = it->second;
+	return true;
+}
 
 static RE::BGSHeadPart* FindHeadPartByEditorID(const char* editorID)
 {
@@ -854,54 +907,7 @@ static RE::BGSHeadPart* FindHeadPartByEditorID(const char* editorID)
 	return it != headParts.end() ? it->second : nullptr;
 }
 
-static const HeadPartBodyTri* GetHeadPartBodyTri(RE::BGSHeadPart* headPart)
-{
-	static std::unordered_map<RE::BGSHeadPart*, HeadPartBodyTri> cache;
-	if (auto it = cache.find(headPart); it != cache.end())
-		return it->second.triPath.empty() ? nullptr : &it->second;
-
-	HeadPartBodyTri& entry = cache[headPart];
-	const char* model = headPart->GetModel();
-	if (!model || !model[0])
-		return nullptr;
-
-	std::string nifPath = "meshes\\";
-	nifPath += model;
-
-	RE::BSResourceNiBinaryStream binaryStream(nifPath.c_str());
-	NifStreamWrapper niStream;
-	if (!binaryStream.good() || !niStream.LoadStream(&binaryStream)) {
-		SKSE::log::error("{} - Couldn't load {}", __FUNCTION__, nifPath);
-		return nullptr;
-	}
-
-	niStream.VisitObjects([&](RE::NiObject* object) {
-		RE::NiAVObject* avObject = netimmerse_cast<RE::NiAVObject*>(object);
-		if (!avObject)
-			return false;
-
-		VisitObjects(avObject, [&](RE::NiAVObject* node) {
-			if (node->AsGeometry() && entry.shapeName.empty())
-				entry.shapeName = node->name.c_str();
-
-			auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(node->GetExtraData("BODYTRI"));
-			if (stringData && stringData->value && entry.triPath.empty()) {
-				entry.triPath = stringData->value;
-				if (node->AsGeometry())
-					entry.shapeName = node->name.c_str();
-			}
-			return false;
-		});
-		return true;
-	});
-
-#ifdef _DEBUG
-	SKSE::log::debug("{} - {} BODYTRI '{}' shape '{}'", __FUNCTION__, nifPath, entry.triPath, entry.shapeName);
-#endif
-	return entry.triPath.empty() ? nullptr : &entry;
-}
-
-void MorphCache::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate)
+void MorphCache::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate, RE::BGSHeadPart * onlyHeadPart)
 {
 	if (!refr || !faceNode)
 		return;
@@ -915,38 +921,19 @@ void MorphCache::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNo
 		if (!geometry)
 			continue;
 
-		// The face node holds a copy of the head part's shape named after the head part's
-		// editor ID, without the extra data of the head part's NIF.
-		std::string triPath;
-		std::string shapeName;
+		// The face node holds a copy of the head part's shape, named after the head part's
+		// editor ID and without the extra data of the head part's NIF.
+		RE::BGSHeadPart* headPart = FindHeadPartByEditorID(geometry->name.c_str());
+		if (onlyHeadPart && headPart != onlyHeadPart)
+			continue;
 
-		// The original NIF tree, if the facegen model still has it with its extra data
-		auto* modelData = geometry->GetExtraData<RE::BSFaceGenModelExtraData>("FMD");
-		RE::BSFaceGenModelMeshData* meshData = (modelData && modelData->m_model) ? modelData->m_model->modelMeshData.get() : nullptr;
-		if (meshData) {
-			auto findBodyTri = [&](RE::NiAVObject* object) {
-				auto* stringData = object ? netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData("BODYTRI")) : nullptr;
-				if (stringData && stringData->value)
-					triPath = stringData->value;
-				return !triPath.empty();
-			};
-			if (!findBodyTri(meshData->faceShape.get()) && meshData->faceNode)
-				VisitObjects(meshData->faceNode.get(), findBodyTri);
-			if (meshData->faceShape)
-				shapeName = meshData->faceShape->name.c_str();
-		}
+		const char* model = headPart ? headPart->GetModel() : nullptr;
+		ModelBodyTri bodyTri;
+		if (!model || !LookupModelBodyTri(model, bodyTri))
+			continue;
 
-		// Otherwise read it from the head part's NIF
-		if (triPath.empty()) {
-			RE::BGSHeadPart* headPart = FindHeadPartByEditorID(geometry->name.c_str());
-			const HeadPartBodyTri* bodyTri = headPart ? GetHeadPartBodyTri(headPart) : nullptr;
-			if (!bodyTri)
-				continue;
-
-			triPath = bodyTri->triPath;
-			if (shapeName.empty())
-				shapeName = bodyTri->shapeName;
-		}
+		std::string triPath = bodyTri.triPath;
+		std::string shapeName = bodyTri.shapeName;
 
 		if (shapeName.empty())
 			shapeName = geometry->name.c_str();
@@ -1347,11 +1334,11 @@ void BodyMorphInterface::Impl_ApplyVertexDiff(RE::TESObjectREFR * refr, RE::NiAV
 	}
 }
 
-void BodyMorphInterface::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode)
+void BodyMorphInterface::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, RE::BGSHeadPart * headPart)
 {
 	if (g_enableBodyMorph && refr && faceNode && HasMorphs(refr))
 	{
-		morphCache.ApplyHeadPartMorphs(refr, faceNode, true);
+		morphCache.ApplyHeadPartMorphs(refr, faceNode, true, headPart);
 	}
 }
 
