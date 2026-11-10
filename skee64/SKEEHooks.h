@@ -100,7 +100,7 @@ inline constexpr std::uint32_t kID_InvalidateTextures              = 106510;
 inline constexpr std::uint32_t kID_CopyFrom                        = 106713;
 inline constexpr std::uint32_t kID_RaceSexMenu_Vtable              = 215885; // ??_7RaceSexMenu@@6B@
 inline constexpr std::uint32_t kID_useFaceGenPreProcessedHeads     = 378620; // ini setting (data, not a function)
-inline constexpr std::uint32_t kID_BSModelProcessor_Singleton     = 400486; // BSTSingletonExplicit<BSModelDB::BSModelProcessor>::singleton (data)
+inline constexpr std::uint32_t kID_BSModelProcessor_Singleton      = 400486; // BSTSingletonExplicit<BSModelDB::BSModelProcessor>::singleton (data)
 
 // Function-pointer types for the hooked functions whose unpatched originals
 // are kept in code-cave trampolines (see the *_Original holders below).

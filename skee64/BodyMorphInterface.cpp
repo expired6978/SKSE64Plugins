@@ -49,6 +49,7 @@ extern bool								g_parallelMorphing;
 extern std::uint16_t							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
+extern std::uint32_t						g_mainThreadId;
 extern bool								g_enableBodyNormalRecalculate;
 extern bool								g_bodyMorphGPUCopy;
 extern bool								g_bodyMorphRebind;
@@ -749,11 +750,8 @@ void MorphFileCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * root
 
 void MorphFileCache::RunPartitionUpdates(const std::vector<NIOVTaskUpdateSkinPartition*>& partitionUpdates)
 {
-	bool defer = false;
-	{
-		static std::uint32_t mainThreadId = GetCurrentThreadId(); // captured on first call (game load, main thread)
-		defer = mainThreadId != GetCurrentThreadId();
-	}
+	// Head parts are morphed from loader threads too, so this can't go by the first caller's thread
+	const bool defer = g_mainThreadId != GetCurrentThreadId();
 
 	for (auto update : partitionUpdates)
 	{
@@ -839,11 +837,18 @@ struct ModelBodyTri
 static std::mutex g_modelBodyTriLock;
 static std::unordered_map<std::string, ModelBodyTri> g_modelBodyTri;
 
+static std::string ToLower(const char* a_text)
+{
+	std::string text = a_text ? a_text : "";
+	std::transform(text.begin(), text.end(), text.begin(), [](char c) { return static_cast<char>(::tolower(static_cast<unsigned char>(c))); });
+	return text;
+}
+
 // Lower case, backslashes, no "data\" or "meshes\" prefix
 static std::string NormalizeModelPath(const char* a_path)
 {
-	std::string path = a_path ? a_path : "";
-	std::transform(path.begin(), path.end(), path.begin(), [](char c) { return c == '/' ? '\\' : static_cast<char>(::tolower(static_cast<unsigned char>(c))); });
+	std::string path = ToLower(a_path);
+	std::replace(path.begin(), path.end(), '/', '\\');
 	for (std::string_view prefix : { "data\\"sv, "meshes\\"sv }) {
 		if (path.starts_with(prefix))
 			path.erase(0, prefix.size());
@@ -856,22 +861,36 @@ void MorphCache::RecordModelBodyTri(const char* modelPath, RE::NiAVObject* root)
 	if (!modelPath || !modelPath[0] || !root)
 		return;
 
-	ModelBodyTri entry;
-	VisitObjects(root, [&](RE::NiAVObject* object) {
-		if (object->AsGeometry() && entry.shapeName.empty())
-			entry.shapeName = object->name.c_str();
+	// Runs for every model the game loads, so keep it cheap until a BODYTRI turns up
+	static const RE::BSFixedString bodyTriName("BODYTRI");
 
-		auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData("BODYTRI"));
-		if (stringData && stringData->value && entry.triPath.empty()) {
-			entry.triPath = stringData->value;
-			if (object->AsGeometry())
-				entry.shapeName = object->name.c_str();
+	RE::NiStringExtraData* bodyTri = nullptr;
+	RE::NiAVObject* bodyTriOwner = nullptr;
+	RE::NiAVObject* firstGeometry = nullptr;
+	VisitObjects(root, [&](RE::NiAVObject* object) {
+		if (!firstGeometry && object->AsGeometry())
+			firstGeometry = object;
+
+		if (!bodyTri) {
+			auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(bodyTriName));
+			if (stringData && stringData->value) {
+				bodyTri = stringData;
+				bodyTriOwner = object;
+			}
 		}
-		return false;
+		return bodyTri && firstGeometry;
 	});
 
-	if (entry.triPath.empty())
+	if (!bodyTri)
 		return;
+
+	// The shape the BODYTRI sits on, otherwise the first one (BODYTRI on the root)
+	RE::NiAVObject* shape = bodyTriOwner->AsGeometry() ? bodyTriOwner : firstGeometry;
+
+	ModelBodyTri entry;
+	entry.triPath = bodyTri->value;
+	if (shape)
+		entry.shapeName = shape->name.c_str();
 
 	std::lock_guard locker(g_modelBodyTriLock);
 	g_modelBodyTri.insert_or_assign(NormalizeModelPath(modelPath), std::move(entry));
@@ -893,17 +912,12 @@ static RE::BGSHeadPart* FindHeadPartByEditorID(const char* editorID)
 	static std::unordered_map<std::string, RE::BGSHeadPart*> headParts;
 	if (headParts.empty()) {
 		for (RE::BGSHeadPart* headPart : RE::TESDataHandler::GetSingleton()->GetFormArray<RE::BGSHeadPart>()) {
-			if (headPart && headPart->formEditorID.c_str()) {
-				std::string key = headPart->formEditorID.c_str();
-				std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-				headParts.emplace(std::move(key), headPart);
-			}
+			if (headPart && headPart->formEditorID.c_str())
+				headParts.emplace(ToLower(headPart->formEditorID.c_str()), headPart);
 		}
 	}
 
-	std::string key = editorID;
-	std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-	auto it = headParts.find(key);
+	auto it = headParts.find(ToLower(editorID));
 	return it != headParts.end() ? it->second : nullptr;
 }
 

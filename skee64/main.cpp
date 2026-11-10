@@ -126,6 +126,7 @@ bool	g_enableBodyGen = true;
 bool	g_enableAutoTransforms = true;
 bool	g_enableHeadExport = true;
 bool	g_enableBodyMorph = true;
+std::uint32_t g_mainThreadId = 0;
 bool	g_enableTintSync = true;
 bool	g_enableTintInventory = true;
 bool	g_enableTintHairSlot = true;
@@ -703,6 +704,9 @@ void SKSEMessageHandler(SKSE::MessagingInterface::Message * message)
 
 SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_intfc)
 {
+	// SKSE loads plugins on the game's main thread
+	g_mainThreadId = GetCurrentThreadId();
+
 	REL::Module::get().reset(); // Static inited addresses fucko'd in CommonLibSSE-NG
 	SKSE::Init(a_intfc);
 
