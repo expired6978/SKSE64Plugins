@@ -767,6 +767,14 @@ void MorphFileCache::RunPartitionUpdates(const std::vector<NIOVTaskUpdateSkinPar
 	}
 }
 
+// Extra data name lookups are per node, so build the key once. Not a global: the game's string
+// cache doesn't exist yet when the DLL's globals are constructed.
+static const RE::BSFixedString& BodyTriName()
+{
+	static const RE::BSFixedString name("BODYTRI");
+	return name;
+}
+
 void MorphCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool isAttaching, bool deferUpdate)
 {
 	std::lock_guard locker(m_lock);
@@ -775,7 +783,7 @@ void MorphCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode
 
 	// Find the BODYTRI and cache it
 	VisitObjects(rootNode, [&](RE::NiAVObject* object) {
-		RE::NiStringExtraData* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData("BODYTRI"));
+		RE::NiStringExtraData* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(BodyTriName()));
 		if (stringData) {
 			SKEEFixedString filePath = CreateTRIPath(stringData->value);
 			CacheFile(filePath.c_str());
@@ -862,8 +870,6 @@ void MorphCache::RecordModelBodyTri(const char* modelPath, RE::NiAVObject* root)
 		return;
 
 	// Runs for every model the game loads, so keep it cheap until a BODYTRI turns up
-	static const RE::BSFixedString bodyTriName("BODYTRI");
-
 	RE::NiStringExtraData* bodyTri = nullptr;
 	RE::NiAVObject* bodyTriOwner = nullptr;
 	RE::NiAVObject* firstGeometry = nullptr;
@@ -872,7 +878,7 @@ void MorphCache::RecordModelBodyTri(const char* modelPath, RE::NiAVObject* root)
 			firstGeometry = object;
 
 		if (!bodyTri) {
-			auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(bodyTriName));
+			auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(BodyTriName()));
 			if (stringData && stringData->value) {
 				bodyTri = stringData;
 				bodyTriOwner = object;
