@@ -11,7 +11,10 @@
 #include <DirectXMath.h>
 #include "RE/N/NiGeometry.h"
 #include "RE/N/NiExtraData.h"
+#include "RE/B/BSAtomic.h"
+#include "RE/B/BSDynamicTriShape.h"
 #include <cstdint>
+#include <optional>
 
 float round_v(float num)
 {
@@ -25,12 +28,79 @@ NormalApplicator::NormalApplicator(RE::NiPointer<RE::BSGeometry> _geometry, RE::
 	
 }
 
+static std::uint8_t PackUnitFloat(float value)
+{
+	return static_cast<std::uint8_t>(round_v(((value + 1.0f) / 2.0f) * 255.0f));
+}
+
 void NormalApplicator::Apply()
 {
-	RE::BSDynamicTriShape* dynamicTriShape = geometry.get() ? geometry.get()->AsDynamicTriShape() : nullptr;
-	RE::BSTriShape* triShape = geometry.get() ? geometry.get()->AsTriShape() : nullptr;
+	using RE::BSGraphics::Vertex;
 
-	if (dynamicTriShape) dynamicTriShape->lock.Lock();
+	if (!geometry || !skinPartition || skinPartition->numPartitions == 0)
+		return;
+
+	auto& partition = skinPartition->partitions[0];
+	if (!partition.buffData || !partition.buffData->rawVertexData)
+		return;
+
+	// The layout of the vertex block being rewritten. Any attribute can be missing,
+	// so every one is located through its offset rather than assuming the order.
+	auto vertexDesc = partition.vertexDesc;
+	const std::uint32_t vertexSize = vertexDesc.GetSize();
+
+	const bool hasVertices = vertexDesc.HasFlag(Vertex::VF_VERTEX);
+	const bool hasUV = vertexDesc.HasFlag(Vertex::VF_UV);
+	const bool hasNormals = vertexDesc.HasFlag(Vertex::VF_NORMAL);
+	const bool hasTangents = hasNormals && vertexDesc.HasFlag(Vertex::VF_TANGENT); // Tangents are only stored next to normals
+
+	if (!hasNormals || vertexSize == 0)
+		return;
+
+	RE::BSDynamicTriShape* dynamicTriShape = geometry->AsDynamicTriShape();
+	RE::BSTriShape* triShape = geometry->AsTriShape();
+
+	// A BSDynamicTriShape keeps its positions (and bitangent X) in dynamicData, one float4 per vertex
+	DirectX::XMFLOAT4* dynamicVertices = nullptr;
+	std::uint32_t numVertices = skinPartition->vertexCount;
+	if (triShape && triShape->vertexCount && (numVertices == 0 || triShape->vertexCount < numVertices))
+		numVertices = triShape->vertexCount;
+
+	if (dynamicTriShape) {
+		auto& dynamicData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
+		dynamicVertices = static_cast<DirectX::XMFLOAT4*>(dynamicData.dynamicData);
+		if (dynamicVertices && dynamicData.dataSize)
+			numVertices = (std::min)(numVertices, dynamicData.dataSize / static_cast<std::uint32_t>(sizeof(DirectX::XMFLOAT4)));
+	}
+
+	// Without positions there is nothing to calculate normals from
+	if (!dynamicVertices && !hasVertices)
+		return;
+
+	if (numVertices == 0)
+		return;
+
+	std::vector<std::uint16_t> indices;
+	for (std::uint32_t p = 0; p < skinPartition->numPartitions; ++p)
+	{
+		auto& part = skinPartition->partitions[p];
+		if (!part.triList)
+			continue;
+
+		for (std::uint32_t t = 0; t < part.triangles; ++t)
+		{
+			const std::uint16_t* tri = &part.triList[t * 3];
+			if (tri[0] < numVertices && tri[1] < numVertices && tri[2] < numVertices)
+				indices.insert(indices.end(), tri, tri + 3);
+		}
+	}
+
+	if (indices.empty())
+		return;
+
+	std::optional<RE::BSSpinLockGuard> locker;
+	if (dynamicTriShape)
+		locker.emplace(dynamicTriShape->GetDynamicTrishapeRuntimeData().lock);
 
 	RE::NiIntegersExtraData* extraData = static_cast<RE::NiIntegersExtraData*>(geometry->GetExtraData("LOCKEDNORM"));
 	if (extraData)
@@ -41,125 +111,88 @@ void NormalApplicator::Apply()
 		}
 	}
 
-	auto& vertexDesc = geometry->vertexDesc;
-	std::uint32_t numVertices = triShape ? triShape->vertexCount : 0;
+	const std::uint32_t positionOffset = vertexDesc.GetAttributeOffset(Vertex::VA_POSITION);
+	const std::uint32_t uvOffset = vertexDesc.GetAttributeOffset(Vertex::VA_TEXCOORD0);
+	const std::uint32_t normalOffset = vertexDesc.GetAttributeOffset(Vertex::VA_NORMAL);
+	const std::uint32_t tangentOffset = vertexDesc.GetAttributeOffset(Vertex::VA_BINORMAL);
 
-	bool hasVertices = vertexDesc.HasFlag(RE::BSGraphics::Vertex::VF_VERTEX);
-	bool hasNormals = vertexDesc.HasFlag(RE::BSGraphics::Vertex::VF_NORMAL);
-	bool hasTangents = vertexDesc.HasFlag(RE::BSGraphics::Vertex::VF_TANGENT);
-	bool hasUV = vertexDesc.HasFlag(RE::BSGraphics::Vertex::VF_UV);
+	std::uint8_t* vertexBlock = partition.buffData->rawVertexData;
 
-	if (skinPartition && (hasNormals || hasTangents)) {
+	// Pull the base data from the vertex block
+	rawVertices.resize(numVertices);
+	rawNormals.resize(numVertices);
+	if (hasUV)
+		rawUV.resize(numVertices);
+	if (hasTangents) {
+		rawTangents.resize(numVertices);
+		rawBitangents.resize(numVertices);
+	}
 
-		numVertices = numVertices ? numVertices : skinPartition->vertexCount;
+	for (std::uint32_t i = 0; i < numVertices; i++)
+	{
+		const std::uint8_t* vBegin = &vertexBlock[i * vertexSize];
 
-		// Pull the base data from the vertex block
-		rawVertices.resize(numVertices);
+		if (dynamicVertices)
+		{
+			rawVertices[i].x = dynamicVertices[i].x;
+			rawVertices[i].y = dynamicVertices[i].y;
+			rawVertices[i].z = dynamicVertices[i].z;
+		}
+		else
+		{
+			const float* position = reinterpret_cast<const float*>(vBegin + positionOffset);
+			rawVertices[i].x = position[0];
+			rawVertices[i].y = position[1];
+			rawVertices[i].z = position[2];
+		}
+
 		if (hasUV)
-			rawUV.resize(numVertices);
-
-		if (hasNormals) {
-			rawNormals.resize(numVertices);
-			if (hasTangents) {
-				rawTangents.resize(numVertices);
-				rawBitangents.resize(numVertices);
-			}
-		}
-
-		std::uint32_t vertexSize = vertexDesc.GetSize();
-		std::uint8_t* vertexBlock = skinPartition->partitions[0].buffData->rawVertexData;
-
-		if (dynamicTriShape)
 		{
-			for (std::uint32_t i = 0; i < numVertices; i++)
-			{
-				DirectX::XMVECTOR* vertex = static_cast<DirectX::XMVECTOR*>(dynamicTriShape->dynamicData);
-				DirectX::XMStoreFloat3(reinterpret_cast<DirectX::XMFLOAT3*>(&rawVertices[i]), vertex[i]);
-			}
-		}
-
-		for (std::uint32_t i = 0; i < numVertices; i++)
-		{
-			std::uint8_t* vBegin = &vertexBlock[i * vertexSize];
-
-			if (hasVertices)
-			{
-				rawVertices[i].x = (*(float*)vBegin); vBegin += 4;
-				rawVertices[i].y = (*(float*)vBegin); vBegin += 4;
-				rawVertices[i].z = (*(float*)vBegin); vBegin += 4;
-
-				vBegin += 4; // Skip BitangetX
-			}
-
-			if (hasUV)
-			{
-				rawUV[i].u = (*(half_float::half*)vBegin); vBegin += 2;
-				rawUV[i].v = (*(half_float::half*)vBegin); vBegin += 2;
-			}
-		}
-
-		std::vector<std::uint16_t> indices;
-		for (std::uint32_t p = 0; p < skinPartition->numPartitions; ++p)
-		{
-			for (std::uint32_t t = 0; t < skinPartition->partitions[p].triangles * 3; ++t)
-			{
-				indices.push_back(skinPartition->partitions[p].triList[t]);
-			}
-		}
-
-		RecalcNormals(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
-		CalcTangentSpace(indices.size() / 3, reinterpret_cast<Morpher::Triangle*>(&indices.at(0)));
-
-		for (std::uint32_t i = 0; i < numVertices; i++)
-		{
-			std::uint8_t* vBegin = &vertexBlock[i * vertexSize];
-
-			bool skipVertex = lockedVertices.count(i);
-
-			if (hasVertices)
-			{
-				// X,Y,Z,BX
-				vBegin += 4;
-				vBegin += 4;
-				vBegin += 4;
-
-				// No need to write bitangentX
-				if (!skipVertex)
-				{
-					*(float*)vBegin = rawBitangents[i].x;
-				}
-				vBegin += 4;
-			}
-
-			// Skip UV write
-			if (hasUV)
-			{
-				vBegin += 4;
-			}
-
-			if (hasNormals && !skipVertex)
-			{
-
-				*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawNormals[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-				*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawNormals[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-				*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawNormals[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-
-				*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawBitangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-
-				if (hasTangents)
-				{
-
-					*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawTangents[i].x + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawTangents[i].y + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-					*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawTangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-
-					*(std::int8_t*)vBegin = (std::uint8_t)round_v((((rawBitangents[i].z + 1.0f) / 2.0f) * 255.0f)); vBegin += 1;
-				}
-			}
+			const half_float::half* uv = reinterpret_cast<const half_float::half*>(vBegin + uvOffset);
+			rawUV[i].u = uv[0];
+			rawUV[i].v = uv[1];
 		}
 	}
 
-	if (dynamicTriShape) dynamicTriShape->lock.Unlock();
+	const std::uint32_t numTriangles = static_cast<std::uint32_t>(indices.size() / 3);
+	Morpher::Triangle* triangles = reinterpret_cast<Morpher::Triangle*>(indices.data());
+
+	RecalcNormals(numTriangles, triangles);
+	if (hasTangents)
+		CalcTangentSpace(numTriangles, triangles);
+
+	for (std::uint32_t i = 0; i < numVertices; i++)
+	{
+		if (lockedVertices.count(static_cast<std::uint16_t>(i)))
+			continue;
+
+		std::uint8_t* vBegin = &vertexBlock[i * vertexSize];
+
+		// Normal XYZ, bitangent Y
+		std::uint8_t* normal = vBegin + normalOffset;
+		normal[0] = PackUnitFloat(rawNormals[i].x);
+		normal[1] = PackUnitFloat(rawNormals[i].y);
+		normal[2] = PackUnitFloat(rawNormals[i].z);
+
+		// The bitangent is split over the position, normal and tangent; leave it alone without tangents
+		if (!hasTangents)
+			continue;
+
+		normal[3] = PackUnitFloat(rawBitangents[i].y);
+
+		// Tangent XYZ, bitangent Z
+		std::uint8_t* tangent = vBegin + tangentOffset;
+		tangent[0] = PackUnitFloat(rawTangents[i].x);
+		tangent[1] = PackUnitFloat(rawTangents[i].y);
+		tangent[2] = PackUnitFloat(rawTangents[i].z);
+		tangent[3] = PackUnitFloat(rawBitangents[i].z);
+
+		// Bitangent X
+		if (dynamicVertices)
+			dynamicVertices[i].w = rawBitangents[i].x;
+		else
+			*reinterpret_cast<float*>(vBegin + positionOffset + 12) = rawBitangents[i].x;
+	}
 }
 
 void NormalApplicator::RecalcNormals(std::uint32_t numTriangles, Morpher::Triangle* triangles, const bool smooth, const float smoothThresh)
@@ -227,7 +260,13 @@ void NormalApplicator::CalcTangentSpace(std::uint32_t numTriangles, Morpher::Tri
 	tan1.resize(numVertices);
 	tan2.resize(numVertices);
 
-	for (std::uint32_t i = 0; i < numTriangles; i++)
+	rawTangents.resize(numVertices);
+	rawBitangents.resize(numVertices);
+
+	// Without UVs there is no texture direction, every vertex gets a tangent frame around its normal
+	const bool hasUV = rawUV.size() == numVertices;
+
+	for (std::uint32_t i = 0; hasUV && i < numTriangles; i++)
 	{
 		int i1 = triangles[i].p1;
 		int i2 = triangles[i].p2;

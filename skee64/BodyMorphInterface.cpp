@@ -49,6 +49,8 @@ extern bool								g_parallelMorphing;
 extern std::uint16_t							g_bodyMorphMode;
 extern bool								g_enableBodyGen;
 extern bool								g_enableBodyMorph;
+extern bool								g_enableHeadPartBodyMorph;
+extern std::uint32_t						g_mainThreadId;
 extern bool								g_enableBodyNormalRecalculate;
 extern bool								g_bodyMorphGPUCopy;
 extern bool								g_bodyMorphRebind;
@@ -505,11 +507,73 @@ void BodyMorphMap::ForEachMorph(std::function<void(const SKEEFixedString&, const
 
 
 
+// Original positions of a BSDynamicTriShape, saved the first time it is morphed.
+static constexpr const char* DYNAMIC_SHAPEDATA = "SHAPEDATA_DYN";
+
+// A BSDynamicTriShape renders (and SMP reads) its positions from dynamicData, one float4 per
+// vertex, while its skin partition vertices have no position at all. Morph dynamicData in place.
+static void ApplyDynamicShapeMorphs(RE::TESObjectREFR* refr, RE::BSDynamicTriShape* shape, const BodyMorphMap& morphMap)
+{
+	auto& dynamicData = shape->GetDynamicTrishapeRuntimeData();
+	if (!dynamicData.dynamicData)
+		return;
+
+	std::uint32_t vertexCount = shape->GetTrishapeRuntimeData().vertexCount;
+	if (dynamicData.dataSize)
+		vertexCount = (std::min)(vertexCount, dynamicData.dataSize / static_cast<std::uint32_t>(sizeof(DirectX::XMFLOAT4)));
+	if (vertexCount == 0)
+		return;
+
+	const std::uint32_t byteSize = vertexCount * sizeof(DirectX::XMFLOAT4);
+
+	RE::NiPointer<RE::NiBinaryExtraData> originalData{ netimmerse_cast<RE::NiBinaryExtraData*>(shape->GetExtraData(DYNAMIC_SHAPEDATA)) };
+	if (!morphMap.HasMorphs(refr) && !originalData)
+		return;
+
+	RE::BSSpinLockGuard locker(dynamicData.lock);
+
+	if (originalData) {
+		if (originalData->size != byteSize) {
+			SKSE::log::error("{} - Saved vertex data of {} doesn't match its vertex count ({} vs {} bytes)", __FUNCTION__, shape->name.c_str(), originalData->size, byteSize);
+			return;
+		}
+
+		// Undo the previous morphs
+		memcpy(dynamicData.dynamicData, originalData->data, byteSize);
+	}
+	else {
+		originalData = RE::NiPointer<RE::NiBinaryExtraData>(
+			RE::NiBinaryExtraData::Create(DYNAMIC_SHAPEDATA, static_cast<const std::uint8_t*>(dynamicData.dynamicData), byteSize));
+		shape->AddExtraData(originalData.get());
+	}
+
+	// Position-only layout with a 16 byte stride, which is what dynamicData is
+	TriShapeVertexData::Layout layout;
+	layout.vertexDesc = RE::BSGraphics::VertexDesc{};
+	layout.vertexDesc.SetFlag(RE::BSGraphics::Vertex::VF_VERTEX);
+	layout.vertexData = static_cast<std::uint8_t*>(dynamicData.dynamicData);
+
+	// UV morphs are skipped, the UVs live in the skin partition
+	morphMap.ApplyMorphs(refr, [&](const TriShapeVertexDataPtr morphData, float morphFactor)
+	{
+		if (morphFactor != 0.0f)
+		{
+			morphData->ApplyMorph(static_cast<std::uint16_t>(vertexCount), &layout, morphFactor);
+		}
+	}, nullptr);
+}
+
 std::vector<NIOVTaskUpdateSkinPartition*> MorphFileCache::ApplyMorph(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool isAttaching, const std::pair<SKEEFixedString, BodyMorphMap> & bodyMorph)
 {
 	std::vector<NIOVTaskUpdateSkinPartition*> partitionUpdates;
 	auto execMorphUpdate = [&](RE::NiPointer<RE::BSGeometry> bodyGeometry)
 	{
+		if (RE::BSDynamicTriShape* dynamicShape = bodyGeometry->AsDynamicTriShape())
+		{
+			ApplyDynamicShapeMorphs(refr, dynamicShape, bodyMorph.second);
+			return;
+		}
+
 		RE::NiPointer<RE::NiSkinInstance> skinInstance = bodyGeometry->skinInstance;
 		if (skinInstance) {
 			RE::NiPointer<RE::NiSkinPartition> skinPartition = skinInstance->skinPartition;
@@ -682,10 +746,13 @@ void MorphFileCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * root
 		}
 	}
 
-	{
-		static std::uint32_t mainThreadId = GetCurrentThreadId(); // captured on first call (game load, main thread)
-		defer = mainThreadId != GetCurrentThreadId();
-	}
+	RunPartitionUpdates(partitionUpdates);
+}
+
+void MorphFileCache::RunPartitionUpdates(const std::vector<NIOVTaskUpdateSkinPartition*>& partitionUpdates)
+{
+	// Head parts are morphed from loader threads too, so this can't go by the first caller's thread
+	const bool defer = g_mainThreadId != GetCurrentThreadId();
 
 	for (auto update : partitionUpdates)
 	{
@@ -701,6 +768,14 @@ void MorphFileCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * root
 	}
 }
 
+// Extra data name lookups are per node, so build the key once. Not a global: the game's string
+// cache doesn't exist yet when the DLL's globals are constructed.
+static const RE::BSFixedString& BodyTriName()
+{
+	static const RE::BSFixedString name("BODYTRI");
+	return name;
+}
+
 void MorphCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode, bool isAttaching, bool deferUpdate)
 {
 	std::lock_guard locker(m_lock);
@@ -709,7 +784,7 @@ void MorphCache::ApplyMorphs(RE::TESObjectREFR * refr, RE::NiAVObject * rootNode
 
 	// Find the BODYTRI and cache it
 	VisitObjects(rootNode, [&](RE::NiAVObject* object) {
-		RE::NiStringExtraData* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData("BODYTRI"));
+		RE::NiStringExtraData* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(BodyTriName()));
 		if (stringData) {
 			SKEEFixedString filePath = CreateTRIPath(stringData->value);
 			CacheFile(filePath.c_str());
@@ -752,6 +827,172 @@ void MorphCache::UpdateMorphs(RE::TESObjectREFR * refr, bool deferUpdate)
 			ApplyMorphs(refr, attachmentNode, false, deferUpdate);
 		}
 	});
+
+	if (g_enableHeadPartBodyMorph)
+	{
+		if (RE::BSFaceGenNiNode* faceNode = GetFaceGenNiNode(actor))
+			ApplyHeadPartMorphs(refr, faceNode, deferUpdate);
+	}
+}
+
+// BODYTRI of every loaded model, recorded by the model processor proxy (see SKEEHooks.cpp)
+// before the game builds anything from it. Head parts lose the extra data of their NIF when the
+// face node copy is made, so this is the only place it can still be read.
+struct ModelBodyTri
+{
+	std::string triPath;
+	std::string shapeName;
+};
+
+static std::mutex g_modelBodyTriLock;
+static std::unordered_map<std::string, ModelBodyTri> g_modelBodyTri;
+
+static std::string ToLower(const char* a_text)
+{
+	std::string text = a_text ? a_text : "";
+	std::transform(text.begin(), text.end(), text.begin(), [](char c) { return static_cast<char>(::tolower(static_cast<unsigned char>(c))); });
+	return text;
+}
+
+// Lower case, backslashes, no "data\" or "meshes\" prefix
+static std::string NormalizeModelPath(const char* a_path)
+{
+	std::string path = ToLower(a_path);
+	std::replace(path.begin(), path.end(), '/', '\\');
+	for (std::string_view prefix : { "data\\"sv, "meshes\\"sv }) {
+		if (path.starts_with(prefix))
+			path.erase(0, prefix.size());
+	}
+	return path;
+}
+
+void MorphCache::RecordModelBodyTri(const char* modelPath, RE::NiAVObject* root)
+{
+	if (!modelPath || !modelPath[0] || !root)
+		return;
+
+	// Runs for every model the game loads, so keep it cheap until a BODYTRI turns up
+	RE::NiStringExtraData* bodyTri = nullptr;
+	RE::NiAVObject* bodyTriOwner = nullptr;
+	RE::NiAVObject* firstGeometry = nullptr;
+	VisitObjects(root, [&](RE::NiAVObject* object) {
+		if (!firstGeometry && object->AsGeometry())
+			firstGeometry = object;
+
+		if (!bodyTri) {
+			auto* stringData = netimmerse_cast<RE::NiStringExtraData*>(object->GetExtraData(BodyTriName()));
+			if (stringData && stringData->value) {
+				bodyTri = stringData;
+				bodyTriOwner = object;
+			}
+		}
+		return bodyTri && firstGeometry;
+	});
+
+	if (!bodyTri)
+		return;
+
+	// The shape the BODYTRI sits on, otherwise the first one (BODYTRI on the root)
+	RE::NiAVObject* shape = bodyTriOwner->AsGeometry() ? bodyTriOwner : firstGeometry;
+
+	ModelBodyTri entry;
+	entry.triPath = bodyTri->value;
+	if (shape)
+		entry.shapeName = shape->name.c_str();
+
+	std::lock_guard locker(g_modelBodyTriLock);
+	g_modelBodyTri.insert_or_assign(NormalizeModelPath(modelPath), std::move(entry));
+}
+
+static bool LookupModelBodyTri(const char* modelPath, ModelBodyTri& a_out)
+{
+	std::lock_guard locker(g_modelBodyTriLock);
+	auto it = g_modelBodyTri.find(NormalizeModelPath(modelPath));
+	if (it == g_modelBodyTri.end())
+		return false;
+
+	a_out = it->second;
+	return true;
+}
+
+static RE::BGSHeadPart* FindHeadPartByEditorID(const char* editorID)
+{
+	static std::unordered_map<std::string, RE::BGSHeadPart*> headParts;
+	if (headParts.empty()) {
+		for (RE::BGSHeadPart* headPart : RE::TESDataHandler::GetSingleton()->GetFormArray<RE::BGSHeadPart>()) {
+			if (headPart && headPart->formEditorID.c_str())
+				headParts.emplace(ToLower(headPart->formEditorID.c_str()), headPart);
+		}
+	}
+
+	auto it = headParts.find(ToLower(editorID));
+	return it != headParts.end() ? it->second : nullptr;
+}
+
+void MorphCache::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, bool deferUpdate, RE::BGSHeadPart * onlyHeadPart)
+{
+	if (!refr || !faceNode)
+		return;
+
+	std::lock_guard locker(m_lock);
+
+	std::vector<NIOVTaskUpdateSkinPartition*> partitionUpdates;
+	for (auto& child : faceNode->GetChildren())
+	{
+		RE::BSGeometry* geometry = child ? child->AsGeometry() : nullptr;
+		if (!geometry)
+			continue;
+
+		// The face node holds a copy of the head part's shape, named after the head part's
+		// editor ID and without the extra data of the head part's NIF.
+		RE::BGSHeadPart* headPart = FindHeadPartByEditorID(geometry->name.c_str());
+		if (onlyHeadPart && headPart != onlyHeadPart)
+			continue;
+
+		const char* model = headPart ? headPart->GetModel() : nullptr;
+		ModelBodyTri bodyTri;
+		if (!model || !LookupModelBodyTri(model, bodyTri))
+			continue;
+
+		std::string triPath = bodyTri.triPath;
+		std::string shapeName = bodyTri.shapeName;
+
+		if (shapeName.empty())
+			shapeName = geometry->name.c_str();
+
+		SKEEFixedString filePath = CreateTRIPath(triPath.c_str());
+		CacheFile(filePath.c_str());
+		auto fileIt = m_data.find(filePath);
+		if (fileIt == m_data.end() || fileIt->second.vertexMap.empty()) {
+#ifdef _DEBUG
+			SKSE::log::debug("{} - {}: no morphs in {}", __FUNCTION__, geometry->name.c_str(), filePath.c_str());
+#endif
+			continue;
+		}
+
+		bool found = false;
+		for (const auto& shapeMorphs : fileIt->second.vertexMap)
+		{
+			if (_stricmp(shapeMorphs.first.c_str(), shapeName.c_str()) == 0)
+			{
+#ifdef _DEBUG
+				SKSE::log::debug("{} - Applying morphs to head part {} (shape {}) of {:08X}", __FUNCTION__, geometry->name.c_str(), shapeName, refr->formID);
+#endif
+				auto results = fileIt->second.ApplyMorph(refr, geometry, false, shapeMorphs);
+				partitionUpdates.insert(partitionUpdates.end(), results.begin(), results.end());
+				found = true;
+				break;
+			}
+		}
+#ifdef _DEBUG
+		if (!found)
+			SKSE::log::debug("{} - {}: shape {} not in {}", __FUNCTION__, geometry->name.c_str(), shapeName, filePath.c_str());
+#endif
+	}
+
+	MorphFileCache::RunPartitionUpdates(partitionUpdates);
+
+	Shrink();
 }
 
 void MorphCache::ForEachMorphFile(std::function<void(const SKEEFixedString&, const MorphFileCache&)> functor) const
@@ -1112,6 +1353,14 @@ void BodyMorphInterface::Impl_ApplyVertexDiff(RE::TESObjectREFR * refr, RE::NiAV
 	if (g_enableBodyMorph)
 	{
 		morphCache.ApplyMorphs(refr, rootNode, attach, true);
+	}
+}
+
+void BodyMorphInterface::ApplyHeadPartMorphs(RE::TESObjectREFR * refr, RE::BSFaceGenNiNode * faceNode, RE::BGSHeadPart * headPart)
+{
+	if (g_enableBodyMorph && g_enableHeadPartBodyMorph && refr && faceNode && HasMorphs(refr))
+	{
+		morphCache.ApplyHeadPartMorphs(refr, faceNode, true, headPart);
 	}
 }
 
