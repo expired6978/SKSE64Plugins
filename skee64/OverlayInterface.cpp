@@ -21,7 +21,6 @@
 #undef InterlockedIncrement
 #endif
 
-#include <unordered_set>
 #include <format>
 #include <cstdint>
 #include "NiRTTIUtils.h"
@@ -53,7 +52,6 @@ extern bool		g_overlayForceDecal;
 
 extern bool		g_immediateArmor;
 
-extern std::unordered_set<void*> g_adjustedBlocks;
 
 skee_u32 OverlayInterface::GetVersion()
 {
@@ -85,6 +83,10 @@ void OverlayInterface::UninstallOverlay(const char * nodeName, RE::TESObjectREFR
 
 void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, RE::TESObjectREFR * refr, RE::BSGeometry * source, RE::NiNode * destination, RE::BGSTextureSet * textureSet)
 {
+	if (!source || !destination || !refr) return;
+	// Keep source destruction (and its final buffer release) out of the complete
+	// acquisition/installation interval. Inputs must already be live on entry.
+	RE::NiPointer<RE::BSGeometry> sourceOwner(source);
 	RE::NiPointer<RE::NiAVObject> newShape;
 	RE::NiPointer<RE::NiProperty> alphaProperty;
 	RE::NiPointer<RE::NiProperty> shaderProperty;
@@ -157,34 +159,32 @@ void OverlayInterface::InstallOverlay(const char * nodeName, const char * path, 
 	auto * targetShape = newShape.get() ? newShape.get()->AsGeometry() : nullptr;
 	if(targetShape)
 	{
+		auto* sourceDynamic = sourceOwner->AsDynamicTriShape();
+		auto* targetDynamic = targetShape->AsDynamicTriShape();
+		if (!SKEE::OverlayGeometryKindsMatch(sourceDynamic != nullptr, targetDynamic != nullptr)) {
+			SKSE::log::warn("{} - Geometry kind mismatch for overlay {}", __FUNCTION__, nodeName);
+			return; // Existing target, properties, callbacks and attachment untouched.
+		}
+		// Finish ownership acquisition before changing an existing target. A
+		// failed copy must not publish metadata, properties, callbacks or attach.
+		if (targetDynamic) {
+			auto acquired = SKEE::AcquireOverlayDynamicData(sourceDynamic, g_enableFaceOverlays);
+			if (!acquired) {
+				SKSE::log::warn("{} - Could not acquire dynamic data for overlay {}", __FUNCTION__, nodeName);
+				return;
+			}
+			auto& dstRT = targetDynamic->GetDynamicTrishapeRuntimeData();
+			SKEE::DynamicDataMutex targetMutex{dstRT.lock};
+			std::scoped_lock targetLock(targetMutex);
+			SKEE::ReplaceDynamicData(dstRT, acquired, SKEE::ReleaseOverlayDynamicData);
+		}
+
 		targetShape->vertexDesc = source->vertexDesc;
 
 		if (shaderProperty && shaderProperty.get())
 			targetShape->GetGeometryRuntimeData().shaderProperty.reset(static_cast<RE::BSShaderProperty*>(shaderProperty.get()));
 		if (alphaProperty && alphaProperty.get())
 			targetShape->GetGeometryRuntimeData().alphaProperty.reset(static_cast<RE::NiAlphaProperty*>(alphaProperty.get()));
-
-		// Dynamic shape data copy: share the buffer when in g_adjustedBlocks, else memcpy.
-		if (auto * newDynShape = targetShape ? targetShape->AsDynamicTriShape() : nullptr) {
-			if (auto * sourceShape = source ? source->AsDynamicTriShape() : nullptr) {
-				auto & srcRT = sourceShape->GetDynamicTrishapeRuntimeData();
-				auto & dstRT = newDynShape->GetDynamicTrishapeRuntimeData();
-				dstRT.dataSize = srcRT.dataSize;
-				dstRT.frameCount = srcRT.frameCount;
-				if (g_enableFaceOverlays && g_adjustedBlocks.find(srcRT.dynamicData) != g_adjustedBlocks.end()) {
-					void * ptr = reinterpret_cast<void*>((uintptr_t)srcRT.dynamicData - 0x10);
-					REX::W32::InterlockedIncrement(reinterpret_cast<volatile std::uint32_t*>(ptr));
-					dstRT.dynamicData = srcRT.dynamicData;  // shared buffer
-				} else {
-					dstRT.dynamicData = RE::NiMalloc(srcRT.dataSize);
-					if (dstRT.dynamicData) {
-						std::memcpy(dstRT.dynamicData, srcRT.dynamicData, srcRT.dataSize);
-					}
-				}
-				dstRT.unk178 = srcRT.unk178;
-				dstRT.unk17C = 0;
-			}
-		}
 
 		targetShape->local = source->local;  // m_localTransform
 		targetShape->GetGeometryRuntimeData().skinInstance = source->GetGeometryRuntimeData().skinInstance;

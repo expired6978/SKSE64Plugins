@@ -7,6 +7,7 @@
 #include <REL/Relocation.h>
 
 #include "RaceMenuTypes.h"
+#include "AdjustedDynamicData.h"
 
 // Game types used only by pointer/reference in the signatures below. The
 // project PCH (RE/Skyrim.h) provides full definitions to every TU.
@@ -19,6 +20,7 @@ namespace RE
 	class BSFaceGenNiNode;
 	class BSFadeNode;
 	class BSGeometry;
+	class BSDynamicTriShape;
 	class BSLightingShaderMaterial;
 	class BSLightingShaderProperty;
 	class BSTextureSet;
@@ -122,6 +124,12 @@ extern TransferItemUIDFn          TransferItemUID_Original;
 // wrapper lazily resolves its own Relocation on first use.
 namespace SKEE
 {
+    // Acquires the source data lock before capturing buffer fields, then retains
+    // tracked storage or copies under the registry lock. Input must be a live
+    // geometry; writers must honor its data lock.
+    DynamicDataLease AcquireOverlayDynamicData(RE::BSDynamicTriShape* source, bool share);
+    void ReleaseOverlayDynamicData(void* data);
+
 	// --- BSLightingShaderProperty / material helpers --------------------------
 
 	inline std::uint32_t InitializeShader(RE::BSLightingShaderProperty* a_this, RE::BSGeometry* a_geometry)
