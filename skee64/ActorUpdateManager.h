@@ -16,6 +16,7 @@
 #include <RE/T/TESObjectLoadedEvent.h>
 #include <RE/T/TESObjectREFR.h>
 
+#include "DeferredTaskSubmission.h"
 #include "IPluginInterface.h"
 #include "Utilities.h"
 
@@ -78,6 +79,10 @@ protected:
 	std::unordered_set<NIOVTaskUpdateItemDye*> m_dyeUpdates;
 
 private:
+	void FlushLocked();
+
+	skee::DeferredTaskSubmission m_taskSubmission;
+
 	std::map<std::string, FlushCallback> m_flushObservers;
 	std::vector<IAddonAttachmentInterface*> m_observers;
 };

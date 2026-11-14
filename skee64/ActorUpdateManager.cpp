@@ -128,11 +128,12 @@ void ActorUpdateManager::RemoveInterface(IAddonAttachmentInterface* observer)
 
 void ActorUpdateManager::OnAttach(RE::TESObjectREFR * refr, RE::TESObjectARMO * armor, RE::TESObjectARMA * addon, RE::NiAVObject * object, bool isFirstPerson, RE::NiNode * skeleton, RE::NiNode * root)
 {
-	std::lock_guard<std::recursive_mutex> scs(m_lock);
-	for (auto observer : m_observers)
-	{
-		observer->OnAttach(refr, armor, addon, object, isFirstPerson, skeleton, root);
-	}
+	m_taskSubmission.WhileLocked(m_lock, [&] {
+		for (auto observer : m_observers)
+		{
+			observer->OnAttach(refr, armor, addon, object, isFirstPerson, skeleton, root);
+		}
+	});
 }
 
 void ActorUpdateManager::AddBodyUpdate(skee_u32 formId)
@@ -209,7 +210,11 @@ bool ActorUpdateManager::UnregisterFlushCallback(const char* key)
 
 void ActorUpdateManager::Flush()
 {
-	std::lock_guard<std::recursive_mutex> scs(m_lock);
+	m_taskSubmission.WhileLocked(m_lock, [&] { FlushLocked(); });
+}
+
+void ActorUpdateManager::FlushLocked()
+{
 	SKEE_AddTask(g_task, new SKSETaskApplyMorphs(RE::PlayerCharacter::GetSingleton()));
 
 	std::unordered_set<std::uint32_t> flushedSet;
@@ -293,19 +298,22 @@ void ActorUpdateManager::Flush()
 		}
 	}
 
-	for (NIOVTaskUpdateItemDye* task : m_dyeUpdates)
+	while (!m_dyeUpdates.empty())
 	{
+		auto it = m_dyeUpdates.begin();
+		auto* task = *it;
+		const auto actor = task->GetActor();
+		m_dyeUpdates.erase(it);
 		SKEE_AddTask(g_task, task);
-		if (flushedSet.count(task->GetActor()) == 0)
+		if (flushedSet.emplace(actor).second)
 		{
-			flushedSet.emplace(task->GetActor());
-			flushedForms.emplace_back(task->GetActor());
+			flushedForms.emplace_back(actor);
 		}
 	}
 
 	for (auto cb : m_flushObservers)
 	{
-		cb.second(reinterpret_cast<skee_u32*>(&flushedForms.at(0)), static_cast<skee_u32>(flushedForms.size()));
+		cb.second(flushedForms.data(), static_cast<skee_u32>(flushedForms.size()));
 	}
 
 	m_bodyUpdates.clear();
@@ -315,7 +323,6 @@ void ActorUpdateManager::Flush()
 	m_overrideWeapUpdates.clear();
 	m_overrideAddonUpdates.clear();
 	m_overrideSkinUpdates.clear();
-	m_dyeUpdates.clear();
 }
 
 void ActorUpdateManager::Revert()
