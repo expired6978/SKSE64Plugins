@@ -156,7 +156,6 @@ target_link_libraries(skee64 PRIVATE
     shlwapi.lib
 )
 set_target_properties(skee64 PROPERTIES OUTPUT_NAME "skee64")
-target_link_options(skee64 PRIVATE /FORCE:UNRESOLVED)
 
 # --- Precompiled shaders ---------------------------------------------------------
 # Compile the HLSL/.fx sources with fxc (Windows SDK) into .cso. The runtime
