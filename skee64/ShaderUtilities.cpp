@@ -349,15 +349,14 @@ void SetShaderProperty(RE::NiAVObject* node, OverrideVariant* value, bool immedi
 					// Convert the shaderType to support tints
 					if (material->GetFeature() != RE::BSShaderMaterial::Feature::kFaceGenRGBTint && material->GetFeature() != RE::BSShaderMaterial::Feature::kHairTint)
 					{
-						auto* tintedMaterial = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(RE::malloc(sizeof(RE::BSLightingShaderMaterialFacegenTint)));
-						new (tintedMaterial) RE::BSLightingShaderMaterialFacegenTint();
+						auto* tintedMaterial = RE::BSLightingShaderMaterialBase::CreateMaterial<RE::BSLightingShaderMaterialFacegenTint>();
 						SKEE::CopyFrom(static_cast<RE::BSLightingShaderMaterial*>(static_cast<RE::BSLightingShaderMaterialBase*>(tintedMaterial)), material);
 						lightingShader->SetFlags(static_cast<RE::BSShaderProperty::EShaderPropertyFlag8>(0x0A), false);
 						lightingShader->SetFlags(static_cast<RE::BSShaderProperty::EShaderPropertyFlag8>(0x15), true);
 						lightingShader->SetMaterial(tintedMaterial, 1);
 						SKEE::InitializeShader(lightingShader, geometry);
 						tintedMaterial->~BSLightingShaderMaterialFacegenTint();
-						RE::free(tintedMaterial);
+						RE::MemoryManager::GetSingleton()->GetThreadScrapHeap()->Deallocate(tintedMaterial);
 					}
 
 					material = static_cast<RE::BSLightingShaderMaterial*>(shaderProperty->material);

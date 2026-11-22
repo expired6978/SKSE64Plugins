@@ -74,13 +74,51 @@ namespace std {
 namespace Serialization
 {
 	template <typename T>
-	bool WriteData(const SKSE::SerializationInterface* intfc, const T* data);
+	bool WriteData(const SKSE::SerializationInterface* intfc, const T* data)
+	{
+		return intfc->WriteRecordData(data, sizeof(T));
+	}
 
 	template <typename T>
-	bool ReadData(const SKSE::SerializationInterface* intfc, T* data);
+	bool ReadData(const SKSE::SerializationInterface* intfc, T* data)
+	{
+		return intfc->ReadRecordData(data, sizeof(T)) > 0;
+	}
 
-	template<> bool WriteData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, const SKEEFixedString* str);
-	template<> bool ReadData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, SKEEFixedString* str);
+	template <typename String>
+	bool WriteString(const SKSE::SerializationInterface* intfc, const String* str)
+	{
+		if (str->length() > SHRT_MAX)
+			return false;
+		std::uint16_t len = static_cast<std::uint16_t>(str->length());
+		if (!intfc->WriteRecordData(&len, sizeof(len)))
+			return false;
+		return len == 0 || intfc->WriteRecordData(str->c_str(), len);
+	}
+
+	template <typename String>
+	bool ReadString(const SKSE::SerializationInterface* intfc, String* str)
+	{
+		std::uint16_t len = 0;
+		if (!intfc->ReadRecordData(&len, sizeof(len)))
+			return false;
+		if (len == 0)
+			return true;
+		if (len > SHRT_MAX)
+			return false;
+
+		std::string buf(len, '\0');
+		if (!intfc->ReadRecordData(buf.data(), len))
+			return false;
+
+		*str = String(buf.c_str());
+		return true;
+	}
+
+	template<> inline bool WriteData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, const SKEEFixedString* str) { return WriteString(intfc, str); }
+	template<> inline bool ReadData<SKEEFixedString>(const SKSE::SerializationInterface* intfc, SKEEFixedString* str) { return ReadString(intfc, str); }
+	template<> inline bool WriteData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, const RE::BSFixedString* str) { return WriteString(intfc, str); }
+	template<> inline bool ReadData<RE::BSFixedString>(const SKSE::SerializationInterface* intfc, RE::BSFixedString* str) { return ReadString(intfc, str); }
 }
 
 typedef std::unordered_map<std::uint32_t, StringTableItem> StringIdMap;
