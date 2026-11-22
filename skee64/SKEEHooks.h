@@ -92,6 +92,7 @@ inline constexpr std::uint32_t kID_NiAllocate_Geom                 = 70939;
 inline constexpr std::uint32_t kID_CreateBSDynamicTriShape         = 70946;
 inline constexpr std::uint32_t kID_NiAllocate_Geom2_Target         = 70947;
 inline constexpr std::uint32_t kID_NiFree_Geom2_Target             = 70958;
+inline constexpr std::uint32_t kID_NiGeometry_LoadBinary           = 71240;
 inline constexpr std::uint32_t kID_NiTriBasedGeomCtor              = 71852;
 inline constexpr std::uint32_t kID_GFxInvokeFunction               = 82640;
 inline constexpr std::uint32_t kID_BSFadeNodeCtor                  = 105481;

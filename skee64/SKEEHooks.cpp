@@ -894,6 +894,14 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 	SKEE::DoubleMorphCallback(menu, newValue, sliderId);
 }
 
+using IsBoundValidFn = bool (*)(const RE::NiBound*);
+static IsBoundValidFn IsBoundValid_Original = nullptr;
+
+bool IsBoundValid_Hooked(const RE::NiBound* bound)
+{
+	return reinterpret_cast<std::uintptr_t>(bound) == offsetof(RE::NiGeometryData, bound) || IsBoundValid_Original(bound);
+}
+
 // This tracking container is because I only verified two locations of allocation
 // in the case somehow it is allocated elsewhere without the hook the destructor wont
 // crash the game and instead free the original pointer
@@ -1381,6 +1389,10 @@ bool InstallSKEEHooks()
 		const std::uintptr_t UpdateHeadState_Target2 = REL::RelocationID(0, kID_UpdateHeadState_Target2).address() + 0x2EB;
 		g_branchTrampoline.write_call<5>(UpdateHeadState_Target2, (uintptr_t)UpdateHeadState_Disabled_Hooked);
 	}
+
+	const uint8_t* geometryLoadBase = reinterpret_cast<const uint8_t*>(REL::RelocationID(0, kID_NiGeometry_LoadBinary).address());
+	if (uintptr_t boundCheck = PatternScan::FindUnique(geometryLoadBase, 0x100, PatternScan::MakePattern("48 8B 8F 20 01 00 00 48 83 C1 18 E8 ?? ?? ?? ?? 84 C0")))
+		IsBoundValid_Original = reinterpret_cast<IsBoundValidFn>(g_branchTrampoline.write_call<5>(boundCheck + 0x0B, (uintptr_t)IsBoundValid_Hooked));
 
 	const std::uintptr_t RaceSexMenu_Render_Target = REL::RelocationID(0, kID_RaceSexMenu_Vtable).address() + 0x30; // ??_7RaceSexMenu@@6B@
 	{ std::uintptr_t _sw64 = (std::uintptr_t)RaceSexMenu_Render_Hooked; REL::safe_write(RaceSexMenu_Render_Target, &_sw64, sizeof(_sw64)); }
