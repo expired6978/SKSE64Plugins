@@ -746,8 +746,8 @@ void DoubleMorphCallback_Hook(RE::RaceSexMenu * menu, float newValue, std::uint3
 	RE::BSFaceGenNiNode * faceNode = player->GetFaceNodeSkinned();
 
 	auto& menuData = menu->GetRuntimeData();
-	if (menuData.unk188 < menuData.sliderData[gender].size())
-		raceData = &menuData.sliderData[gender][menuData.unk188];
+	if (menuData.raceIndex < menuData.sliderData[gender].size())
+		raceData = &menuData.sliderData[gender][menuData.raceIndex];
 	if (raceData && sliderId < raceData->sliders.size())
 		slider = &raceData->sliders[sliderId];
 

@@ -6,7 +6,7 @@
 // The project-owned mirrors that used to live here (skee::RaceMenuSlider,
 // skee::RaceComponent, skee::RaceSexMenuData + GetRaceSexMenuData) were removed
 // once CommonLib typed those regions. Access the menu's runtime data directly via
-//   RE::RaceSexMenu::GetRuntimeData()  ->  .headParts[7], .sliderData[2], .unk188, ...
+//   RE::RaceSexMenu::GetRuntimeData()  ->  .headParts[7], .sliderData[2], .raceIndex, ...
 //
 // The only thing kept in this header is a small factory for building an
 // RE::RaceMenuSlider (CommonLib's type is a plain POD with no convenience

@@ -345,8 +345,8 @@ std::pair<RE::RaceSexMenu*, RE::RaceMenuSlider*> GetRaceMenuSlider(std::uint32_t
 				gender = actorBase->GetSex();
 
 			auto& menuData = raceMenu->GetRuntimeData();
-			if (menuData.unk188 < menuData.sliderData[gender].size())
-				raceData = &menuData.sliderData[gender][menuData.unk188];
+			if (menuData.raceIndex < menuData.sliderData[gender].size())
+				raceData = &menuData.sliderData[gender][menuData.raceIndex];
 			if (raceData && sliderId < raceData->sliders.size())
 				slider = &raceData->sliders[sliderId];
 
