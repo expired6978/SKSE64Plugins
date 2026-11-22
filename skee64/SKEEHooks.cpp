@@ -1443,7 +1443,7 @@ bool InstallSKEEHooks()
 			{
 				Xbyak::Label retnLabel;
 
-				push(rbx);
+				push(rdi);
 				sub(rsp, 0x20);
 
 				jmp(ptr[rip + retnLabel]);
